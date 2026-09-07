@@ -30,7 +30,7 @@ describe("RawResponse type", () => {
     expect(files.length).toBeGreaterThanOrEqual(5);
     for (const f of files) {
       expect(code(`src/fetch/${f}`), f).not.toMatch(/\bhttp2xx\b/);
-      expect(code(`src/fetch/${f}`), f).not.toMatch(/\bok\s*:/);
+      expect(code(`src/fetch/${f}`), f).not.toMatch(/\bok\s*[?:]/);
     }
   });
 });

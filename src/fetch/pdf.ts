@@ -40,7 +40,12 @@ export function pdftotextAvailable(): boolean {
   try {
     execFileSync("pdftotext", ["-v"], { stdio: "ignore" });
     return true;
-  } catch {
-    return false;
+  } catch (e) {
+    // Xpdf's pdftotext exits 99 on -v, and other builds differ again. A
+    // non-zero exit means the binary RAN, so it is present; only a spawn
+    // failure (ENOENT) means it is genuinely missing. Probing on exit code
+    // alone reported a working install as absent and silently disabled the
+    // PDF rung.
+    return (e as NodeJS.ErrnoException)?.code !== "ENOENT";
   }
 }

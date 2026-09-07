@@ -76,7 +76,11 @@ export function curlAvailable(): boolean {
   try {
     execFileSync("curl", ["--version"], { stdio: "ignore" });
     return true;
-  } catch {
-    return false;
+  } catch (e) {
+    // Same reasoning as pdftotextAvailable(): a non-zero exit means the
+    // binary RAN, so it is present; only a spawn failure (ENOENT) means it
+    // is genuinely missing. curl happens to exit 0 on --version today, but
+    // probing on exit code alone is the same latent bug waiting to happen.
+    return (e as NodeJS.ErrnoException)?.code !== "ENOENT";
   }
 }
