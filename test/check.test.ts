@@ -78,6 +78,22 @@ describe("check", () => {
     expect(r.ladderTruncated).toBe(true);
   });
 
+  it("degrades a throwing fetcher to an unread rung rather than aborting the run", async () => {
+    // The Fetcher contract says do not throw, but a third-party one might.
+    // One bad rung must not abort a document with nineteen other citations in
+    // it - and it must be warned about, not silently dropped.
+    const throwing: Fetcher = {
+      rungs: ["node", "curl"] as RungId[],
+      async fetch() {
+        throw new Error("boom");
+      },
+    };
+    const r = await check("https://e.com/a", ["anything"], { fetcher: throwing });
+    expect(r.verdict).toBe("unreachable");
+    expect(r.rungsAttempted).toEqual(["node", "curl"]);
+    expect(r).not.toHaveProperty("evidence");
+  });
+
   it("does not consult HTTP status outside the 404/410 veto", async () => {
     // The property the design actually holds. A 400 or a 500 says nothing
     // about whether the bytes are the document - spec 6.3 records a 400

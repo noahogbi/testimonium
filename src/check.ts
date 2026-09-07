@@ -3,7 +3,7 @@ import { verdict } from "./classify/verdict.js";
 import { defaultFetcher } from "./fetch/default-fetcher.js";
 import { nextAction, type Attempt } from "./fetch/ladder.js";
 import { isPdf } from "./fetch/pdf.js";
-import type { Fetcher, RungId } from "./fetch/types.js";
+import { EMPTY_RESPONSE, type Fetcher, type RawResponse, type RungId } from "./fetch/types.js";
 import { dedupeEvidence, excerptFor, type Evidence } from "./text/excerpt.js";
 import { buildResult, type CitationResult } from "./io/evidence.js";
 
@@ -48,7 +48,20 @@ export async function check(
     const action = nextAction(history, fetcher.rungs, pdfUrl);
     if (action.kind === "stop") break;
 
-    const response = await fetcher.fetch(url, action.rung);
+    // A Fetcher must not throw - see the contract on the interface. The three
+    // bundled rungs all return EMPTY_RESPONSE on failure. A third-party
+    // fetcher that throws anyway degrades to an unread rung rather than
+    // aborting a run midway through a document, and is WARNED about rather
+    // than swallowed.
+    let response: RawResponse;
+    try {
+      response = await fetcher.fetch(url, action.rung);
+    } catch (e) {
+      console.warn(
+        `warn fetcher rung "${action.rung}" threw for ${url}: ${e instanceof Error ? e.message : String(e)}`,
+      );
+      response = EMPTY_RESPONSE;
+    }
     attempted.push(action.rung);
     const computed = computeSignals({
       rawBody: response.rawBody,
@@ -84,10 +97,13 @@ export async function check(
   }
 
   const v = verdict(best.computed.signals);
-  const evidence: Evidence[] = best.computed.matchedClaims.map((claim) => ({
+  // Bound once: TypeScript cannot narrow a closed-over `let` inside a
+  // callback, and two non-null assertions read worse than one binding.
+  const won = best;
+  const evidence: Evidence[] = won.computed.matchedClaims.map((claim) => ({
     claims: [claim],
-    excerpt: excerptFor(best!.computed.text, claim),
-    rung: best!.rung,
+    excerpt: excerptFor(won.computed.text, claim),
+    rung: won.rung,
   }));
 
   return buildResult({

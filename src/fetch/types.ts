@@ -31,6 +31,18 @@ export interface Fetcher {
    *  no curl and no pdftotext; its ladder is truncated, which is reported as
    *  provenance so an unreachable never reads as a fact about the host. */
   readonly rungs: readonly RungId[];
+  /**
+   * CONTRACT: THIS MUST NOT THROW.
+   *
+   * An unreachable source is a RESULT, not an error. Report failure by
+   * returning `EMPTY_RESPONSE` - or any `RawResponse` with an empty body -
+   * exactly as the three bundled rungs do internally.
+   *
+   * A throw is caught by `check()` and degraded to an unread rung with a
+   * warning, so a misbehaving third-party fetcher cannot abort a run partway
+   * through a document. It is warned about rather than swallowed: a rung that
+   * silently vanishes is the failure shape this project keeps finding.
+   */
   fetch(url: string, rung: RungId): Promise<RawResponse>;
 }
 
