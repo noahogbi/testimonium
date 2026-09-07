@@ -31,6 +31,7 @@ describe("challenge signatures", () => {
   });
 
   it("every signature carries a lastConfirmed date", () => {
+    expect(CHALLENGE_SIGNATURES.length).toBeGreaterThan(5);
     for (const r of CHALLENGE_SIGNATURES) {
       expect(r.lastConfirmed).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(r.note.length).toBeGreaterThan(0);
@@ -50,6 +51,7 @@ describe("challenge paths", () => {
 
 describe("host rules", () => {
   it("every host rule carries a lastConfirmed date and a note", () => {
+    expect(HOST_RULES.length).toBeGreaterThan(0);
     for (const r of HOST_RULES) {
       expect(r.lastConfirmed).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(r.note.length).toBeGreaterThan(0);
@@ -59,6 +61,7 @@ describe("host rules", () => {
   it("no host rule ships a personal identity string", () => {
     // SEC_UA in the origin embedded a personal email address and could not be
     // bundled. Identity is per-user configuration.
+    expect(HOST_RULES.length).toBeGreaterThan(0);
     for (const r of HOST_RULES) {
       expect(JSON.stringify(r)).not.toMatch(/@[a-z0-9.-]+\.[a-z]{2,}/i);
     }
@@ -67,5 +70,13 @@ describe("host rules", () => {
   it("resolves a rule by host suffix", () => {
     expect(hostRuleFor("https://www.sec.gov/Archives/x.htm")?.host).toBe("sec.gov");
     expect(hostRuleFor("https://example.com/x")).toBeNull();
+  });
+
+  it("does not resolve a look-alike domain to a real host rule", () => {
+    // Suffix matching without the leading dot would match all three of these.
+    expect(hostRuleFor("https://notsec.gov/x")).toBeNull();
+    expect(hostRuleFor("https://sec.gov.evil.com/x")).toBeNull();
+    expect(hostRuleFor("https://evilsec.gov/x")).toBeNull();
+    expect(hostRuleFor("https://www.sec.gov/x")?.host).toBe("sec.gov");
   });
 });

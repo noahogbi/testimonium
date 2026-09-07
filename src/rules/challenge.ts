@@ -34,7 +34,7 @@ export const CHALLENGE_SIGNATURES: readonly Rule[] = [
     note: "RETIRED pre-2023 Cloudflare wording. Kept: old edge configs still serve it." },
   { pattern: /just a moment/, lastConfirmed: "2026-09-06",
     note: "Cloudflare interstitial title." },
-  { pattern: /press (and hold|&) hold/, lastConfirmed: "2026-09-06",
+  { pattern: /press (and|&) hold/, lastConfirmed: "2026-09-06",
     note: "PerimeterX press-and-hold; its block page is caught by the javascript rules." },
   { pattern: /making sure you're not a robot|we just need to make sure/, lastConfirmed: "2026-09-06",
     note: "Amazon robot check, historically served at HTTP 200." },
