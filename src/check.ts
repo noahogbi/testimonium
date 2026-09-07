@@ -6,6 +6,7 @@ import { isPdf } from "./fetch/pdf.js";
 import { EMPTY_RESPONSE, type Fetcher, type RawResponse, type RungId } from "./fetch/types.js";
 import { dedupeEvidence, excerptFor, type Evidence } from "./text/excerpt.js";
 import { buildResult, type CitationResult } from "./io/evidence.js";
+import type { RuleSet } from "./rules/load.js";
 
 export interface CheckOptions {
   /** Bring your own reader - a headless browser, a paid proxy - behind the
@@ -15,6 +16,10 @@ export interface CheckOptions {
    *  how a PDF at a hashed URL with no title still has something to correlate
    *  against. Optional; omitting it only makes an accusation harder to earn. */
   readonly sourceLabel?: string;
+  /** Bundled-plus-local challenge rules, from `loadRules()`. Omitting it uses
+   *  the bundled snapshot only - the same behavior as before this option
+   *  existed. */
+  readonly rules?: RuleSet;
 }
 
 // NOTE: there is deliberately no `failOn` here. check() returns ONE result and
@@ -70,6 +75,7 @@ export async function check(
       status: response.status,
       claims,
       sourceLabel: opts.sourceLabel ?? "",
+      ...(opts.rules ? { rules: opts.rules } : {}),
     });
 
     // Keep the rung that read the most prose. A later rung that got a wall must
@@ -114,5 +120,6 @@ export async function check(
     rungsAvailable: fetcher.rungs,
     missed: v === "unsupported" ? [...best.computed.missedClaims] : [],
     isPdfUrl: pdfUrl,
+    firedRule: won.computed.firedRule,
   });
 }

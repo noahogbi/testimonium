@@ -2,6 +2,18 @@ import { writeFileSync, readFileSync, existsSync } from "node:fs";
 import type { Verdict } from "../classify/verdict.js";
 import type { Evidence } from "../text/excerpt.js";
 import type { RungId } from "../fetch/types.js";
+import type { Rule } from "../rules/challenge.js";
+
+/** Which rule fired, and how stale it is. PROVENANCE, not a renderable field:
+ *  it may appear on every verdict, including non-`supported` ones, without
+ *  violating the rule that non-supported results carry no renderable
+ *  evidence. The pattern itself is dropped - a RegExp does not survive
+ *  JSON.stringify, and callers only ever want to know what fired and when it
+ *  was last confirmed. */
+export interface FiredRule {
+  readonly lastConfirmed: string;
+  readonly note: string;
+}
 
 export interface CitationResult {
   readonly url: string;
@@ -16,6 +28,7 @@ export interface CitationResult {
   /** PRESENT ONLY WHEN verdict === "supported". */
   readonly evidence?: readonly Evidence[];
   readonly retrievedAt?: string;
+  readonly firedRule?: FiredRule;
 }
 
 export interface BuildInput {
@@ -29,6 +42,9 @@ export interface BuildInput {
    *  and an HTML url never uses pdftotext. Without it the flag is wrong in
    *  both directions. */
   readonly isPdfUrl: boolean;
+  /** The full Rule that fired, if any - `computeSignals`'s output. Stripped
+   *  down to `{ lastConfirmed, note }` on the way into `CitationResult`. */
+  readonly firedRule?: Rule | null;
 }
 
 /**
@@ -62,6 +78,9 @@ export function buildResult(input: BuildInput): CitationResult {
     rungsAvailable: input.rungsAvailable,
     ladderTruncated: isLadderTruncated(input.rungsAvailable, input.isPdfUrl),
     missed: input.missed,
+    // Provenance, carried on every verdict - deliberately not gated behind
+    // `verdict === "supported"` below, unlike evidence/retrievedAt.
+    ...(input.firedRule ? { firedRule: { lastConfirmed: input.firedRule.lastConfirmed, note: input.firedRule.note } } : {}),
   };
   if (input.verdict !== "supported") return base;
   return { ...base, evidence: input.evidence, retrievedAt: new Date().toISOString() };

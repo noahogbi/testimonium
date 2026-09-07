@@ -2,6 +2,7 @@ import { phraseFound } from "../text/normalize.js";
 import { toText } from "../text/extract.js";
 import { THRESHOLDS, proseVolume, slugLabelOverlap } from "./thresholds.js";
 import { matchesChallengePath, matchesChallengeSignature, type Rule } from "../rules/challenge.js";
+import type { RuleSet } from "../rules/load.js";
 import type { Signals } from "./verdict.js";
 
 export interface SignalInput {
@@ -14,6 +15,9 @@ export interface SignalInput {
   /** The author's footnote text. Widens C1's content-word pool so a PDF at a
    *  hashed URL with no title is not left with nothing to correlate. */
   readonly sourceLabel?: string;
+  /** Bundled-plus-local rules (Task 15's `loadRules()`). Defaults to the
+   *  bundled snapshot when omitted, so every existing caller is unaffected. */
+  readonly rules?: RuleSet;
 }
 
 export interface SignalResult {
@@ -39,8 +43,8 @@ export function computeSignals(input: SignalInput): SignalResult {
   const text = toText(input.rawBody);
   const matchedClaims = input.claims.filter((c) => phraseFound(text, c));
   const missedClaims = input.claims.filter((c) => !phraseFound(text, c));
-  const sigRule = matchesChallengeSignature(text);
-  const pathRule = matchesChallengePath(input.finalUrl);
+  const sigRule = matchesChallengeSignature(text, input.rules?.signatures);
+  const pathRule = matchesChallengePath(input.finalUrl, input.rules?.paths);
 
   return {
     text,

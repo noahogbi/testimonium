@@ -7,6 +7,7 @@ import { reachability } from "./reachability.js";
 import { parseGfmFootnotes } from "./adapters/gfm-footnotes.js";
 import { joinClaims, parseClaimsFile } from "./io/claims.js";
 import { writeEvidenceFile, type CitationResult } from "./io/evidence.js";
+import { loadRules, type RuleSet } from "./rules/load.js";
 
 export interface RunTally {
   readonly unsupported: number;
@@ -67,6 +68,19 @@ async function main(argv: string[]): Promise<number> {
     return 2;
   }
 
+  // --rules <path>: additive-only local override (Task 15). Loaded once, up
+  // front, so a bad local file is reported clearly rather than exploding
+  // mid-run on whichever citation happens to trip it first.
+  const rulesIdx = argv.indexOf("--rules");
+  const rulesPath = rulesIdx !== -1 ? argv[rulesIdx + 1] : undefined;
+  let rules: RuleSet;
+  try {
+    rules = loadRules(rulesPath);
+  } catch (e) {
+    console.error(`cannot load rules: ${e instanceof Error ? e.message : String(e)}`);
+    return 2;
+  }
+
   if (command === "reachability") {
     const urls = document.footnotes.map((f) => f.url).filter((u): u is string => u !== null);
     const r = await reachability(urls);
@@ -101,7 +115,7 @@ async function main(argv: string[]): Promise<number> {
   for (const c of joined.checkable) {
     // The label feeds C1's content-word pool, which is what gives a PDF at a
     // hashed URL something to correlate against.
-    const r = await check(c.url, c.claims, { sourceLabel: c.label });
+    const r = await check(c.url, c.claims, { sourceLabel: c.label, rules });
     results.push(r);
     if (r.verdict === "unsupported") {
       unsupported++;
@@ -114,6 +128,10 @@ async function main(argv: string[]): Promise<number> {
       console.log(`  [${c.n}] unreachable - ${c.url} (tried: ${r.rungsAttempted.join(", ")}${trunc})`);
     } else {
       console.log(`  [${c.n}] supported (${c.claims.length} claims) - ${c.url}`);
+    }
+    if (flags.has("--explain-fetch") && r.firedRule) {
+      const age = Math.round((Date.now() - Date.parse(r.firedRule.lastConfirmed)) / 86_400_000);
+      console.log(`        rule fired: ${r.firedRule.note} (last confirmed ${age} days ago)`);
     }
   }
   // not_applicable is signposted, never silenced: a clause resting on a primary

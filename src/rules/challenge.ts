@@ -57,11 +57,11 @@ export const CHALLENGE_PATHS: readonly Rule[] = [
   { pattern: /\/consent(\/|$|\?)/, lastConfirmed: "2026-09-06", note: "Consent-wall redirect, e.g. consent.youtube.com." },
 ];
 
-export function matchesChallengeSignature(text: string): Rule | null {
+export function matchesChallengeSignature(text: string, signatures: readonly Rule[] = CHALLENGE_SIGNATURES): Rule | null {
   const n = norm(text);
-  return CHALLENGE_SIGNATURES.find((r) => r.pattern.test(n)) ?? null;
+  return signatures.find((r) => r.pattern.test(n)) ?? null;
 }
 
-export function matchesChallengePath(finalUrl: string): Rule | null {
-  return CHALLENGE_PATHS.find((r) => r.pattern.test(finalUrl)) ?? null;
+export function matchesChallengePath(finalUrl: string, paths: readonly Rule[] = CHALLENGE_PATHS): Rule | null {
+  return paths.find((r) => r.pattern.test(finalUrl)) ?? null;
 }
