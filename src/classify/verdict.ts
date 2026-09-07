@@ -28,6 +28,15 @@ export interface Signals {
    *  threshold pair could reject it. Body shape cannot see what the status
    *  line says plainly. */
   readonly documentGone: boolean;
+  /** N5: the body is not text at all.
+   *
+   *  The other four vetoes ask whether a server or a wall stopped us. This one
+   *  asks whether what came back is prose in the first place. Without it a
+   *  content-negotiated PDF - an arxiv or DOI link with no ".pdf" in the path -
+   *  decodes to a megabyte of "prose", clears every threshold, and turns a
+   *  claim the document genuinely contains into an accusation. Measured on a
+   *  real paper: 1,037,512 extracted characters, 230x the floor, no veto. */
+  readonly notText: boolean;
 }
 
 /**
@@ -54,9 +63,9 @@ export interface Signals {
  * worse than no preflight. Exported so the two cannot drift again.
  */
 export function isBlocked(
-  s: Pick<Signals, "challengeHeader" | "challengePath" | "challengeSignature" | "documentGone">,
+  s: Pick<Signals, "challengeHeader" | "challengePath" | "challengeSignature" | "documentGone" | "notText">,
 ): boolean {
-  return s.challengeHeader || s.challengePath || s.challengeSignature || s.documentGone;
+  return s.challengeHeader || s.challengePath || s.challengeSignature || s.documentGone || s.notText;
 }
 
 export function verdict(s: Signals): Verdict {

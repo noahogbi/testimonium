@@ -11,6 +11,7 @@ const base: Signals = {
   challengePath: false,
   challengeSignature: false,
   documentGone: false,
+  notText: false,
 };
 
 describe("verdict", () => {
@@ -47,6 +48,10 @@ describe("verdict", () => {
     // N4. A real ECB 404 served 13,221 characters of nav chrome and cleared
     // every body-derived test; body shape cannot see what the status line says.
     expect(verdict({ ...base, matched: 3, documentGone: true })).toBe("unreachable");
+  });
+
+  it("a non-text body vetoes, even over a full match", () => {
+    expect(verdict({ ...base, matched: 3, notText: true })).toBe("unreachable");
   });
 
   it("a partial match inside a low-prose body is unreachable, not unsupported", () => {

@@ -39,6 +39,38 @@ function hasChallengeHeader(headers: Readonly<Record<string, string>>): boolean 
   return typeof v === "string" && v.toLowerCase().includes("challenge");
 }
 
+/** Content types that carry prose a reader could read. An ABSENT header is
+ *  treated as textual, and that is forced rather than merely defensible: the
+ *  pdftotext rung returns `headers: {}` with real extracted text, so the
+ *  opposite choice would veto every PDF the tool CAN read. */
+function isTextualContentType(raw: string | undefined): boolean {
+  const t = (raw ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
+  if (t === "") return true;
+  return (
+    t.startsWith("text/") ||
+    t === "application/xhtml+xml" ||
+    t === "application/xml" ||
+    t === "application/json" ||
+    t.endsWith("+xml") ||
+    t.endsWith("+json")
+  );
+}
+
+/** Binary decoded as UTF-8 is dense with replacement characters and C0 control
+ *  bytes; prose is not - and no script is, since CJK, emoji and mathematical
+ *  notation all sit above U+0020. Tests the RAW body: toText's tag stripping
+ *  mangles binary in ways that hide the evidence. */
+function looksBinary(rawBody: string): boolean {
+  if (rawBody.length === 0) return false;
+  const sample = rawBody.length > 65536 ? rawBody.slice(0, 65536) : rawBody;
+  let bad = 0;
+  for (const ch of sample) {
+    const c = ch.codePointAt(0) ?? 0;
+    if (c === 0xfffd || c === 0 || c < 0x09 || (c > 0x0d && c < 0x20)) bad++;
+  }
+  return bad / sample.length > 0.01;
+}
+
 export function computeSignals(input: SignalInput): SignalResult {
   const text = toText(input.rawBody);
   const matchedClaims = input.claims.filter((c) => phraseFound(text, c));
@@ -73,6 +105,7 @@ export function computeSignals(input: SignalInput): SignalResult {
       // thresholds were left alone rather than "fixed".
       challengeSignature: sigRule !== null && proseVolume(text) < THRESHOLDS.maxChallengeChars,
       documentGone: input.status === 404 || input.status === 410,
+      notText: !isTextualContentType(input.headers["content-type"]) || looksBinary(input.rawBody),
     },
   };
 }
