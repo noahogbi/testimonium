@@ -194,7 +194,9 @@ Run `npx vitest run` and `npx tsc --noEmit`.
 **Then the sweep. `scripts/calibrate.mjs` imports from `dist/`, so it measures the OLD build unless you rebuild first** - run as written, "0 verdicts moved" is vacuously true. Do this:
 
 1. `npm run build`.
-2. Write a throwaway script in your temp directory that, for each of the 34 fixtures in `fixtures/corpus.json`, computes `verdict(computeSignals({...}).signals)` twice: once with the shipped `toText` and once with a copy of the **pre-patch** `toText` (recover it with `git show dbaa030:src/text/extract.ts`). Use a claim drawn from the fixture's own extracted text, as `corpus-verdict.test.ts` does.
+2. Write a throwaway script in your temp directory that, for each of the 34 fixtures in `fixtures/corpus.json`, computes a verdict **twice: once through the whole patched pipeline, once through the whole `dbaa030` pipeline.** Use a claim drawn from the fixture's own extracted text, as `corpus-verdict.test.ts` does.
+
+   **Baseline means the whole pipeline, not just `toText`.** `computeSignals` closes over its imported `toText` and takes no injection, so you cannot swap one function in. Check out `dbaa030` into a second temp directory and build it, or reconstruct the old signal derivation alongside the old extractor. At Task 2 this matters twice over: a script that swaps only `toText` would leave N5 running on **both** sides and report a vacuous 0 moved.
 3. Report fixtures, comparisons, and verdicts moved.
 
 **Expected: 0 verdicts moved.** A prior review performed this by simulation and measured 0 of 34. **If one moves, report the fixture and both verdicts rather than proceeding.**
@@ -341,6 +343,10 @@ and in the returned signals:
 
 **`src/reachability.ts` needs an N5 branch in its reason chain.** It currently reads `gone ? ... : challenged ? "challenge interstitial" : ...`, with `challenged` fed by `isBlocked`. Without a carve-out, every preflighted PDF reports as a **challenge interstitial** - a false diagnosis of exactly the class the N4 carve-out two lines above exists to prevent. Add a branch reporting that the body was not text.
 
+**Placement matters: the new branch must come BEFORE the `challenged` branch**, exactly as the `gone` branch does. N5 implies `isBlocked`, so a branch placed after `challenged` is unreachable - dead code that changes nothing and fails no test.
+
+**Pin it**, or nothing catches that mistake. `test/reachability.test.ts` already has the stub-fetcher pattern; add one case: a binary body returned at 200 must produce a reason naming a non-text body, and **must not** say "challenge interstitial".
+
 **State, do not fix, one divergence:** `reachability` escalates its ladder on `isBlocked` while `check.ts` escalates on the inline `N1 || N2 || N3`. Post-N5 the preflight will try curl on a PDF and the gate will stop after one rung. Harmless (curl returns the same bytes) and verdict-neutral. Note it in the report for plan 2 rather than changing escalation here.
 
 - [ ] **Step 4: Verify** - `npx vitest run`, `npx tsc --noEmit`, `npm run build`, then the **same sweep procedure as Task 1 Step 4**, comparing against `dbaa030`. Every fixture is HTML, so **0 verdicts moved** is expected; a prior review measured the binary probe firing on 0 of 34 with no fixture within 10x of the threshold. **If one moves, report the fixture and its measured ratio rather than raising the threshold.**
@@ -359,11 +365,36 @@ and in the returned signals:
 
 `test/classify/acceptance.test.ts`'s `rejected` predicate mirrors N4 (`documentGone`) but knows nothing of N5. A PDF fixture filed as `kind: "challenge"`, `status: 200` therefore fails both "NO challenge or error shell can reach an accusation" and the margin assertion once its stream is large enough to clear the prose floor - **measured at 4,639 characters from an 8KB stream.** Below that the floor alone rejects it, and the new fixture would pin nothing.
 
-So: add an N5 term to the predicate, exactly as N4 has one, and **exempt N5-vetoed fixtures from the margin assertion** in the same way status-vetoed ones are exempt. The margin assertion is about prose-volume separation; a fixture rejected by a veto does not need prose margin.
+So: add an N5 term to the predicate, exactly as N4 has one, and **exempt N5-vetoed fixtures from the margin assertion** in the same way status-vetoed ones are exempt - the filter goes from `!documentGone(f)` to `!documentGone(f) && !notText(f)`. The margin assertion is about prose-volume separation; a fixture rejected by a veto does not need prose margin.
+
+**Name the mechanism, or a literal executor will duplicate the probe** - the second-copy drift this codebase outlaws. `looksBinary` is module-private in Task 2's snippet and `corpus.json` carries no headers, so the test cannot call it directly. Derive the term through the real classifier instead:
+
+```ts
+const notText = (f: Fixture): boolean =>
+  computeSignals({ rawBody: read(f), headers: {}, finalUrl: f.url, status: f.status, claims: [] })
+    .signals.notText;
+```
+
+That reuses the shipped predicate rather than restating it, and `headers: {}` is the honest input since the corpus records no headers.
+
+**Amending before the fixture exists is safe**: a prior review measured the N5 term firing on 0 of the existing 34 fixtures, with no fixture within 10x of the threshold.
 
 - [ ] **Step 2: Build the fixtures by hand**
 
-- **`pdf-binary-served-at-200.bin`** - a small real PDF's bytes or a faithful synthetic one (`%PDF-1.7` header, a `stream`/`endstream` block of binary, an `xref` table), **at least 8KB of stream** so it clears the prose floor and is therefore rejected by N5 rather than by the floor. File it `kind: "challenge"`, `status: 200`, and a `url` with **no `.pdf` in the path** - that is the whole point.
+- **`pdf-binary-served-at-200.bin`** - a small real PDF's bytes or a faithful synthetic one (`%PDF-1.7` header, a `stream`/`endstream` block of binary, an `xref` table), **at least 16KB of stream**.
+
+  The size is load-bearing and 8KB is not enough. The fixture must clear the prose floor so that **N5 rejects it and the floor does not** - otherwise it pins nothing, which is the exact failure this task exists to prevent. Measured over 200 random draws: an 8KB stream extracts a median of 4,087 characters and lands **below the 4,500 floor 75.5% of the time** (min 2,270); a 16KB stream landed below it 0 times out of 200 (min 4,938). An earlier draft said 8KB on the strength of one lucky draw of 4,639.
+
+  Because it would fail silently - N5 fires either way in the corpus test's `headers: {}` context, so every test stays green - **pin the property rather than trusting the build**. In the PDF test below, assert the fixture actually clears the floor:
+
+  ```ts
+  expect(
+    proseVolume(toText(readFileSync(f!.path, "utf8"))),
+    "fixture must be rejected by N5, not by the prose floor",
+  ).toBeGreaterThanOrEqual(THRESHOLDS.minProseChars);
+  ```
+
+  File it `kind: "challenge"`, `status: 200`, and a `url` with **no `.pdf` and no `/pdf/` segment in the path** - that is the whole point, and Task 4 widens the URL heuristic to catch `/pdf/`.
 - **`entity-heavy-article.html`** - a real-shaped article using `&mdash;`, `&#8212;`, `&#x2014;`, `&eacute;`, `&Eacute;`, `&hellip;`, `&nbsp;`, `&amp;` and `&lt;`, long enough to clear the prose floor. `kind: "document"`.
 
 Record both in `fixtures/corpus.json` and add a section to `docs/calibration-2026-09.md` noting what each pins and that the corpus previously held no non-HTML body.
@@ -415,7 +446,12 @@ N5 makes a content-negotiated PDF `unreachable` rather than verified. One cheap 
 - `src/fetch/pdf.ts`: "The classifier does not consult status" - false since N4. The conclusion (that `status: 0` is honest rather than a fabricated 200) stands; the reason does not.
 - `src/rules/load.ts`: "a rule can only ever ADD a fetch attempt... never a wrong verdict" - true of host rules, **false of signature and path rules**, which are verdict inputs via N2 and N3.
 
-**Do NOT change** `thresholds.ts`'s "33-fixture corpus" comment: it is correct (24 + 9 calibration fixtures; the known-gap row is excluded from both `calibrate.mjs` and the acceptance test).
+**`thresholds.ts`'s calibration docstring needs re-scoping, not leaving alone.** Its "33-fixture corpus" figure is correct *today* (24 + 9; the known-gap row is excluded from both `calibrate.mjs` and the acceptance test) - but Task 3 adds two fixtures, so after this plan it reads false, which is the very sin this step exists to punish. Two claims go stale together:
+
+- "the largest challenge shell **that N4 does not veto** is 1,180 chars" - the new PDF fixture is a challenge N4 does not veto either; **N5** does. Amend to "that no veto rejects", or name both vetoes.
+- the corpus count - update it, and check whether the entity-heavy article changes "smallest real document is 6,858".
+
+Do this **after** Task 3 so the numbers are real, and re-run `scripts/calibrate.mjs` to get them rather than arithmetic.
 
 - [ ] **Step 3: Fix the pdftotext probe**
 
