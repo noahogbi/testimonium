@@ -1,5 +1,5 @@
 import { computeSignals } from "./classify/signals.js";
-import { verdict } from "./classify/verdict.js";
+import { isBlocked, verdict } from "./classify/verdict.js";
 import { defaultFetcher } from "./fetch/default-fetcher.js";
 import { nextAction, type Attempt } from "./fetch/ladder.js";
 import { isPdf } from "./fetch/pdf.js";
@@ -145,6 +145,13 @@ export async function check(
   // nothing it could be failed for.
   const locatedBy = new Map<string, (typeof reads)[number]>();
   for (const r of reads) {
+    // A read the classifier itself vetoed is NOT the document - spec 6.2 is
+    // explicit that a challenge body cannot be one. A match inside it is the
+    // WALL'S text, and letting it prove a claim both mints a false attestation
+    // and publishes the wall as the evidence behind it. The same skip fixes
+    // attribution: without it the FIRST read to match wins, so a vetoed wall
+    // carrying a claim outranks a later clean read that genuinely proves it.
+    if (isBlocked(r.computed.signals)) continue;
     for (const c of r.computed.matchedClaims) if (!locatedBy.has(c)) locatedBy.set(c, r);
   }
   const missedAll = claims.filter((c) => !locatedBy.has(c));

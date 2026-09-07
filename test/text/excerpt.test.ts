@@ -110,6 +110,35 @@ describe("excerptFor", () => {
       expect(phraseFound(e!, "GPT-4 in detail"), `dash U+${dash.codePointAt(0)!.toString(16)}`).toBe(true);
     }
   });
+
+  it("LOCATES a claim spanning a zero-width character norm() deletes", () => {
+    // The same defect the dash range had, one class over: norm() deletes
+    // U+200B-U+200F, U+2060 and U+FEFF, but DROP carried only the comma - so
+    // the zero-width was pushed into the FOLDED string, the index map diverged
+    // from the matcher, and phraseFound said true while excerptFor returned
+    // null. That is `supported` with no passage behind it.
+    //
+    // Built from code points rather than pasted in: a zero-width character in
+    // a source file is invisible to every reviewer who would have to maintain
+    // this test.
+    for (const cp of [0x200b, 0x200c, 0x200d, 0x200e, 0x200f, 0x2060, 0xfeff]) {
+      const zw = String.fromCharCode(cp);
+      const at = `U+${cp.toString(16)}`;
+      const tail = "Further discussion followed at length. ".repeat(8);
+      // Two shapes, both observed: the wire mirror injects it into the
+      // document's whitespace run, and an author copies a claim out of one.
+      const cases = [
+        { name: "in the document's space run", doc: `Musk said he was in contact ${zw} with Tesla investors that week. ${tail}`, claim: "contact with Tesla" },
+        { name: "in the author's claim", doc: `Musk said he was in contact with Tesla investors that week. ${tail}`, claim: `contact ${zw}with Tesla` },
+      ];
+      for (const c of cases) {
+        expect(phraseFound(c.doc, c.claim), `matcher, ${at}, ${c.name}`).toBe(true);
+        const e = excerptFor(c.doc, c.claim);
+        expect(e, `${at}, ${c.name}`).not.toBeNull();
+        expect(phraseFound(e!, c.claim), `contract, ${at}, ${c.name}`).toBe(true);
+      }
+    }
+  });
 });
 
 describe("dedupeEvidence", () => {

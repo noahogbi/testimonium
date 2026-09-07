@@ -188,6 +188,63 @@ describe("check", () => {
     expect(r.evidence?.[1]?.excerpt).toContain(c2);
   });
 
+  it("never lets a VETOED rung's match contribute to the union", async () => {
+    // The union's dangerous edge. `node` reads a genuine sub-floor article
+    // carrying c1, so the ladder escalates; `curl` returns a short wall whose
+    // own boilerplate happens to carry c2. Assembling matches across every read
+    // without asking whether each read was VETOED made the union complete and
+    // minted `supported` - quoting the wall's own sentence as the passage
+    // behind c2. A challenge body cannot be the document (spec 6.2), so a match
+    // inside one is the wall's text and proves nothing about the citation.
+    const c1 = "spending rose sharply";
+    const c2 = "before you continue";
+    const shortReal = `<html><body><p>${`The committee report states that ${c1}. `.repeat(8)}</p></body></html>`;
+    // Both veto routes, because the two arrive by different signals: N1 fires
+    // at any length, N3 only below maxChallengeChars.
+    const sigWall = `<html><body><p>Just a moment ${c2}.</p></body></html>`;
+    const walls: { name: string; per: Parameters<typeof stub>[0] }[] = [
+      { name: "N3 signature wall", per: { node: { rawBody: shortReal, status: 200 }, curl: { rawBody: sigWall, status: 200 } } },
+      { name: "N1 header wall", per: { node: { rawBody: shortReal, status: 200 }, curl: { rawBody: `<html><body><p>Please wait ${c2}.</p></body></html>`, status: 200, headers: { "cf-mitigated": "challenge" } } } },
+    ];
+    for (const w of walls) {
+      const r = await check("https://e.com/committee-report", [c1, c2], { fetcher: stub(w.per) });
+      expect(r.rungsAttempted, w.name).toEqual(["node", "curl"]);
+      // The whole point: no false attestation, and nothing quoting the wall.
+      expect(r.verdict, w.name).toBe("unreachable");
+      expect(r, w.name).not.toHaveProperty("evidence");
+    }
+
+    // And when the winning read DOES clear the floor, the wall-only claim has
+    // to land in `missed` rather than vanish: `node` is the wall carrying c2,
+    // `curl` the real document carrying only c1.
+    const longReal = `<html><title>The Committee Report</title><body>${`The committee report states that ${c1}. `.repeat(120)}</body></html>`;
+    const r = await check("https://e.com/committee-report", [c1, c2], {
+      fetcher: stub({ node: { rawBody: sigWall, status: 200 }, curl: { rawBody: longReal, status: 200 } }),
+    });
+    expect(r.verdict).toBe("unsupported");
+    expect(r.missed).toEqual([c2]);
+  });
+
+  it("attributes evidence to the CLEAN read when a vetoed read located the same claim", async () => {
+    // `locatedBy` keeps the first read to match, so before the veto skip a
+    // wall that carried the claim outranked the later clean read that actually
+    // proved it - the verdict was right and the published passage came from the
+    // wall. Here `node` is a challenge shell that happens to quote the claim
+    // and `curl` is the real document.
+    const claim = "spending rose sharply";
+    const wall = `<html><body><p>Just a moment. The committee report states that ${claim}.</p></body></html>`;
+    const real = `<html><title>The Committee Report</title><body>${`The committee report states that ${claim}. `.repeat(120)}</body></html>`;
+    const r = await check("https://e.com/committee-report", [claim], {
+      fetcher: stub({ node: { rawBody: wall, status: 200 }, curl: { rawBody: real, status: 200 } }),
+    });
+    expect(r.rungsAttempted).toEqual(["node", "curl"]);
+    expect(r.verdict).toBe("supported");
+    expect(r.evidence?.map((e) => e.rung)).toEqual(["curl"]);
+    expect(r.evidence?.[0]?.excerpt).not.toBeNull();
+    // The wall's own opening must not be what the reader is shown.
+    expect(r.evidence?.[0]?.excerpt).not.toContain("Just a moment");
+  });
+
   it("INVARIANT: an unsupported verdict always names at least one missed claim", async () => {
     // `unsupported` fails a build. A CI failure that names nothing is worse
     // than no check at all, and the schema cannot express the reason anywhere
