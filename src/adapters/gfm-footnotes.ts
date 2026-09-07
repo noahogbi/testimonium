@@ -47,22 +47,31 @@ function trimUrl(u: string): string {
  * fence shifts.
  */
 function blankFencedCode(text: string): string {
-  let inFence = false;
-  let marker = "";
+  // The OPENING run, verbatim - not truncated to three characters.
+  //
+  // CommonMark closes a fence only with a run of the SAME character that is AT
+  // LEAST AS LONG as the opener. An earlier version compared against the first
+  // three characters, so an inner ``` closed a ```` fence early: the trapped
+  // example leaked out as a live citation with a fetchable URL, and the real
+  // closing ```` line - now seen with no fence open - became a NEW opener that
+  // never closed, silently swallowing every real footnote after it. Four-tick
+  // fences wrapping a three-tick example are the ordinary way to write
+  // documentation about markdown.
+  let fence: string | null = null;
   return text
     .split("\n")
     .map((line) => {
-      const m = /^\s*(```+|~~~+)/.exec(line);
-      if (m && !inFence) {
-        inFence = true;
-        marker = m[1]!.slice(0, 3);
+      const m = /^\s*(`{3,}|~{3,})/.exec(line);
+      const open = fence;
+      if (open === null) {
+        if (!m) return line;
+        fence = m[1]!;
         return "";
       }
-      if (m && inFence && line.trim().startsWith(marker)) {
-        inFence = false;
-        return "";
-      }
-      return inFence ? "" : line;
+      // Inside a fence every line is blanked; the only question is whether
+      // this one ends it.
+      if (m && m[1]![0] === open[0] && m[1]!.length >= open.length) fence = null;
+      return "";
     })
     .join("\n");
 }

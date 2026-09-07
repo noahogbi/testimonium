@@ -91,6 +91,24 @@ describe("parseGfmFootnotes", () => {
     expect(d.footnotes[0]!.url).toBe("https://example.gov/real");
   });
 
+  it("closes a fence only on a run of the same character, at least as long", () => {
+    // A four-tick fence wrapping a three-tick example is how documentation
+    // about markdown is written. Truncating the marker to three characters let
+    // the inner ``` close early: the trapped example leaked out as a live
+    // citation, and the real closer became a new opener that swallowed every
+    // footnote after it.
+    const doc =
+      "````markdown\n" +
+      "To close a normal fence, write:\n" +
+      "```\n" +
+      "[^1]: Trapped https://example.com/trapped\n" +
+      "````\n\n" +
+      "[^2]: Real https://example.gov/real\n";
+    const d = parseGfmFootnotes(doc);
+    expect(d.footnotes).toHaveLength(1);
+    expect(d.footnotes[0]!.url).toBe("https://example.gov/real");
+  });
+
   it("does not treat a prose reference NEAR a url as a definition", () => {
     // The original version of this test used text containing no URL at all,
     // so a parser that merely scanned for https:// would also have passed it.
