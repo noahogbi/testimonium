@@ -84,6 +84,18 @@ describe("entity decoding is canonical", () => {
     expect(toText("<p>&ldquo;quoted&rdquo;</p>")).toBe(LDQUO + "quoted" + RDQUO);
   });
 
+  it("decodes the entities a follow-up review found missing from the table", () => {
+    // Comparison operator: ordinary in a quantitative or statistical claim.
+    expect(toText("<p>p &le; 0.05</p>")).toBe("p " + CP(0x2264) + " 0.05");
+    // Greek letter beyond the original eight: "chi-squared" style claims.
+    expect(toText("<p>&chi;-squared</p>")).toBe(CP(0x3c7) + "-squared");
+    // Uppercase accented form whose lowercase already worked (ecirc did,
+    // Ecirc did not, until this row closed the case asymmetry).
+    expect(toText("<p>&Ecirc;tude</p>")).toBe(CP(0xca) + "tude");
+    // Spanish-language punctuation: opens rather than closes the sentence.
+    expect(toText("<p>&iexcl;Hola!</p>")).toBe(CP(0xa1) + "Hola!");
+  });
+
   it("still decodes &amp; LAST so an escaped entity does not double-decode", () => {
     // "&amp;#x27;" is a literal "&#x27;" on the page, not an apostrophe.
     expect(toText("<p>&amp;#x27;</p>")).toBe("&#x27;");
