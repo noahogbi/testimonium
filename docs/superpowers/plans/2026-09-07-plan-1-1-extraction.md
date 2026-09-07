@@ -4,7 +4,7 @@
 
 **Goal:** Close two false-accusation routes that ship in `main` today, both living below the layer plan 1's sixteen reviews examined.
 
-**Architecture:** No structural change. One new veto in the classifier, one correction to the extractor's entity table, two fixtures for body shapes the corpus has never contained, and three false comments corrected.
+**Architecture:** No structural change. One new veto in the classifier, one correction to the extractor's entity table, fixtures for two body shapes the corpus has never held, and the cheap keystone hygiene alongside.
 
 **Tech Stack:** TypeScript, Node >= 20, vitest. Unchanged.
 
@@ -16,21 +16,21 @@
 
 - Node >= 20, ESM only. **Zero runtime dependencies.** Conventional commit prefixes.
 - **THE KEYSTONE RULE:** reporting a citation `unsupported` requires positive proof the real page was read. A false accusation against an author's accurate citation is the worst outcome; a false attestation is second.
-- **No unit test may touch the network.** Fixtures only.
-- Every change must move a verdict toward `unreachable`, never toward `unsupported`. If a change could newly produce an accusation, stop and report.
-- The corpus sweep (34 fixtures) must show **0 verdicts moved** unless a task says otherwise and says why.
+- **No unit test may touch the network.** Fixtures only. (Task 4 has one manual live check, marked as such.)
+- Every change must move a verdict toward `unreachable`, never toward `unsupported`. **If a change could newly produce an accusation, stop and report.**
+- **ASCII ONLY inside code blocks.** Every non-ASCII character is written as a code point via `String.fromCodePoint`. This document corrupted itself twice while being drafted - literal U+FFFD became NUL bytes, and an escape became a real newline - and its first review found four *invisible* space literals in a table where they were indistinguishable from ASCII spaces. Prose may use ordinary punctuation; code may not.
 
 ---
 
 ## Why this plan exists
 
-A fresh-eyes review of merged `main` found two defects that produce **false accusations against accurate citations**, both proven by running the real code:
+A fresh-eyes review of merged `main` found two defects that produce **false accusations against accurate citations**. A second review then verified every factual claim below by running the real code.
 
-**1. A content-negotiated PDF is matched as HTML.** `isPdf` (`src/fetch/pdf.ts:7`) decides by URL shape only. Its `contentType` parameter is dead — neither `check.ts` nor `reachability.ts` passes it, and nothing anywhere reads `RawResponse.headers["content-type"]`. Probed with the real bytes of `https://arxiv.org/pdf/1706.03762v7` (`content-type: application/pdf`, no `.pdf` in the path): the binary decodes to a 2.1MB string, `proseVolume` measures **1,037,512** — 230x the floor — no veto fires, and a claim the paper genuinely contains comes back **`unsupported`**. arxiv links, DOI redirects and CMS `download?id=` endpoints are first-class citation shapes.
+**1. A content-negotiated PDF is matched as HTML.** `isPdf` (`src/fetch/pdf.ts`) decides by URL shape only. Its `contentType` parameter is dead - called with one argument at `src/check.ts:69` and `src/reachability.ts:52`, and nothing in `src/` reads `headers["content-type"]`. Probed with the real bytes of `https://arxiv.org/pdf/1706.03762v7` (`content-type: application/pdf`, no `.pdf` in the path): the binary decodes to a 2.1MB string, `proseVolume` measures **1,037,512** - 230x the floor - no veto fires, and a claim the paper genuinely contains comes back **`unsupported`**.
 
-**2. `toText` disagrees with itself, and with `norm`, about the em dash.** `&#8212;` and `&mdash;` map to `"--"`; `&#x2014;` falls through to the numeric branch and yields a literal `—`, which `norm` folds to `"-"`. Same code point, two extractions. A claim copied verbatim from a rendered page therefore matches or misses depending on how the *source markup* spelled the character. Named entities outside the small decode list are left raw, so `caf&eacute;` misses "café".
+**2. `toText` disagrees with itself about the em dash.** `&#8212;` and `&mdash;` map to `"--"`; `&#x2014;` falls through to the numeric branch and yields the literal character, which `norm` folds to `"-"`. Same code point, two extractions. A claim copied verbatim from a rendered page matches or misses depending on how the *source markup* spelled a character no author can see. Named entities outside the small decode list are left raw, so `caf&eacute;` misses the rendered word.
 
-**The structural gap under both:** `toText`/`norm` and the calibration corpus jointly define what "the page's text" means, and **every fixture in that corpus is a friendly HTML page**. No PDF, no entity-heavy document, no binary body. The floor and the vetoes have never been calibrated against a body that is not text. The classifier asks "did we read a document" by prose volume and vetoes, and never asks **"is this body text at all."**
+**The structural gap under both:** `toText`, `norm` and the calibration corpus jointly define what "the page's text" means, and **every one of the 34 fixtures is a friendly HTML page**. No PDF, no entity-heavy document, no binary body. The classifier asks "did we read a document" by prose volume and vetoes, and never asks **"is this body text at all."**
 
 **Ordering note.** Plan 2's `harvest` proposes claims drawn from `toText` output. Shipping it against today's extractor would bake these quirks into users' committed claims files, which then break when the extractor is fixed. Extraction fidelity is a dependency of harvest, not parallel work.
 
@@ -39,68 +39,75 @@ A fresh-eyes review of merged `main` found two defects that produce **false accu
 ## File Structure
 
 ```
-src/classify/signals.ts     + notText derivation, content-type and binary probes
-src/classify/verdict.ts     + notText in Signals and isBlocked (N5)
-src/text/extract.ts         entity table corrected: named entities -> literal characters
-src/fetch/pdf.ts            availability probe requires curl too; false comment corrected
-src/fetch/default-fetcher.ts  pass content-type nowhere - see Task 2 note
-src/classify/thresholds.ts  false comment corrected
-src/rules/load.ts           false doctrine comment corrected
-src/bin.ts                  reject unknown flags
-fixtures/                   + a PDF binary served at 200, + an entity-heavy document
+src/text/extract.ts             entity table -> code-point map; one canonical form
+src/classify/verdict.ts         + notText on Signals and in isBlocked (N5)
+src/classify/signals.ts         + notText derivation: content-type and binary probes
+src/reachability.ts             + an N5 branch in the reason chain (see Task 2)
+src/fetch/pdf.ts                isPdf widened to /pdf/ paths; probe requires curl; comment
+src/fetch/default-fetcher.ts    pdftotext rung requires curl too
+src/classify/thresholds.ts      false comment corrected
+src/rules/load.ts               false doctrine comment corrected
+src/bin.ts                      reject unknown flags
+test/classify/acceptance.test.ts  `rejected` predicate taught about N5 (see Task 3)
+fixtures/                       + a PDF binary at 200, + an entity-heavy document
 ```
 
 ---
 
-### Task 1: Entity decoding — one canonical form per character
+### Task 1: Entity decoding - one canonical form per character
 
-**Files:**
-- Modify: `src/text/extract.ts`
-- Test: `test/text/extract.test.ts`
+**Files:** modify `src/text/extract.ts`; test `test/text/extract.test.ts`.
 
-**Interfaces:**
-- Consumes: nothing new.
-- Produces: `toText` unchanged in signature; changed in output for named entities.
+**The defect.** Two spellings of U+2014 map to `"--"` while a third reaches the numeric branch and produces the literal, which `norm` folds to `"-"`.
 
-**The defect.** The table maps two spellings of U+2014 to `"--"` while a third spelling reaches the numeric branch and produces the literal `—`. `norm` folds the literal to `"-"`. So `phraseFound(toText(src), claim)` depends on the source's encoding choice, which no author can see.
+**The fix.** Named entities decode to their literal characters via a **code-point map**, and `norm` does all folding. One canonical form, one place that folds it. A multi-character stand-in would also desynchronise `excerpt.ts`'s `FOLD` map, which is length-preserving by construction.
 
-**The fix, and why this shape.** Named entities decode to **their literal characters**, and `norm` does all folding. One canonical form, one place that folds it. Mapping to `"--"` inside `toText` would also desynchronise `excerpt.ts`'s length-preserving `FOLD` map, which assumes one character in, one character out.
-
-**Ordering is load-bearing.** `&amp;` must decode **last**, or `&amp;#x27;` double-decodes into an apostrophe. The current file already gets this right; preserve it.
+**Ordering is load-bearing.** `&amp;` decodes **last**, or `&amp;#x27;` double-decodes. The current file gets this right; preserve it.
 
 - [ ] **Step 1: Write the failing test**
 
-Add to `test/text/extract.test.ts`:
+Add to `test/text/extract.test.ts` (import `phraseFound` from `../../src/text/normalize.js`):
 
 ```ts
+const CP = String.fromCodePoint;
+const EM = CP(0x2014);   // em dash
+const EN = CP(0x2013);   // en dash
+const EACUTE = CP(0xE9); // e-acute
+const HELLIP = CP(0x2026);
+const LDQUO = CP(0x201C);
+const RDQUO = CP(0x201D);
+
 describe("entity decoding is canonical", () => {
   it("decodes every spelling of one code point identically", () => {
     // toText once disagreed with ITSELF: &#8212; and &mdash; became "--" while
-    // &#x2014; fell through to the numeric branch and produced a literal em
-    // dash, which norm folds to "-". A claim copied verbatim from a rendered
-    // page then matched or missed depending on how the SOURCE markup spelled
-    // the character - something no author can see.
-    const forms = ["&mdash;", "&#8212;", "&#x2014;", "—"];
-    const out = forms.map((f) => toText(`<p>profits${f}up sharply</p>`));
+    // &#x2014; fell through to the numeric branch and produced the literal
+    // character, which norm folds to "-". A claim copied verbatim from a
+    // rendered page then matched or missed depending on how the SOURCE markup
+    // spelled a character no author can see.
+    const forms = ["&mdash;", "&#8212;", "&#x2014;", EM];
+    const out = forms.map((f) => toText("<p>profits" + f + "up sharply</p>"));
     expect(new Set(out).size, JSON.stringify(out)).toBe(1);
   });
 
   it("agrees with norm on every dash spelling", () => {
-    for (const f of ["&mdash;", "&#8212;", "&#x2014;", "—", "&ndash;", "&#8211;", "–"]) {
-      const text = toText(`<p>profits${f}up sharply</p>`);
-      expect(phraseFound(text, "profits—up sharply"), f).toBe(true);
+    for (const f of ["&mdash;", "&#8212;", "&#x2014;", EM, "&ndash;", "&#8211;", EN]) {
+      const text = toText("<p>profits" + f + "up sharply</p>");
+      expect(phraseFound(text, "profits" + EM + "up sharply"), f).toBe(true);
     }
   });
 
-  it("decodes the common named entities a real page uses", () => {
-    expect(toText("<p>caf&eacute;</p>")).toBe("café");
-    expect(toText("<p>and so on&hellip;</p>")).toBe("and so on…");
+  it("decodes the named entities a real citation hits", () => {
+    expect(toText("<p>caf&eacute;</p>")).toBe("caf" + EACUTE);
+    expect(toText("<p>&Eacute;cole</p>")).toBe(CP(0xC9) + "cole");
+    expect(toText("<p>fen&ecirc;tre</p>")).toBe("fen" + CP(0xEA) + "tre");
+    expect(toText("<p>TNF-&alpha;</p>")).toBe("TNF-" + CP(0x3B1));
+    expect(toText("<p>and so on&hellip;</p>")).toBe("and so on" + HELLIP);
     expect(toText("<p>a &lt; b &gt; c</p>")).toBe("a < b > c");
-    expect(toText("<p>&ldquo;quoted&rdquo;</p>")).toBe("“quoted”");
+    expect(toText("<p>&ldquo;quoted&rdquo;</p>")).toBe(LDQUO + "quoted" + RDQUO);
   });
 
   it("still decodes &amp; LAST so an escaped entity does not double-decode", () => {
-    // &amp;#x27; is a literal "&#x27;" on the page, not an apostrophe.
+    // "&amp;#x27;" is a literal "&#x27;" on the page, not an apostrophe.
     expect(toText("<p>&amp;#x27;</p>")).toBe("&#x27;");
   });
 
@@ -110,42 +117,56 @@ describe("entity decoding is canonical", () => {
 });
 ```
 
-`phraseFound` must be imported in that file.
-
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `npx vitest run test/text/extract.test.ts`
-Expected: the first two tests FAIL — `&mdash;` yields `"--"` where `&#x2014;` yields `—`.
+Expected: the first two FAIL - `&mdash;` yields `"--"` where `&#x2014;` yields the literal character. The named-entity test fails on every entity outside the current short list.
 
 - [ ] **Step 3: Implement**
 
-In `src/text/extract.ts`, replace the ad-hoc entity lines with a named table decoded before the numeric branches, keeping `&amp;` last:
+In `src/text/extract.ts`, replace the ad-hoc entity lines with a code-point map decoded before the numeric branches, keeping `&amp;` last. **Entity names are case-sensitive**, so uppercase forms need their own rows.
 
 ```ts
-/** Named entities decode to their LITERAL characters; norm() does all folding.
+/** Named entities decode to their literal characters; norm() does all folding.
  *  One canonical form per code point, folded in one place.
+ *
+ *  Values are CODE POINTS, not literal characters. Four of the entries below
+ *  are spaces of different widths, and written literally they are
+ *  indistinguishable from an ASCII space in any editor - a review of this
+ *  file's own plan caught exactly that.
  *
  *  Mapping an entity to a multi-character stand-in (this file once turned
  *  &mdash; into "--") makes toText disagree with itself, because the numeric
  *  branches below produce the literal character for the same code point - and
- *  it desynchronises excerpt.ts's FOLD map, which is length-preserving by
- *  construction.
+ *  it desynchronises excerpt.ts's FOLD map, which is length-preserving.
  *
- *  `amp` is deliberately ABSENT: it is decoded last, separately, or
- *  "&amp;#x27;" - a literal "&#x27;" on the page - would double-decode. */
-const NAMED: Readonly<Record<string, string>> = {
-  lt: "<", gt: ">", quot: '"', apos: "'",
-  nbsp: " ", ensp: " ", emsp: " ", thinsp: " ",
-  ndash: "–", mdash: "—", minus: "−",
-  lsquo: "‘", rsquo: "’", ldquo: "“", rdquo: "”",
-  hellip: "…", prime: "′", bull: "•", middot: "·",
-  eacute: "é", egrave: "è", agrave: "à", ccedil: "ç",
-  uuml: "ü", ouml: "ö", auml: "ä", szlig: "ß",
-  ntilde: "ñ", aacute: "á", iacute: "í", oacute: "ó",
-  uacute: "ú", copy: "©", reg: "®", trade: "™",
-  deg: "°", pound: "£", euro: "€", yen: "¥",
-  sect: "§", para: "¶", dagger: "†", permil: "‰",
-  laquo: "«", raquo: "»", times: "×", divide: "÷",
+ *  `amp` is deliberately ABSENT: it decodes last, separately, or "&amp;#x27;"
+ *  - a literal "&#x27;" on the page - would double-decode. */
+const NAMED: Readonly<Record<string, number>> = {
+  lt: 0x3c, gt: 0x3e, quot: 0x22, apos: 0x27,
+  nbsp: 0xa0, ensp: 0x2002, emsp: 0x2003, thinsp: 0x2009, shy: 0xad,
+  ndash: 0x2013, mdash: 0x2014, minus: 0x2212,
+  lsquo: 0x2018, rsquo: 0x2019, sbquo: 0x201a,
+  ldquo: 0x201c, rdquo: 0x201d, bdquo: 0x201e,
+  laquo: 0xab, raquo: 0xbb, lsaquo: 0x2039, rsaquo: 0x203a,
+  hellip: 0x2026, prime: 0x2032, Prime: 0x2033, bull: 0x2022, middot: 0xb7,
+  dagger: 0x2020, Dagger: 0x2021, permil: 0x2030, sect: 0xa7, para: 0xb6,
+  copy: 0xa9, reg: 0xae, trade: 0x2122,
+  deg: 0xb0, plusmn: 0xb1, micro: 0xb5, times: 0xd7, divide: 0xf7,
+  sup2: 0xb2, sup3: 0xb3, frac12: 0xbd, frac14: 0xbc, frac34: 0xbe,
+  pound: 0xa3, euro: 0x20ac, yen: 0xa5, cent: 0xa2,
+  aacute: 0xe1, Aacute: 0xc1, eacute: 0xe9, Eacute: 0xc9,
+  iacute: 0xed, Iacute: 0xcd, oacute: 0xf3, Oacute: 0xd3,
+  uacute: 0xfa, Uacute: 0xda,
+  agrave: 0xe0, Agrave: 0xc0, egrave: 0xe8, Egrave: 0xc8,
+  ugrave: 0xf9, ograve: 0xf2,
+  acirc: 0xe2, ecirc: 0xea, icirc: 0xee, ocirc: 0xf4, ucirc: 0xfb,
+  auml: 0xe4, Auml: 0xc4, euml: 0xeb, iuml: 0xef,
+  ouml: 0xf6, Ouml: 0xd6, uuml: 0xfc, Uuml: 0xdc,
+  ntilde: 0xf1, Ntilde: 0xd1, ccedil: 0xe7, Ccedil: 0xc7, szlig: 0xdf,
+  aelig: 0xe6, oslash: 0xf8, aring: 0xe5, oelig: 0x153,
+  alpha: 0x3b1, beta: 0x3b2, gamma: 0x3b3, delta: 0x3b4,
+  mu: 0x3bc, sigma: 0x3c3, omega: 0x3c9, Omega: 0x3a9,
 };
 
 export function toText(html: string): string {
@@ -154,7 +175,10 @@ export function toText(html: string): string {
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<[^>]*>/g, " ")
     // Named entities EXCEPT &amp;, which must come last.
-    .replace(/&([a-zA-Z][a-zA-Z0-9]{1,31});/g, (raw, name: string) => NAMED[name] ?? raw)
+    .replace(/&([a-zA-Z][a-zA-Z0-9]{1,31});/g, (raw, name: string) => {
+      const cp = NAMED[name];
+      return cp === undefined ? raw : String.fromCodePoint(cp);
+    })
     .replace(/&#[xX]([0-9a-fA-F]+);/g, (raw, h: string) => entityChar(parseInt(h, 16), raw))
     .replace(/&#(\d+);/g, (raw, d: string) => entityChar(Number(d), raw))
     .replace(/&amp;/g, "&")
@@ -163,35 +187,29 @@ export function toText(html: string): string {
 }
 ```
 
-**Write the escapes as `\uXXXX`, then byte-check.** Writing these literally has round-tripped into raw invisible characters twice on this project.
+- [ ] **Step 4: Verify, and run the corpus sweep correctly**
 
-- [ ] **Step 4: Verify**
+Run `npx vitest run` and `npx tsc --noEmit`.
 
-Run: `npx vitest run` and `npx tsc --noEmit`.
-**Then run the corpus sweep** (`scripts/calibrate.mjs` plus a verdict comparison against pre-patch `toText`): confirm **0 verdicts moved** across all 34 fixtures. Entity decoding changes extracted text, so this is the task most likely to move one — **if a verdict moves, report it with the fixture rather than proceeding.**
+**Then the sweep. `scripts/calibrate.mjs` imports from `dist/`, so it measures the OLD build unless you rebuild first** - run as written, "0 verdicts moved" is vacuously true. Do this:
 
-- [ ] **Step 5: Commit**
+1. `npm run build`.
+2. Write a throwaway script in your temp directory that, for each of the 34 fixtures in `fixtures/corpus.json`, computes `verdict(computeSignals({...}).signals)` twice: once with the shipped `toText` and once with a copy of the **pre-patch** `toText` (recover it with `git show dbaa030:src/text/extract.ts`). Use a claim drawn from the fixture's own extracted text, as `corpus-verdict.test.ts` does.
+3. Report fixtures, comparisons, and verdicts moved.
 
-```bash
-git add src/text/extract.ts test/text/extract.test.ts
-git commit -m "fix: one canonical form per entity, folded only by norm"
-```
+**Expected: 0 verdicts moved.** A prior review performed this by simulation and measured 0 of 34. **If one moves, report the fixture and both verdicts rather than proceeding.**
+
+- [ ] **Step 5: Commit** with `fix:`.
 
 ---
 
-### Task 2: N5 — the body is not text
+### Task 2: N5 - the body is not text
 
-**Files:**
-- Modify: `src/classify/verdict.ts`, `src/classify/signals.ts`
-- Test: `test/classify/verdict.test.ts`, `test/classify/signals-nottext.test.ts` (new)
+**Files:** modify `src/classify/verdict.ts`, `src/classify/signals.ts`, **`src/reachability.ts`**; test `test/classify/verdict.test.ts` and a new `test/classify/signals-nottext.test.ts`.
 
-**Interfaces:**
-- Consumes: `RawResponse.headers` (already threaded into `computeSignals`).
-- Produces: `Signals.notText`, included in `isBlocked`.
+**The defect.** The classifier never asks whether the body is text at all. A PDF decoded as UTF-8 measures a million characters of "prose", clears every threshold, and turns a genuine claim into an accusation.
 
-**The defect.** The classifier asks "did we read a document" by prose volume and vetoes, and never asks whether the body is text at all. A 2.1MB PDF decoded as UTF-8 measures a million characters of "prose", clears every threshold, and turns a genuine claim into an accusation.
-
-**The fix, and its deliberate limit.** N5 sends a non-text body to `unreachable` — the keystone's safe direction. It does **not** re-route to the pdftotext rung; that requires the ladder to revise a rung choice after a fetch, which is a redesign this plan does not attempt. **The consequence must be stated plainly in the README:** a PDF cited from a URL without `.pdf` in the path currently reads as `unreachable` rather than being verified. That is a lost capability, not a wrong answer, and it replaces a false accusation.
+**The limit, deliberately.** N5 sends a non-text body to `unreachable` - the safe direction. It does **not** re-route to the `pdftotext` rung; that would break `ladder.ts`'s load-bearing contract ("pdftotext is selected by URL shape before any fetch, never as a fallback") and ripple through `Attempt`, `nextAction`, and `isLadderTruncated`'s `isPdfUrl` keying. **Task 4 states the consequence in the README.**
 
 - [ ] **Step 1: Write the failing test**
 
@@ -202,8 +220,13 @@ import { describe, expect, it } from "vitest";
 import { computeSignals } from "../../src/classify/signals.js";
 import { verdict } from "../../src/classify/verdict.js";
 
+const CP = String.fromCodePoint;
+const REPL = CP(0xfffd);      // what binary looks like decoded as UTF-8
+const NL = CP(0x0a);
+const CTRL = CP(0x01);        // a single C0 control byte
+
 const base = { finalUrl: "https://e.com/paper", claims: ["a phrase"], status: 200 };
-const prose = `<html><body>${"Real sentences of ordinary prose. ".repeat(300)}</body></html>`;
+const prose = "<html><body>" + "Real sentences of ordinary prose. ".repeat(300) + "</body></html>";
 
 describe("N5 - the body is not text", () => {
   it("vetoes on a non-textual content-type", () => {
@@ -213,32 +236,33 @@ describe("N5 - the body is not text", () => {
   });
 
   it("accepts the textual content-types a real page sends", () => {
-    for (const ct of ["text/html; charset=utf-8", "text/plain", "application/xhtml+xml", "application/xml", ""]) {
+    for (const ct of ["text/html; charset=utf-8", "text/plain", "application/xhtml+xml", "application/xml", "application/json", ""]) {
       const s = computeSignals({ ...base, rawBody: prose, headers: { "content-type": ct } });
       expect(s.signals.notText, ct).toBe(false);
     }
   });
 
   it("vetoes a binary body even when the content-type is absent or lies", () => {
-    // A server that mislabels, or a rung that reports no header at all.
-    // Build the non-ASCII characters from code points. Writing them literally
-    // into a plan or a test file has corrupted them twice on this project -
-    // once into NUL bytes. Nothing here needs an escape sequence, so nothing
-    // here can round-trip wrong.
-    const REPL = String.fromCharCode(0xFFFD);
-    const NL = String.fromCharCode(10);
     const binary = "%PDF-1.7" + NL + (" " + REPL + REPL).repeat(500) + "stream";
     const s = computeSignals({ ...base, rawBody: binary, headers: {} });
     expect(s.signals.notText).toBe(true);
   });
 
-  it("does not veto ordinary prose containing a stray control character", () => {
-    const s = computeSignals({ ...base, rawBody: `${prose}`, headers: { "content-type": "text/html" } });
+  it("tolerates prose carrying a stray control character", () => {
+    // Pins the TOLERANCE property: density below the threshold must not veto.
+    // An earlier draft of this test passed a body identical to `prose` and so
+    // asserted nothing.
+    const s = computeSignals({ ...base, rawBody: prose + CTRL, headers: { "content-type": "text/html" } });
+    expect(s.signals.notText).toBe(false);
+  });
+
+  it("does not veto scripts with no ASCII - CJK, emoji, mathematics", () => {
+    const cjk = "<html><body>" + CP(0x6587) + CP(0x66F8) + CP(0x1F600) + CP(0x2211);
+    const s = computeSignals({ ...base, rawBody: cjk.repeat(200), headers: {} });
     expect(s.signals.notText).toBe(false);
   });
 
   it("vetoes even a full claim match - a non-text body is not the document", () => {
-    const REPL = String.fromCharCode(0xFFFD);
     const body = "%PDF-1.7 a phrase " + (" " + REPL).repeat(400);
     const s = computeSignals({ ...base, rawBody: body, headers: { "content-type": "application/pdf" } });
     expect(s.signals.matched).toBeGreaterThan(0);
@@ -247,7 +271,7 @@ describe("N5 - the body is not text", () => {
 });
 ```
 
-Add to `test/classify/verdict.test.ts`'s veto group:
+Add to `test/classify/verdict.test.ts`'s veto group, and add `notText: false` to that file's shared `base`:
 
 ```ts
   it("a non-text body vetoes, even over a full match", () => {
@@ -255,16 +279,11 @@ Add to `test/classify/verdict.test.ts`'s veto group:
   });
 ```
 
-and add `notText: false` to that file's shared `base` object.
-
-- [ ] **Step 2: Run to verify it fails**
-
-Run: `npx vitest run test/classify/`
-Expected: FAIL — `notText` does not exist on `Signals`.
+- [ ] **Step 2: Run to verify it fails** - `notText` does not exist on `Signals`.
 
 - [ ] **Step 3: Implement**
 
-In `src/classify/verdict.ts`, add to `Signals`:
+`src/classify/verdict.ts` - add to `Signals`, and to `isBlocked`'s `Pick` and disjunction:
 
 ```ts
   /** N5: the body is not text at all.
@@ -278,15 +297,13 @@ In `src/classify/verdict.ts`, add to `Signals`:
   readonly notText: boolean;
 ```
 
-and include it in `isBlocked`'s `Pick` and its disjunction.
-
-In `src/classify/signals.ts`:
+`src/classify/signals.ts`:
 
 ```ts
 /** Content types that carry prose a reader could read. An ABSENT header is
- *  treated as textual: it is unknown, not evidence, and the body test below is
- *  what decides. Being wrong in that direction costs a wasted read; being
- *  wrong the other way would veto real documents on silent servers. */
+ *  treated as textual, and that is forced rather than merely defensible: the
+ *  pdftotext rung returns `headers: {}` with real extracted text, so the
+ *  opposite choice would veto every PDF the tool CAN read. */
 function isTextualContentType(raw: string | undefined): boolean {
   const t = (raw ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
   if (t === "") return true;
@@ -301,7 +318,8 @@ function isTextualContentType(raw: string | undefined): boolean {
 }
 
 /** Binary decoded as UTF-8 is dense with replacement characters and C0 control
- *  bytes; prose is not. Tests the RAW body, because toText's tag stripping
+ *  bytes; prose is not - and no script is, since CJK, emoji and mathematical
+ *  notation all sit above U+0020. Tests the RAW body: toText's tag stripping
  *  mangles binary in ways that hide the evidence. */
 function looksBinary(rawBody: string): boolean {
   if (rawBody.length === 0) return false;
@@ -309,7 +327,7 @@ function looksBinary(rawBody: string): boolean {
   let bad = 0;
   for (const ch of sample) {
     const c = ch.codePointAt(0) ?? 0;
-    if (c === 0xfffd || c === 0 || (c < 0x09) || (c > 0x0d && c < 0x20)) bad++;
+    if (c === 0xfffd || c === 0 || c < 0x09 || (c > 0x0d && c < 0x20)) bad++;
   }
   return bad / sample.length > 0.01;
 }
@@ -318,35 +336,41 @@ function looksBinary(rawBody: string): boolean {
 and in the returned signals:
 
 ```ts
-      notText:
-        !isTextualContentType(input.headers["content-type"]) || looksBinary(input.rawBody),
+      notText: !isTextualContentType(input.headers["content-type"]) || looksBinary(input.rawBody),
 ```
 
-- [ ] **Step 4: Verify**
+**`src/reachability.ts` needs an N5 branch in its reason chain.** It currently reads `gone ? ... : challenged ? "challenge interstitial" : ...`, with `challenged` fed by `isBlocked`. Without a carve-out, every preflighted PDF reports as a **challenge interstitial** - a false diagnosis of exactly the class the N4 carve-out two lines above exists to prevent. Add a branch reporting that the body was not text.
 
-Run: `npx vitest run`, `npx tsc --noEmit`, `npm run build`.
-**Run the corpus sweep: 0 verdicts moved.** Every fixture is HTML, so any movement means the binary probe is over-firing on real prose — **report the fixture and its measured ratio rather than raising the threshold.**
+**State, do not fix, one divergence:** `reachability` escalates its ladder on `isBlocked` while `check.ts` escalates on the inline `N1 || N2 || N3`. Post-N5 the preflight will try curl on a PDF and the gate will stop after one rung. Harmless (curl returns the same bytes) and verdict-neutral. Note it in the report for plan 2 rather than changing escalation here.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Verify** - `npx vitest run`, `npx tsc --noEmit`, `npm run build`, then the **same sweep procedure as Task 1 Step 4**, comparing against `dbaa030`. Every fixture is HTML, so **0 verdicts moved** is expected; a prior review measured the binary probe firing on 0 of 34 with no fixture within 10x of the threshold. **If one moves, report the fixture and its measured ratio rather than raising the threshold.**
 
-```bash
-git add src/classify/verdict.ts src/classify/signals.ts test/classify/
-git commit -m "feat: N5 - a body that is not text cannot be the document"
-```
+- [ ] **Step 5: Commit** with `feat:`.
 
 ---
 
 ### Task 3: Fixtures for body shapes the corpus has never held
 
-**Files:**
-- Create: `fixtures/challenge/pdf-binary-served-at-200.bin`, `fixtures/documents/entity-heavy-article.html`
-- Modify: `fixtures/corpus.json`, `docs/calibration-2026-09.md`
+**Files:** create `fixtures/challenge/pdf-binary-served-at-200.bin` and `fixtures/documents/entity-heavy-article.html`; modify `fixtures/corpus.json`, **`test/classify/acceptance.test.ts`**, `test/classify/corpus-verdict.test.ts`, `docs/calibration-2026-09.md`.
 
-**Context.** Every one of the 34 fixtures is a friendly HTML page. The floor and the vetoes have never been calibrated against a body that is not text, or one dense with entities — which is exactly why both defects in this plan survived sixteen reviews.
+**Context.** Every one of the 34 fixtures is a friendly HTML page, which is why both defects survived sixteen reviews.
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Teach the acceptance test about N5 - do this FIRST**
 
-Add to `test/classify/corpus-verdict.test.ts`:
+`test/classify/acceptance.test.ts`'s `rejected` predicate mirrors N4 (`documentGone`) but knows nothing of N5. A PDF fixture filed as `kind: "challenge"`, `status: 200` therefore fails both "NO challenge or error shell can reach an accusation" and the margin assertion once its stream is large enough to clear the prose floor - **measured at 4,639 characters from an 8KB stream.** Below that the floor alone rejects it, and the new fixture would pin nothing.
+
+So: add an N5 term to the predicate, exactly as N4 has one, and **exempt N5-vetoed fixtures from the margin assertion** in the same way status-vetoed ones are exempt. The margin assertion is about prose-volume separation; a fixture rejected by a veto does not need prose margin.
+
+- [ ] **Step 2: Build the fixtures by hand**
+
+- **`pdf-binary-served-at-200.bin`** - a small real PDF's bytes or a faithful synthetic one (`%PDF-1.7` header, a `stream`/`endstream` block of binary, an `xref` table), **at least 8KB of stream** so it clears the prose floor and is therefore rejected by N5 rather than by the floor. File it `kind: "challenge"`, `status: 200`, and a `url` with **no `.pdf` in the path** - that is the whole point.
+- **`entity-heavy-article.html`** - a real-shaped article using `&mdash;`, `&#8212;`, `&#x2014;`, `&eacute;`, `&Eacute;`, `&hellip;`, `&nbsp;`, `&amp;` and `&lt;`, long enough to clear the prose floor. `kind: "document"`.
+
+Record both in `fixtures/corpus.json` and add a section to `docs/calibration-2026-09.md` noting what each pins and that the corpus previously held no non-HTML body.
+
+- [ ] **Step 3: Write the tests**
+
+In `test/classify/corpus-verdict.test.ts`:
 
 ```ts
   it("rejects a PDF binary served at 200 with no .pdf in the url", () => {
@@ -357,80 +381,67 @@ Add to `test/classify/corpus-verdict.test.ts`:
     expect(run(f!, ["any claim at all"])).toBe("unreachable");
   });
 
-  it("reads an entity-heavy document as a document", () => {
+  it("reads an entity-heavy document and supports a claim in its RENDERED form", () => {
+    // NOT `run(f, [])`: verdict() returns "unclaimed" on total === 0 before any
+    // veto, so that would pass for any input including a challenge shell - the
+    // test-that-asserts-nothing shape this file already warns about. The claim
+    // below is written as a reader sees it; the fixture spells it with
+    // entities. This is the only end-to-end pin of Task 1.
     const f = corpus.find((x) => x.path.includes("entity-heavy-article"));
     expect(f, "fixture missing from corpus.json").toBeDefined();
-    expect(run(f!, [])).toBe("unclaimed");
+    expect(run(f!, [RENDERED_CLAIM])).toBe("supported");
   });
 ```
 
-- [ ] **Step 2: Build the fixtures by hand**
+Define `RENDERED_CLAIM` with `String.fromCodePoint` for its non-ASCII characters, and put the entity spellings of the same sentence in the fixture.
 
-- **`pdf-binary-served-at-200.bin`** — a small real PDF's bytes, or a faithful synthetic one (`%PDF-1.7` header, a `stream`/`endstream` block of binary, an `xref` table). It must be filed with `kind: "challenge"`, `status: 200`, and a `url` **without** `.pdf` in the path — that is the whole point.
-- **`entity-heavy-article.html`** — a real-shaped article using `&mdash;`, `&#8212;`, `&#x2014;`, `&eacute;`, `&hellip;`, `&nbsp;`, `&amp;` and `&lt;`, long enough to clear the prose floor. `kind: "document"`.
+- [ ] **Step 4: Verify** - `npx vitest run`. The corpus grows by two, so **state the new totals** rather than matching the old figure.
 
-Record both in `fixtures/corpus.json`, and add a section to `docs/calibration-2026-09.md` noting what each pins and that the corpus previously contained no non-HTML body.
-
-- [ ] **Step 3: Verify**
-
-Run: `npx vitest run` and the corpus sweep. The two new fixtures change the corpus size — **state the new totals** rather than matching the old figure.
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add fixtures/ docs/calibration-2026-09.md test/classify/corpus-verdict.test.ts
-git commit -m "test: fixtures for a binary body and an entity-heavy document"
-```
+- [ ] **Step 5: Commit** with `test:`.
 
 ---
 
-### Task 4: Three false comments, one false probe, one silent flag
+### Task 4: One cheap recovery, three false comments, one false probe, one silent flag
 
-**Files:**
-- Modify: `src/classify/thresholds.ts`, `src/fetch/pdf.ts`, `src/rules/load.ts`, `src/bin.ts`, `README.md`
-- Test: `test/bin.test.ts`
+**Files:** modify `src/fetch/pdf.ts`, `src/fetch/default-fetcher.ts`, `src/classify/thresholds.ts`, `src/rules/load.ts`, `src/bin.ts`, `README.md`; test `test/bin.test.ts`, `test/fetch/`.
 
-**Context.** Comments in this codebase are load-bearing — each records a specific defeat — so a false one is worse than none. Three are now false, and one availability probe reports a capability the machine does not have.
+- [ ] **Step 1: Recover the arxiv case pre-fetch**
 
-- [ ] **Step 1: Correct the three comments**
+N5 makes a content-negotiated PDF `unreachable` rather than verified. One cheap widening recovers the named case without touching the ladder: **`arxiv.org/pdf/1706.03762v7` has `/pdf/` in the path.** Widen `isPdf`'s URL heuristic to treat a `/pdf/` path segment as a PDF, so the rung is chosen before the fetch, as `ladder.ts` requires. Worst case it is wrong and the body is HTML, which reads as `unreachable` - never an accusation. Add tests for `/pdf/` paths, a `.pdf` suffix, and a URL containing "pdf" only as a substring of a word (must NOT match).
 
-- `src/classify/thresholds.ts`, `slugLabelOverlap`: "Returning 0 sends that case to `unreachable`, the safe direction" — false since the signal was withdrawn from the verdict. It sends nothing anywhere. The same docstring says "THIS DOES NOT GATE" three paragraphs above; make it consistent.
-- `src/fetch/pdf.ts`: "The classifier does not consult status" — false since the 404/410 veto. The conclusion (that `status: 0` is honest rather than a fabricated 200) stands; the stated reason does not.
-- `src/rules/load.ts`: "a rule can only ever ADD a fetch attempt… never a wrong verdict" — true of host rules, **false of signature and path rules**, which are verdict inputs via N2 and N3. Say which is which.
+- [ ] **Step 2: Correct three false comments**
 
-- [ ] **Step 2: Fix the pdftotext probe**
+- `src/classify/thresholds.ts`, `slugLabelOverlap`: "Returning 0 sends that case to `unreachable`, the safe direction" - false since the signal was withdrawn from the verdict; it sends nothing anywhere. The same docstring says "THIS DOES NOT GATE" three paragraphs above.
+- `src/fetch/pdf.ts`: "The classifier does not consult status" - false since N4. The conclusion (that `status: 0` is honest rather than a fabricated 200) stands; the reason does not.
+- `src/rules/load.ts`: "a rule can only ever ADD a fetch attempt... never a wrong verdict" - true of host rules, **false of signature and path rules**, which are verdict inputs via N2 and N3.
 
-`pdfFetch` downloads via **curl**, but `defaultFetcher` advertises the `pdftotext` rung whenever the binary exists. On a machine with pdftotext and no curl, every PDF attempts the rung, fails, and reports `unreachable` with **`ladderTruncated: false`** — the one field built to disclose exactly that. Require both:
+**Do NOT change** `thresholds.ts`'s "33-fixture corpus" comment: it is correct (24 + 9 calibration fixtures; the known-gap row is excluded from both `calibrate.mjs` and the acceptance test).
 
-```ts
-if (pdftotextAvailable() && curlAvailable()) rungs.push("pdftotext");
-```
+- [ ] **Step 3: Fix the pdftotext probe**
 
-with a comment saying why. Add a test asserting the rung is absent when either binary is missing (inject the probes or test the predicate directly — do not require an actual missing binary).
+`pdfFetch` downloads via **curl**, but `defaultFetcher` advertises the rung on `pdftotextAvailable()` alone. On a machine with pdftotext and no curl every PDF attempts the rung, fails, and reports `unreachable` with **`ladderTruncated: false`** - the one field built to disclose exactly that. Require both binaries. To make it testable, extract the predicate rather than leaving it an inline `&&`, and test the predicate directly - do not require an actually-missing binary.
 
-- [ ] **Step 3: Reject unknown flags**
+- [ ] **Step 4: Reject unknown flags**
 
-`node dist/bin.js check doc.md --fail-on-unrechable` exits 0 with no complaint: a user who believes they hardened CI has not, invisibly. `bin.ts` already guards the bare-`--rules` case against this exact "silent no-op class" — generalise it. Collect the known flags, reject anything else with exit 2 and a message naming the offender. Add tests for a typo'd flag and for a valid one.
+`node dist/bin.js check doc.md --fail-on-unrechable` exits 0 with no complaint: a user who believes they hardened CI has not, invisibly. `bin.ts` already guards the bare-`--rules` case against this same silent-no-op class. Collect the known flags, reject anything else with exit 2 naming the offender. **`main()` is not exported**, so export a small `validateFlags(argv)` and test that directly rather than spawning a process.
 
-- [ ] **Step 4: README**
+- [ ] **Step 5: README**
 
-State N5's consequence plainly in "What this does not do": **a PDF cited from a URL with no `.pdf` in the path reads as `unreachable`** — the tool declines to judge a body it cannot confirm is text, and re-entry via the PDF rung is future work. Do not imply PDFs are unsupported generally; a `.pdf` URL still works.
+Two additions to "What this does not do":
 
-- [ ] **Step 5: Verify and commit**
+1. **A PDF cited from a URL with neither `.pdf` nor a `/pdf/` path segment reads as `unreachable`.** The tool declines to judge a body it cannot confirm is text. Re-entry via the PDF rung is future work. Do not imply PDFs are unsupported generally.
+2. **A claim that appears only inside an HTML comment can return `supported`.** Verified live on current `main`: `toText` strips tags but not comment bodies, so commented-out markup - which always contains `>` - leaks into extracted prose. That is a false attestation from text no reader sees. It is disclosed rather than fixed here because fixing it can move a verdict *toward* `unsupported`, which this plan's constraints forbid; it is plan 2 work. Record it beside the existing known-gap in `docs/calibration-2026-09.md` too.
 
-Run: `npx vitest run`, `npx tsc --noEmit`, `npm run build`, and `node dist/bin.js check example/sample.md` (exit 0).
+- [ ] **Step 6: Verify and commit**
 
-```bash
-git add src test README.md
-git commit -m "fix: correct three false comments, the pdftotext probe, and silent flag typos"
-```
+`npx vitest run`, `npx tsc --noEmit`, `npm run build`. Then **manually** (this one touches the network and rewrites `example/sample.evidence.json`): `node dist/bin.js check example/sample.md` must exit 0. Restore that file to HEAD afterwards. Commit with `fix:`.
 
 ---
 
 ## Self-Review
 
-**Coverage:** both Criticals from the fresh-eyes review are addressed — entity canonicalisation (Task 1) and the non-text veto (Task 2) — with fixtures pinning the body shapes that hid them (Task 3) and the cheap keystone hygiene alongside (Task 4).
+**Coverage:** both Criticals are addressed - entity canonicalisation (Task 1) and the non-text veto (Task 2) - with fixtures pinning the body shapes that hid them (Task 3), the arxiv case recovered cheaply, and the keystone hygiene alongside (Task 4).
 
-**Deliberately NOT in this plan:** re-routing a content-negotiated PDF into the `pdftotext` rung (needs the ladder to revise a rung choice post-fetch); the `--json` stdout purity fix; `rungsAvailable` on `ReachabilityResult`; the N2-without-redirect question; per-run URL memoisation and politeness delays; case-insensitive local signature rules; HTML-comment stripping. All are recorded for plan 2.
+**Deliberately NOT in this plan, and why:** true PDF re-routing (breaks the ladder's before-any-fetch contract); HTML-comment stripping (can move a verdict toward `unsupported`; **disclosed** in Task 4 Step 5 instead); `--json` stdout purity; `rungsAvailable` on `ReachabilityResult`; the N2-without-redirect question; per-run URL memoisation and politeness delays; case-insensitive local signature rules; `&shy;` in `norm()`; and an all-ASCII non-prose body (ASCII85/base64) under a textual content-type, which evades both N5 probes - record that beside the known-gap.
 
-**The risk to watch:** Task 1 changes extracted text and Task 2 adds a veto — either could move a verdict on a fixture that has always passed. Both tasks require a corpus sweep, and both say to report a moved verdict rather than tune around it.
+**The risk to watch:** Task 1 changes extracted text and Task 2 adds a veto. Either could move a verdict. Both require the sweep, both must **build first** or the sweep measures the old code, and both say to report a moved verdict rather than tune around it.
