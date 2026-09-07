@@ -4,7 +4,7 @@ import { computeSignals } from "../../src/classify/signals.js";
 import { verdict } from "../../src/classify/verdict.js";
 import { toText } from "../../src/text/extract.js";
 
-type Fixture = { path: string; kind: "challenge" | "document"; url: string; title: string; status: number };
+type Fixture = { path: string; kind: "challenge" | "document" | "known-gap"; url: string; title: string; status: number };
 const corpus: Fixture[] = JSON.parse(readFileSync("fixtures/corpus.json", "utf8"));
 
 const run = (f: Fixture, claims: string[]) =>
@@ -46,5 +46,42 @@ describe("spec 6.3 acceptance, through the verdict reducer", () => {
       })
       .filter((r) => r.got !== "supported" && r.got !== "skip");
     expect(wrong).toEqual([]);
+  });
+});
+
+describe("known gap, pinned as a fixture", () => {
+  // A CHARACTERIZATION TEST. It asserts the CURRENT, WRONG-ISH behaviour on
+  // purpose, so the exposure the README discloses cannot quietly change
+  // without someone reading this comment.
+  //
+  // The ECB capture is a real 404 page carrying 13,221 characters of intact
+  // navigation chrome. N4 (the status veto) is the ONLY thing that rejects it:
+  // it matches no bundled challenge signature, so served at 200 it clears the
+  // 4,500 prose floor and reaches an accusation against an author whose
+  // citation may be perfectly accurate. The same hole is reachable a second
+  // way - a wall that DOES carry bundled signatures stops being vetoed above
+  // THRESHOLDS.maxChallengeChars (800 extracted characters), so padding past
+  // the floor gets there too.
+  //
+  // No threshold is changed to "fix" this: whether the tool should accuse on a
+  // body it cannot tell from chrome is a design question, and moving a
+  // calibrated number is not a bug fix.
+  const gap = corpus.filter((f) => f.kind === "known-gap");
+
+  it("has the ECB capture filed at status 200", () => {
+    expect(gap.map((f) => f.status)).toEqual([200]);
+    expect(gap[0]?.path).toContain("ecb-europa-eu");
+  });
+
+  it("reaches `unsupported` on a claim it does not carry - the exposure itself", () => {
+    for (const f of gap) {
+      expect(run(f, ["a phrase this page certainly does not carry"]), f.path).toBe("unsupported");
+    }
+  });
+
+  it("is rejected by N4 alone: the identical body at its real 404 is unreachable", () => {
+    for (const f of gap) {
+      expect(run({ ...f, status: 404 }, ["a phrase this page certainly does not carry"]), f.path).toBe("unreachable");
+    }
   });
 });

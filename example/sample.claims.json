@@ -4,7 +4,7 @@
     "The HTTP 404 Not Found client error response status code indicates that the server cannot find the requested resource."
   ],
   "https://en.wikipedia.org/wiki/HTTP_404": [
-    "The code is often associated with response reason Not Found and is often referred to as page not found or file not found .",
+    "The code is often associated with response reason Not Found and is often referred to as page not found or file not found.",
     "A 404 error is often returned when pages have been moved or deleted."
   ],
   "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/410": [

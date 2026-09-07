@@ -97,6 +97,58 @@ describe("check", () => {
     expect(r).not.toHaveProperty("evidence");
   });
 
+  it("keeps a rung that PROVED the claims when a later rung returns a bigger block page", async () => {
+    // The ladder escalates whenever a rung reads under the prose floor, so a
+    // SHORT REAL ARTICLE always escalates. If `curl` then returns a larger
+    // block page, picking the winning read by prose volume alone computes the
+    // verdict on the block page and reports as `unsupported` a claim the tool
+    // had ALREADY located. A full match is its own proof of a read, so the
+    // rung that made it settles the verdict.
+    const shortReal = `<html><body><p>The committee report states that spending rose sharply.</p></body></html>`;
+    const biggerBlock = `<html><body>${"Access to this content is restricted for your region. ".repeat(120)}</body></html>`;
+    const r = await check("https://e.com/committee-report", ["spending rose sharply"], {
+      fetcher: stub({ node: { rawBody: shortReal, status: 200 }, curl: { rawBody: biggerBlock, status: 200 } }),
+    });
+    expect(r.rungsAttempted).toEqual(["node", "curl"]);
+    expect(r.verdict).toBe("supported");
+    expect(r.evidence?.[0]?.rung).toBe("node");
+    expect(r.missed ?? []).toEqual([]);
+  });
+
+  it("never names a claim in `missed` that some rung located", async () => {
+    // The partial case, which is worse than the all-or-nothing one: two claims
+    // found on `node`, the third found nowhere, and a fat block page on `curl`.
+    // `missed` is the INTERSECTION across reads, so only the genuinely absent
+    // claim may be named.
+    const first = "spending rose sharply";
+    const second = "the review is ongoing";
+    const found = [first, second];
+    const absent = "a phrase no page carries";
+    const shortReal = `<html><body><p>The committee report states that ${first}, and ${second}.</p></body></html>`;
+    const biggerBlock = `<html><body>${"Access to this content is restricted for your region. ".repeat(120)}</body></html>`;
+    const r = await check("https://e.com/committee-report", [...found, absent], {
+      fetcher: stub({ node: { rawBody: shortReal, status: 200 }, curl: { rawBody: biggerBlock, status: 200 } }),
+    });
+    expect(r.verdict).toBe("unsupported");
+    expect(r.missed).toEqual([absent]);
+    for (const c of found) expect(r.missed).not.toContain(c);
+  });
+
+  it("rejects an empty or whitespace-only claim rather than attesting to it", async () => {
+    // "".includes("") is true, so an empty claim matches EVERY document and
+    // would mint `supported` with a null excerpt. parseClaimsFile protects the
+    // CLI; check() is the exported front door and defends itself.
+    for (const bad of ["", "   ", "\t\n"]) {
+      await expect(
+        check("https://e.com/a", [bad], { fetcher: stub({ node: { rawBody: LONG_PROSE, status: 200 } }) }),
+      ).rejects.toThrow(/empty or whitespace-only/);
+    }
+    // An empty ARRAY is still legitimate - that is `unclaimed`, tested above.
+    await expect(
+      check("https://e.com/a", ["real claim", ""], { fetcher: stub({ node: { rawBody: LONG_PROSE, status: 200 } }) }),
+    ).rejects.toThrow(/index 1/);
+  });
+
   it("does not consult HTTP status outside the 404/410 veto", async () => {
     // The property the design actually holds. A 400 or a 500 says nothing
     // about whether the bytes are the document - spec 6.3 records a 400

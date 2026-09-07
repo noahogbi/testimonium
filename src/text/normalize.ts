@@ -26,6 +26,16 @@ export function norm(s: string): string {
     .replace(/(\d)\s*mn\b/g, "$1mn")
     .replace(/,/g, "")
     .replace(/\s+/g, " ")
+    // toText() replaces every tag with a space, so a phrase copied VERBATIM
+    // from a rendered page arrives as "404 file not found ." and misses. A
+    // miss on a document that cleared the prose floor is an ACCUSATION, so
+    // this clause is keystone-critical, not cosmetic. It is applied to BOTH
+    // sides and only ever deletes, so it can only ADD a match - and an added
+    // match can only move a verdict toward "supported", the safe direction.
+    // Space AFTER terminal punctuation is deliberately NOT removed: that
+    // would let the claim "1.5" match a list rendering "1. 5 things".
+    .replace(/\s+([.;:!?%)\]}])/g, "$1")
+    .replace(/([(\[{])\s+/g, "$1")
     .trim();
 }
 

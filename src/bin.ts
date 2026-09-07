@@ -76,6 +76,13 @@ async function main(argv: string[]): Promise<number> {
   // that ignores a local rule the gate honors is worse than no preflight.
   const rulesIdx = argv.indexOf("--rules");
   const rulesPath = rulesIdx !== -1 ? argv[rulesIdx + 1] : undefined;
+  // A trailing `--rules` with no path yields undefined, which loadRules reads
+  // as "bundled only" - the flag would silently do nothing, which is the
+  // silent-no-op class this project keeps finding. Say so instead.
+  if (rulesIdx !== -1 && (rulesPath === undefined || rulesPath.startsWith("--"))) {
+    console.error("--rules requires a path to a local rules file");
+    return 2;
+  }
   let rules: RuleSet;
   try {
     rules = loadRules(rulesPath);
@@ -123,7 +130,7 @@ async function main(argv: string[]): Promise<number> {
     if (r.verdict === "unsupported") {
       unsupported++;
       console.log(`  [${c.n}] unsupported - ${c.url}`);
-      for (const m of r.missed) console.log(`        MISS: "${m}"`);
+      for (const m of r.missed ?? []) console.log(`        MISS: "${m}"`);
     } else if (r.verdict === "unreachable") {
       unreachable++;
       // Silent to a reader, NEVER to the author: URL and rung history, always.
@@ -188,5 +195,14 @@ async function main(argv: string[]): Promise<number> {
  */
 const entry = process.argv[1];
 if (entry !== undefined && import.meta.url === pathToFileURL(entry).href) {
-  main(process.argv.slice(2)).then((code) => process.exit(code));
+  main(process.argv.slice(2))
+    .then((code) => process.exit(code))
+    // Without this, an infrastructure failure - an unwritable evidence path, a
+    // fetcher bug - rejects the promise and Node exits 1, the code the README
+    // and classifyRun both define as AUTHOR-FIXABLE. A CI gate would read a
+    // broken tool as a broken citation.
+    .catch((e: unknown) => {
+      console.error(`testimonium failed: ${e instanceof Error ? (e.stack ?? e.message) : String(e)}`);
+      process.exit(2);
+    });
 }

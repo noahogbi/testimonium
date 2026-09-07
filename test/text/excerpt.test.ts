@@ -61,6 +61,41 @@ describe("excerptFor", () => {
     expect(excerptFor("Revenue reached 6.5 billion dollars last year.", "6.5bn dollars")).toBeNull();
   });
 
+  // THE ALIGNMENT TEST. norm() pulls a space back onto the preceding word
+  // before punctuation; if foldWithMap did not reproduce that, every claim the
+  // clause rescues would return `supported` with a NULL excerpt - a verdict
+  // with no passage behind it, which is exactly what this file exists to stop.
+  it.each([".", ";", ":", "!", "?", "%", ")", "]", "}"])("LOCATES what phraseFound matches, before %s", (p) => {
+    const doc =
+      `Ordinary lead text sits ahead of the claim here. The reported value is known ${p} and the report ` +
+      `continues for a while afterwards without saying anything else of note.`;
+    const claim = `The reported value is known${p}`;
+    expect(phraseFound(doc, claim), `matcher, ${p}`).toBe(true);
+    const e = excerptFor(doc, claim);
+    expect(e, `located, ${p}`).not.toBeNull();
+    expect(phraseFound(e!, claim), `contract, ${p}`).toBe(true);
+  });
+
+  it.each(["(", "[", "{"])("LOCATES what phraseFound matches, after %s", (p) => {
+    const doc = `Ordinary lead text sits ahead of the claim here. See ${p} note 4 below for the full table of results.`;
+    const claim = `See ${p}note 4 below`;
+    expect(phraseFound(doc, claim), `matcher, ${p}`).toBe(true);
+    const e = excerptFor(doc, claim);
+    expect(e, `located, ${p}`).not.toBeNull();
+    expect(phraseFound(e!, claim), `contract, ${p}`).toBe(true);
+  });
+
+  it("LOCATES a match whose space run also carries a comma", () => {
+    // norm() deletes commas BEFORE it collapses whitespace, so the lookahead
+    // in foldWithMap has to see past a DROP character inside the run too.
+    const doc = "The lead sentence runs first. The total , however , was revised upward later that month.";
+    const claim = "The total, however, was revised upward";
+    expect(phraseFound(doc, claim)).toBe(true);
+    const e = excerptFor(doc, claim);
+    expect(e).not.toBeNull();
+    expect(phraseFound(e!, claim)).toBe(true);
+  });
+
   it("caps the window so a quotation stays a sentence, not a paragraph", () => {
     expect(excerptFor(LONG, "spending rose")!.length).toBeLessThanOrEqual(260);
   });

@@ -104,8 +104,14 @@ before you trust a green run to mean more than it does.
   generic check - and lazy phrases are the default failure mode, especially
   for model-drafted prose (see above).
 - It makes no originality or paraphrase judgment.
-- It contains **no model**, anywhere, in any command. Every verdict in this
-  tool is a string search over fetched text, nothing more.
+- It contains **no model**, anywhere, in any command. What it does *not*
+  contain is the honest half of that sentence; the rest of it used to read
+  "every verdict is a string search over fetched text, nothing more", and
+  that was false. `supported` and the `missed` list are string searches.
+  `unreachable` is not: it is decided from the HTTP status (404/410), a
+  vendor challenge response header, the post-redirect URL, and a length
+  threshold on the extracted text - four facts about the *fetch*, none of
+  them a search of the prose.
 - **The audience is small**, and that is a limit, not a roadmap item - the
   way `urtext` says three of seven analyzers find nothing in a Python repo.
   Direct fit is people who already keep verbatim source quotes and are
@@ -120,25 +126,40 @@ before you trust a green run to mean more than it does.
 These are not bugs. Each one follows directly from the design, and each one
 will eventually surprise a real user if it isn't said here first.
 
-- **A document extracting to fewer than ~4,500 characters of prose reads as
-  `unreachable`.** Below that floor, a real document is indistinguishable
-  from a bot-challenge shell *by this instrument* - both are short - so the
-  tool declines to accuse rather than guess. A one-paragraph official notice
-  will not produce a `supported` verdict, even if every word of it is true
-  and every claim phrase is right there.
+- **A document extracting to fewer than ~4,500 characters of prose can never
+  read as `unsupported`.** Below that floor, a real document is
+  indistinguishable from a bot-challenge shell *by this instrument* - both
+  are short - so the tool declines to accuse rather than guess, and a
+  one-paragraph official notice whose claim phrase is genuinely missing
+  reports `unreachable` instead of a finding against your prose. The floor
+  bites on **accusation only**: a full match is checked *first* and is its
+  own proof of a read, so a short page whose claims are all present still
+  reports `supported`.
+- **A `supported` verdict therefore does not imply a ≥4,500-character
+  document.** If you are integrating against the evidence file, do not read
+  `supported` as "we retrieved the whole article" - a paywall stub or a
+  syndication teaser that happens to carry the quoted paragraph yields
+  `supported` on a couple of hundred characters, and the excerpt is the only
+  thing that says how much was actually there.
 - **A source served at HTTP 404 or 410 reads as `unreachable`, even if its
   body still visibly carries the claim phrases.** A server is not
   authoritative about *presence* - error pages routinely serve tens of
   kilobytes of intact navigation chrome - but 404/410 is the one place a
   server *is* authoritative: it is the origin stating the resource is gone,
   and that statement is trusted over the body.
-- **A heavy-chrome error page served at HTTP 200, using no wording on the
-  known challenge-signature list, can evade both the status veto and the
-  prose floor.** If it pads past ~4,500 characters of navigation and
-  boilerplate text without saying anything the signature list recognizes as
-  a challenge, it can read as a normal document and report `unsupported`
-  when its claims miss - a false accusation against the author. This is a
-  known gap. There is no fixture for it yet.
+- **A heavy-chrome error page or wall served at HTTP 200 can evade both the
+  status veto and the prose floor - including one whose wording IS on the
+  challenge-signature list.** The signature list only vetoes a *short* body:
+  above `THRESHOLDS.maxChallengeChars` (800 extracted characters) it stops
+  firing, because a real article discussing bot walls quotes the same
+  wording. So a wall carrying two bundled signatures and padded past ~4,500
+  characters of navigation and boilerplate reads as a normal document and
+  reports `unsupported` when its claims miss - a false accusation against
+  the author. This is a known gap, and it is pinned by a fixture:
+  `fixtures/corpus.json` files the real ECB error capture a second time at
+  status 200 (`"kind": "known-gap"`), where its 13,221 characters of intact
+  navigation reach an accusation. At its real 404 the status veto is the
+  *only* thing that rejects it.
 - **If a site is redesigned and now serves different prose-rich content at a
   cited URL, `testimonium` can report `unsupported`.** It verifies that the
   page *carries the phrases*, not that it is *the same page* it was when you
@@ -147,12 +168,23 @@ will eventually surprise a real user if it isn't said here first.
 - **A citation URL carrying a `#fragment` must have that same fragment on
   the key in the claims file**, or the join misses and the footnote reads as
   `unclaimed` rather than being checked.
-- **`unreachable` never fails a run and is never treated as a finding
-  against your prose** - it's an availability fact about the fetch, not a
-  credibility fact about the claim - but it is always listed, to you, the
-  author. If you cited a walled host, `testimonium` will not catch a
-  fabricated claim behind that wall. It will tell you, honestly, that it
-  could not look.
+- **`unreachable` never fails a run by default, and is never treated as a
+  finding against your prose** - it's an availability fact about the fetch,
+  not a credibility fact about the claim - but it is always listed, to you,
+  the author. That default is a default, not an invariant:
+  `--fail-on-unreachable` makes it exit 1, which is the right choice for a
+  corpus you expect to be fully readable. If you cited a walled host,
+  `testimonium` will not catch a fabricated claim behind that wall. It will
+  tell you, honestly, that it could not look.
+- **A `supported` verdict from a truncated ladder does not mean the same
+  thing as one from a full ladder.** The ladder shells out: `curl` for the
+  second HTML rung, `pdftotext` for PDFs. On a slim container or a
+  serverless runtime that has neither, `check` still runs and still exits 0 -
+  but every PDF citation attempts *nothing at all*, reports `unreachable`,
+  and passes. `rungsAvailable` and `ladderTruncated` are on every result for
+  exactly this reason, and the CLI prints "ladder truncated" beside each
+  affected citation. If your CI image is minimal, read those fields before
+  reading the exit code.
 
 ## Commands
 

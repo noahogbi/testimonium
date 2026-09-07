@@ -35,17 +35,33 @@ export interface Signals {
  *
  * "unsupported" requires positive proof we read the real page. Attestation and
  * accusation carry different burdens: a full match is its own proof of a read,
- * while an accusation needs body-derived evidence - prose volume AND slug/title
- * correlation - and no veto. `matched > 0` does not license an accusation on
- * its own, because a wall padded with boilerplate can mint one.
+ * while an accusation needs body-derived evidence - PROSE VOLUME - and no veto.
+ * (Slug/title correlation was withdrawn from this burden by ruling C7: it was
+ * measured three times and ranks the two populations backwards. It is still
+ * computed and reported, and it does not gate.) `matched > 0` does not license
+ * an accusation on its own, because a wall padded with boilerplate can mint one.
  *
  * Every branch that returns "unsupported" is a branch that can publish a false
  * accusation against an author's accurate work if it is wrong. Change nothing
  * here without a fixture.
  */
+/**
+ * The four vetoes, in ONE place, because two callers ask this question.
+ *
+ * `reachability` (the preflight) asked it separately and its copy omitted N4,
+ * so a 404 serving intact navigation chrome read `readable` in the preflight
+ * and `unreachable` in the gate - a preflight that contradicts the gate is
+ * worse than no preflight. Exported so the two cannot drift again.
+ */
+export function isBlocked(
+  s: Pick<Signals, "challengeHeader" | "challengePath" | "challengeSignature" | "documentGone">,
+): boolean {
+  return s.challengeHeader || s.challengePath || s.challengeSignature || s.documentGone;
+}
+
 export function verdict(s: Signals): Verdict {
   if (s.total === 0) return "unclaimed";
-  if (s.challengeHeader || s.challengePath || s.challengeSignature || s.documentGone) return "unreachable";
+  if (isBlocked(s)) return "unreachable";
   if (s.matched === s.total) return "supported";
   // C1 (slugLabelOverlap) is reported on Signals but deliberately NOT consulted
   // here - see thresholds.ts. Prose volume plus the four vetoes carry the whole

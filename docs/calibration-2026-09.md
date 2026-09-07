@@ -1,7 +1,9 @@
 # Calibration of `minProseChars`
 
 **Date:** 2026-09-07 (round 3, after ruling C7) — supersedes the round-1 and round-2 records
-**Corpus:** `fixtures/corpus.json` — 33 fixtures: 24 `challenge`, 9 `document`
+**Corpus:** `fixtures/corpus.json` — 33 calibrated fixtures: 24 `challenge`, 9 `document`.
+A 34th row was added later with `"kind": "known-gap"`; it is **not** a population member and
+no number on this page counts it. See "Known gap" below.
 **Instrument:** `toText` (Task 3) then `proseVolume` (`src/classify/thresholds.ts`), with
 N4 (HTTP 404/410 veto) applied first
 **Reproduce:** `npm run build && node scripts/calibrate.mjs && npx vitest run`
@@ -197,6 +199,42 @@ scores 0.33 against document #25's 0.00, and challenge #24 ties the document cei
 1.00. Among fixtures that actually reach the body-derived gate, the highest challenge
 (#22, 0.00) exactly ties the lowest document (#25, 0.00) — the round-2 finding that no
 threshold fits between two equal values.
+
+## Known gap — a real page that reaches an accusation
+
+**Added 2026-09-07, after the final whole-branch review. No threshold was changed.**
+
+The ECB capture (#24) is filed in `fixtures/corpus.json` a **second time**, same file, with
+`"kind": "known-gap"` and `"status": 200`. It is not part of either population and nothing
+on this page counts it; the acceptance test and `scripts/calibrate.mjs` both key on
+`challenge`/`document` and skip it. `test/classify/corpus-verdict.test.ts` pins it.
+
+What it exposes, measured through the shipped pipeline:
+
+| body | status | prose | bundled signature? | verdict |
+|---|---:|---:|---|---|
+| ECB error page, real capture | 404 | 13,221 | none matches | `unreachable` (N4) |
+| the identical bytes | 200 | 13,221 | none matches | **`unsupported`** |
+
+So on this page **N4 is the only thing standing between an author and a false
+accusation.** Nothing about the body rejects it: 13,221 characters of intact navigation
+chrome out-extracts two real documents in the corpus, and it carries no wording the
+challenge-signature list recognizes.
+
+The same hole is reachable a second way, and this one does involve the signature list:
+`challengeSignature` only vetoes on a body under `THRESHOLDS.maxChallengeChars` (800
+extracted characters), because a real article *about* bot walls matches every signature in
+the list. **Above 800 characters the signature list stops vetoing entirely**, so a wall
+carrying two bundled signatures and padded past the 4,500 prose floor reaches `unsupported`
+just as the ECB page does at 200. The bundled corpus has no such fixture — the largest
+non-vetoed challenge is 1,180 characters, comfortably under the floor — which is precisely
+why the exposure needed pinning rather than another ledger line.
+
+**`maxChallengeChars` and `minProseChars` were deliberately left alone.** Whether the tool
+should accuse on a body it cannot distinguish from chrome is a design question with a real
+cost on both sides (raising the floor loses genuine short documents; extending the
+signature veto to long bodies loses articles that discuss bot walls). Moving a calibrated
+number is not a bug fix, and it would invalidate this page's measurements.
 
 ## What was NOT done
 

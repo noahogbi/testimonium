@@ -34,6 +34,14 @@ const FOLD: Record<string, string> = {
  *  the map records the source offset of each character that SURVIVES. */
 const DROP = new Set([","]);
 
+/** Punctuation that norm() pulls back onto the preceding word, and brackets
+ *  that it pulls the following word up to. Reproduced here so the matcher and
+ *  the index map stay aligned. Without it every claim the punctuation clause
+ *  rescues returns `supported` with a null excerpt - a verdict with no passage
+ *  behind it. */
+const CLOSE_PUNCT = new Set([".", ";", ":", "!", "?", "%", ")", "]", "}"]);
+const OPEN_PUNCT = new Set(["(", "[", "{"]);
+
 /**
  * Fold a copy of the text while remembering where each surviving character came
  * from.
@@ -58,6 +66,15 @@ function foldWithMap(text: string): { folded: string; map: number[] } {
     if (/\s/.test(raw)) {
       // \s matches U+00A0 in JS, so the NBSP fold is covered here.
       if (lastWasSpace) continue;
+      // Look past the whitespace run - and any DROP character inside it, since
+      // norm() deletes commas BEFORE it collapses space - to decide whether
+      // norm() would have deleted this space outright.
+      let j = i;
+      while (j < text.length && (/\s/.test(text[j] as string) || DROP.has(text[j] as string))) j++;
+      const next = text[j];
+      if (next !== undefined && CLOSE_PUNCT.has(next)) continue;
+      const prev = chars[chars.length - 1];
+      if (prev !== undefined && OPEN_PUNCT.has(prev)) continue;
       lastWasSpace = true;
       chars.push(" ");
       map.push(i);

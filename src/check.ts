@@ -40,6 +40,20 @@ export async function check(
   claims: readonly string[],
   opts: CheckOptions = {},
 ): Promise<CitationResult> {
+  // An empty or whitespace-only claim matches EVERYTHING ("".includes("") is
+  // true), so it would mint a `supported` verdict with a null excerpt - an
+  // attestation with nothing behind it. The CLI is protected by
+  // parseClaimsFile, but check() is the exported front door and has to defend
+  // itself. Rejected at the door, before any IO, because it is a caller bug
+  // rather than a fetch failure: an empty ARRAY is still fine and reads
+  // `unclaimed`.
+  const blank = claims.findIndex((c) => typeof c !== "string" || !c.trim());
+  if (blank !== -1) {
+    throw new TypeError(
+      `check(${url}): claim at index ${blank} is empty or whitespace-only; an empty claim matches every document`,
+    );
+  }
+
   // The local `rules.hosts` must reach the default fetcher's UA/identity
   // logic - a local host rule that loads and validates but is never consulted
   // is the same silent-no-op failure that signatures/paths had (Critical 1).
@@ -47,10 +61,11 @@ export async function check(
   const pdfUrl = isPdf(url);
   const history: Attempt[] = [];
   const attempted: RungId[] = [];
-  // The rung is carried WITH the signals, not read off the end of the history.
-  // Taking the last attempted rung mis-attributes evidence whenever an earlier
-  // rung is the one that read the document.
-  let best: { rung: RungId; computed: ReturnType<typeof computeSignals> } | null = null;
+  // EVERY rung's computation is kept, not just the longest. The rung is carried
+  // WITH the signals, not read off the end of the history: taking the last
+  // attempted rung mis-attributes evidence whenever an earlier rung is the one
+  // that read the document.
+  const reads: { rung: RungId; computed: ReturnType<typeof computeSignals> }[] = [];
 
   for (;;) {
     const action = nextAction(history, fetcher.rungs, pdfUrl);
@@ -81,11 +96,7 @@ export async function check(
       ...(opts.rules ? { rules: opts.rules } : {}),
     });
 
-    // Keep the rung that read the most prose. A later rung that got a wall must
-    // not overwrite an earlier one that got the document.
-    if (!best || computed.signals.proseChars > best.computed.signals.proseChars) {
-      best = { rung: action.rung, computed };
-    }
+    reads.push({ rung: action.rung, computed });
 
     history.push({
       rung: action.rung,
@@ -97,7 +108,7 @@ export async function check(
     });
   }
 
-  if (!best) {
+  if (reads.length === 0) {
     return buildResult({
       url, verdict: claims.length === 0 ? "unclaimed" : "unreachable",
       evidence: [], rungsAttempted: attempted, rungsAvailable: fetcher.rungs,
@@ -105,10 +116,16 @@ export async function check(
     });
   }
 
-  const v = verdict(best.computed.signals);
-  // Bound once: TypeScript cannot narrow a closed-over `let` inside a
-  // callback, and two non-null assertions read worse than one binding.
-  const won = best;
+  // A full match is its own proof of a read (verdict.ts), so a rung that
+  // reached `supported` settles it. Discarding that read merely because a later
+  // rung returned a longer body is how a citation the tool ALREADY verified
+  // becomes an accusation - and the ladder escalates on ANY sub-floor read, so
+  // a short real article followed by a fat block page is the ordinary case,
+  // not an exotic one.
+  const proven = reads.find((r) => verdict(r.computed.signals) === "supported");
+  const won = proven ?? reads.reduce((a, b) =>
+    b.computed.signals.proseChars > a.computed.signals.proseChars ? b : a);
+  const v = verdict(won.computed.signals);
   const evidence: Evidence[] = won.computed.matchedClaims.map((claim) => ({
     claims: [claim],
     excerpt: excerptFor(won.computed.text, claim),
@@ -121,7 +138,12 @@ export async function check(
     evidence: dedupeEvidence(evidence),
     rungsAttempted: attempted,
     rungsAvailable: fetcher.rungs,
-    missed: v === "unsupported" ? [...best.computed.missedClaims] : [],
+    // The INTERSECTION across every read, never one rung's miss list. A claim
+    // located on `node` and absent from `curl`'s block page was located; naming
+    // it here would accuse the author of a citation the tool itself verified.
+    missed: v === "unsupported"
+      ? claims.filter((c) => !reads.some((r) => r.computed.matchedClaims.includes(c)))
+      : [],
     isPdfUrl: pdfUrl,
     firedRule: won.computed.firedRule,
   });

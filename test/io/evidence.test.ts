@@ -30,6 +30,17 @@ describe("buildResult", () => {
     for (const k of RENDERABLE) expect(r).not.toHaveProperty(k);
     expect(r.missed).toEqual(["q"]);
   });
+
+  it.each(["supported", "unreachable", "unclaimed"] as const)(
+    "carries NO `missed` on %s - only an accusing verdict may accuse",
+    (verdict) => {
+      // `missed` names the claims the author allegedly failed to support. It
+      // used to sit in `base` on every verdict, so `unreachable` - the verdict
+      // that means "we could not look" - shipped an accusation list beside it.
+      // Gated by construction, the same doctrine as evidence/retrievedAt.
+      expect(buildResult({ ...BASE, verdict, missed: ["q"] })).not.toHaveProperty("missed");
+    },
+  );
 });
 
 describe("ladderTruncated", () => {

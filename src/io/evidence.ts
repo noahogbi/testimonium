@@ -24,7 +24,12 @@ export interface CitationResult {
    *  an unreachable reads as "ladder truncated" and never as a fact about the
    *  host. A serverless caller has node only. */
   readonly ladderTruncated: boolean;
-  readonly missed: readonly string[];
+  /** PRESENT ONLY WHEN verdict === "unsupported". The most accusatory field in
+   *  the schema - it names the claims the author allegedly failed to support -
+   *  so it is gated the same way evidence is, and for the same reason: the
+   *  schema must be structurally unable to express an accusation on a verdict
+   *  that is not accusing. */
+  readonly missed?: readonly string[];
   /** PRESENT ONLY WHEN verdict === "supported". */
   readonly evidence?: readonly Evidence[];
   readonly retrievedAt?: string;
@@ -69,6 +74,12 @@ function isLadderTruncated(available: readonly RungId[], isPdfUrl: boolean): boo
  * retrievedAt. The schema is unable to express the accusation, so the tool's
  * first downstream integrator cannot render `unreachable` as a red badge and
  * break the premise the tool exists for.
+ *
+ * `missed` is gated in the OTHER direction, by the same doctrine: only an
+ * `unsupported` verdict may name claims as unsupported. It sat in `base` on
+ * every verdict, so an `unreachable` result - the verdict that means "we could
+ * not look" - shipped a list of the author's allegedly-missing claims beside
+ * it.
  */
 export function buildResult(input: BuildInput): CitationResult {
   const base = {
@@ -77,11 +88,11 @@ export function buildResult(input: BuildInput): CitationResult {
     rungsAttempted: input.rungsAttempted,
     rungsAvailable: input.rungsAvailable,
     ladderTruncated: isLadderTruncated(input.rungsAvailable, input.isPdfUrl),
-    missed: input.missed,
     // Provenance, carried on every verdict - deliberately not gated behind
     // `verdict === "supported"` below, unlike evidence/retrievedAt.
     ...(input.firedRule ? { firedRule: { lastConfirmed: input.firedRule.lastConfirmed, note: input.firedRule.note } } : {}),
   };
+  if (input.verdict === "unsupported") return { ...base, missed: input.missed };
   if (input.verdict !== "supported") return base;
   return { ...base, evidence: input.evidence, retrievedAt: new Date().toISOString() };
 }

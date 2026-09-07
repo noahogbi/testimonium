@@ -3,7 +3,11 @@ import { readFileSync } from "node:fs";
 import { toText } from "../../src/text/extract.js";
 import { THRESHOLDS, proseVolume, slugLabelOverlap } from "../../src/classify/thresholds.js";
 
-type Fixture = { path: string; kind: "challenge" | "document"; url: string; title: string; status: number };
+// `known-gap` rows are a third kind and belong to NEITHER population: they
+// file a real capture a second time under the status that exposes a documented
+// hole. Every filter below keys on "challenge"/"document", so they are read by
+// test/classify/corpus-verdict.test.ts and by nothing here.
+type Fixture = { path: string; kind: "challenge" | "document" | "known-gap"; url: string; title: string; status: number };
 const corpus: Fixture[] = JSON.parse(readFileSync("fixtures/corpus.json", "utf8"));
 const read = (f: Fixture) => toText(readFileSync(f.path, "utf8"));
 

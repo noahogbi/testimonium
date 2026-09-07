@@ -1,9 +1,10 @@
 import { computeSignals } from "./classify/signals.js";
 import { THRESHOLDS } from "./classify/thresholds.js";
+import { isBlocked } from "./classify/verdict.js";
 import { defaultFetcher } from "./fetch/default-fetcher.js";
 import { nextAction, type Attempt } from "./fetch/ladder.js";
 import { isPdf } from "./fetch/pdf.js";
-import type { Fetcher, RungId } from "./fetch/types.js";
+import { EMPTY_RESPONSE, type Fetcher, type RawResponse, type RungId } from "./fetch/types.js";
 import type { RuleSet } from "./rules/load.js";
 
 export interface ReachabilityResult {
@@ -45,11 +46,24 @@ export async function reachability(
     let bestProse = 0;
     let bestRung: RungId = "node";
     let challenged = false;
+    let gone = false;
 
     for (;;) {
       const action = nextAction(history, fetcher.rungs, isPdf(url));
       if (action.kind === "stop") break;
-      const response = await fetcher.fetch(url, action.rung);
+      // Same contract, same treatment as check(): a Fetcher must not throw,
+      // and a third-party one that does degrades to an unread rung rather than
+      // aborting a preflight over an entire corpus (ruling C12, second call
+      // site). Warned about, never swallowed.
+      let response: RawResponse;
+      try {
+        response = await fetcher.fetch(url, action.rung);
+      } catch (e) {
+        console.warn(
+          `warn fetcher rung "${action.rung}" threw for ${url}: ${e instanceof Error ? e.message : String(e)}`,
+        );
+        response = EMPTY_RESPONSE;
+      }
       attempted.push(action.rung);
       const c = computeSignals({
         rawBody: response.rawBody,
@@ -59,13 +73,16 @@ export async function reachability(
         claims: [],
         ...(opts.rules ? { rules: opts.rules } : {}),
       });
-      const blocked =
-        c.signals.challengeHeader || c.signals.challengePath || c.signals.challengeSignature;
+      // THE SHARED PREDICATE, not a second copy. This one used to omit N4
+      // (documentGone), so a 404 serving nav chrome read `readable` here and
+      // `unreachable` at the gate.
+      const blocked = isBlocked(c.signals);
       if (c.signals.proseChars > bestProse) {
         bestProse = c.signals.proseChars;
         bestRung = action.rung;
       }
       challenged = challenged || blocked;
+      gone = gone || c.signals.documentGone;
       history.push({ rung: action.rung, proseChars: c.signals.proseChars, challenged: blocked });
     }
 
@@ -74,7 +91,13 @@ export async function reachability(
     } else {
       unreadable.push({
         url,
-        reason: challenged ? "challenge interstitial" : `only ${bestProse} characters extracted`,
+        // A 404 is not an interstitial, and saying so would be a new
+        // inaccuracy introduced by folding N4 into `blocked`.
+        reason: gone
+          ? "the origin says the document is gone (404/410)"
+          : challenged
+            ? "challenge interstitial"
+            : `only ${bestProse} characters extracted`,
         rungsAttempted: attempted,
       });
     }

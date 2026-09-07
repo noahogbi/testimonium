@@ -13,7 +13,6 @@
         "pdftotext"
       ],
       "ladderTruncated": false,
-      "missed": [],
       "evidence": [
         {
           "claims": [
@@ -23,7 +22,7 @@
           "rung": "node"
         }
       ],
-      "retrievedAt": "2026-09-07T11:39:08.186Z"
+      "retrievedAt": "2026-09-07T12:09:13.896Z"
     },
     {
       "url": "https://en.wikipedia.org/wiki/HTTP_404",
@@ -37,11 +36,10 @@
         "pdftotext"
       ],
       "ladderTruncated": false,
-      "missed": [],
       "evidence": [
         {
           "claims": [
-            "The code is often associated with response reason Not Found and is often referred to as page not found or file not found ."
+            "The code is often associated with response reason Not Found and is often referred to as page not found or file not found."
           ],
           "excerpt": "…[ 1 ] The code is often associated with response reason Not Found and is often referred to as page not found or file not found .…",
           "rung": "node"
@@ -54,7 +52,7 @@
           "rung": "node"
         }
       ],
-      "retrievedAt": "2026-09-07T11:39:08.471Z"
+      "retrievedAt": "2026-09-07T12:09:14.098Z"
     },
     {
       "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/410",
@@ -68,7 +66,6 @@
         "pdftotext"
       ],
       "ladderTruncated": false,
-      "missed": [],
       "evidence": [
         {
           "claims": [
@@ -78,7 +75,7 @@
           "rung": "node"
         }
       ],
-      "retrievedAt": "2026-09-07T11:39:08.517Z"
+      "retrievedAt": "2026-09-07T12:09:14.147Z"
     },
     {
       "url": "https://www.rfc-editor.org/rfc/rfc9110.html",
@@ -92,7 +89,6 @@
         "pdftotext"
       ],
       "ladderTruncated": false,
-      "missed": [],
       "evidence": [
         {
           "claims": [
@@ -109,7 +105,7 @@
           "rung": "node"
         }
       ],
-      "retrievedAt": "2026-09-07T11:39:09.009Z"
+      "retrievedAt": "2026-09-07T12:09:14.650Z"
     }
   ]
 }
