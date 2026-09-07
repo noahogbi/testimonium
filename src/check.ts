@@ -5,6 +5,7 @@ import { nextAction, type Attempt } from "./fetch/ladder.js";
 import { isPdf } from "./fetch/pdf.js";
 import { EMPTY_RESPONSE, type Fetcher, type RawResponse, type RungId } from "./fetch/types.js";
 import { dedupeEvidence, excerptFor, type Evidence } from "./text/excerpt.js";
+import { norm } from "./text/normalize.js";
 import { buildResult, type CitationResult } from "./io/evidence.js";
 import type { RuleSet } from "./rules/load.js";
 
@@ -47,10 +48,17 @@ export async function check(
   // itself. Rejected at the door, before any IO, because it is a caller bug
   // rather than a fetch failure: an empty ARRAY is still fine and reads
   // `unclaimed`.
-  const blank = claims.findIndex((c) => typeof c !== "string" || !c.trim());
+  //
+  // The predicate is `norm()`, NOT `trim()`, because norm() is what the
+  // matcher runs. Anything norm() folds to "" matches every document exactly
+  // as "" does, and trim() does not see it: "," and ",,," survive trim (norm
+  // deletes commas) and U+200B is not whitespace to JS at all. Testing a
+  // weaker predicate than the matcher uses is how the guard let a false
+  // attestation through.
+  const blank = claims.findIndex((c) => typeof c !== "string" || !norm(c));
   if (blank !== -1) {
     throw new TypeError(
-      `check(${url}): claim at index ${blank} is empty or whitespace-only; an empty claim matches every document`,
+      `check(${url}): claim at index ${blank} is empty or whitespace-only once normalized; an empty claim matches every document`,
     );
   }
 
@@ -125,12 +133,31 @@ export async function check(
   const proven = reads.find((r) => verdict(r.computed.signals) === "supported");
   const won = proven ?? reads.reduce((a, b) =>
     b.computed.signals.proseChars > a.computed.signals.proseChars ? b : a);
-  const v = verdict(won.computed.signals);
-  const evidence: Evidence[] = won.computed.matchedClaims.map((claim) => ({
-    claims: [claim],
-    excerpt: excerptFor(won.computed.text, claim),
-    rung: won.rung,
-  }));
+
+  // A claim located by ANY rung is proven present - a match is proof of a read.
+  // Assembling across reads is what stops an `unsupported` verdict that names
+  // nothing, and it keeps verdict() the only place a verdict is decided.
+  //
+  // Without this, the match count came from the single winning read while
+  // `missed` was the intersection across all of them, so a union that covered
+  // every claim with no single rung covering them all returned `unsupported`
+  // with an EMPTY `missed` and no evidence: a build failed, and the tool named
+  // nothing it could be failed for.
+  const locatedBy = new Map<string, (typeof reads)[number]>();
+  for (const r of reads) {
+    for (const c of r.computed.matchedClaims) if (!locatedBy.has(c)) locatedBy.set(c, r);
+  }
+  const missedAll = claims.filter((c) => !locatedBy.has(c));
+
+  const v = verdict({ ...won.computed.signals, matched: claims.length - missedAll.length });
+
+  // Each claim's excerpt and rung come from the read that actually LOCATED it.
+  // Quoting the winning read for a claim another rung found would attach a
+  // passage to a document it did not come from.
+  const evidence: Evidence[] = claims.flatMap((claim) => {
+    const r = locatedBy.get(claim);
+    return r ? [{ claims: [claim], excerpt: excerptFor(r.computed.text, claim), rung: r.rung }] : [];
+  });
 
   return buildResult({
     url,
@@ -141,9 +168,9 @@ export async function check(
     // The INTERSECTION across every read, never one rung's miss list. A claim
     // located on `node` and absent from `curl`'s block page was located; naming
     // it here would accuse the author of a citation the tool itself verified.
-    missed: v === "unsupported"
-      ? claims.filter((c) => !reads.some((r) => r.computed.matchedClaims.includes(c)))
-      : [],
+    // Since the verdict is now computed from the same union, an `unsupported`
+    // result cannot reach here with this list empty.
+    missed: v === "unsupported" ? missedAll : [],
     isPdfUrl: pdfUrl,
     firedRule: won.computed.firedRule,
   });

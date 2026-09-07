@@ -52,6 +52,20 @@ describe("parseClaimsFile", () => {
     expect(() => parseClaimsFile('{"https://e.com/a":[3]}')).toThrow(/non-empty/);
   });
 
+  it("rejects a phrase that survives trim() but NORMALIZES to empty", () => {
+    // The validation predicate has to be the MATCHER's. norm() deletes commas
+    // and zero-width characters, so each of these folds to "" and matches every
+    // document, while JS trim() sees a non-empty string. This is the CLI's own
+    // door: a claims file carrying one of these parsed clean and minted
+    // `supported` with a null excerpt.
+    for (const bad of [",", ",,,", "\u200b"]) {
+      expect(
+        () => parseClaimsFile(`{"https://e.com/a":[${JSON.stringify(bad)}]}`),
+        JSON.stringify(bad),
+      ).toThrow(/non-empty/);
+    }
+  });
+
   it("rejects a value that is neither a phrase array nor a notApplicable object", () => {
     // The wrong-shape branch had no coverage; a string, a number, or an object
     // without the reason field must all be refused rather than coerced.

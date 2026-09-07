@@ -1,4 +1,5 @@
 import type { Footnote } from "../adapters/types.js";
+import { norm } from "../text/normalize.js";
 
 export type ClaimEntry = string[] | { notApplicable: string };
 export type ClaimsFile = Map<string, ClaimEntry>;
@@ -59,8 +60,13 @@ export function parseClaimsFile(json: string): ClaimsFile {
     }
 
     if (Array.isArray(value)) {
-      if (value.length === 0 || value.some((p) => typeof p !== "string" || !p.trim())) {
-        throw new Error(`${key}: claims must be a non-empty array of non-empty strings`);
+      // `norm()`, NOT `trim()`: the predicate has to be the one the MATCHER
+      // uses. A phrase norm() folds to "" matches every document exactly as ""
+      // does, and trim() cannot see it - "," and ",,," survive trim (norm
+      // deletes commas) and U+200B is not whitespace to JS. Letting one
+      // through here walks a false attestation straight in from the CLI.
+      if (value.length === 0 || value.some((p) => typeof p !== "string" || !norm(p))) {
+        throw new Error(`${key}: claims must be a non-empty array of strings that are non-empty once normalized`);
       }
       out.set(url, value as string[]);
       continue;

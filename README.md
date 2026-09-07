@@ -108,10 +108,13 @@ before you trust a green run to mean more than it does.
   contain is the honest half of that sentence; the rest of it used to read
   "every verdict is a string search over fetched text, nothing more", and
   that was false. `supported` and the `missed` list are string searches.
-  `unreachable` is not: it is decided from the HTTP status (404/410), a
-  vendor challenge response header, the post-redirect URL, and a length
-  threshold on the extracted text - four facts about the *fetch*, none of
-  them a search of the prose.
+  `unreachable` is decided from **five** inputs: the HTTP status (404/410),
+  a vendor challenge response header, the post-redirect URL, a length
+  threshold on the extracted text, and a match against the bundled
+  challenge-signature list. That fifth input *is* a search of the prose -
+  twelve regexes over the normalized extracted text
+  (`src/rules/challenge.ts`), and a hit feeds the blocked decision directly.
+  What none of the five involve is a model.
 - **The audience is small**, and that is a limit, not a roadmap item - the
   way `urtext` says three of seven analyzers find nothing in a Python repo.
   Direct fit is people who already keep verbatim source quotes and are
@@ -147,19 +150,24 @@ will eventually surprise a real user if it isn't said here first.
   kilobytes of intact navigation chrome - but 404/410 is the one place a
   server *is* authoritative: it is the origin stating the resource is gone,
   and that statement is trusted over the body.
-- **A heavy-chrome error page or wall served at HTTP 200 can evade both the
-  status veto and the prose floor - including one whose wording IS on the
-  challenge-signature list.** The signature list only vetoes a *short* body:
-  above `THRESHOLDS.maxChallengeChars` (800 extracted characters) it stops
-  firing, because a real article discussing bot walls quotes the same
-  wording. So a wall carrying two bundled signatures and padded past ~4,500
-  characters of navigation and boilerplate reads as a normal document and
-  reports `unsupported` when its claims miss - a false accusation against
-  the author. This is a known gap, and it is pinned by a fixture:
+- **A heavy-chrome error page served at HTTP 200 can evade both the status
+  veto and the prose floor.** This route *is* pinned by a fixture:
   `fixtures/corpus.json` files the real ECB error capture a second time at
   status 200 (`"kind": "known-gap"`), where its 13,221 characters of intact
-  navigation reach an accusation. At its real 404 the status veto is the
-  *only* thing that rejects it.
+  navigation chrome clear the prose floor and reach an accusation. That page
+  matches **none** of the twelve bundled challenge signatures - verified, 0
+  of 12 - so at its real 404 the status veto is the *only* thing rejecting
+  it, and nothing about the body would.
+- **The same false accusation is reachable a second way, and that route has
+  no fixture at all.** The signature list only vetoes a *short* body: above
+  `THRESHOLDS.maxChallengeChars` (800 extracted characters) it stops firing,
+  because a real article discussing bot walls quotes the same wording. So a
+  wall that *does* carry bundled signatures, padded past the ~4,500-character
+  prose floor with navigation and boilerplate, reads as a normal document and
+  reports `unsupported` when its claims miss. The bundled corpus contains **no
+  fixture for this route** - the largest non-vetoed challenge in it is 1,180
+  characters, comfortably under the floor - so unlike the one above it is
+  disclosed here and in `docs/calibration-2026-09.md`, not pinned by a test.
 - **If a site is redesigned and now serves different prose-rich content at a
   cited URL, `testimonium` can report `unsupported`.** It verifies that the
   page *carries the phrases*, not that it is *the same page* it was when you

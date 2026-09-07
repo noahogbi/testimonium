@@ -149,6 +149,71 @@ describe("check", () => {
     ).rejects.toThrow(/index 1/);
   });
 
+  it("rejects a claim that survives trim() but NORMALIZES to empty", async () => {
+    // The guard has to test the predicate the MATCHER uses. norm() deletes
+    // commas and zero-width characters, so each of these normalizes to "" and
+    // matches every document - while JS trim() sees a non-empty string and
+    // waves it through. That minted `supported` with a null excerpt: an
+    // attestation with nothing behind it, and reachable from the CLI, because
+    // parseClaimsFile tested the same wrong predicate.
+    for (const bad of [",", ",,,", "\u200b"]) {
+      await expect(
+        check("https://e.com/a", [bad], { fetcher: stub({ node: { rawBody: LONG_PROSE, status: 200 } }) }),
+        JSON.stringify(bad),
+      ).rejects.toThrow(/empty or whitespace-only/);
+    }
+  });
+
+  it("assembles a full match across rungs rather than accusing from one of them", async () => {
+    // The union case. Neither rung carries both claims: `node` reads a
+    // sub-floor real article with the first, the ladder escalates because it is
+    // sub-floor, and `curl` returns a fat page carrying the second. A match is
+    // proof of a read, so between them BOTH claims are proven present - and
+    // computing the verdict from the winning read alone returned `unsupported`
+    // with an empty `missed` and no evidence, failing a build while naming
+    // nothing.
+    const c1 = "spending rose sharply";
+    const c2 = "the review is ongoing";
+    const shortReal = `<html><body><p>The committee report states that ${c1}.</p></body></html>`;
+    const fat = `<html><body>${"Access to this content is restricted for your region. ".repeat(120)}<p>Separately, ${c2}.</p></body></html>`;
+    const r = await check("https://e.com/committee-report", [c1, c2], {
+      fetcher: stub({ node: { rawBody: shortReal, status: 200 }, curl: { rawBody: fat, status: 200 } }),
+    });
+    expect(r.rungsAttempted).toEqual(["node", "curl"]);
+    expect(r.verdict).toBe("supported");
+    // Each excerpt comes from the read that actually located its claim.
+    expect(r.evidence?.map((e) => e.rung)).toEqual(["node", "curl"]);
+    for (const e of r.evidence ?? []) expect(e.excerpt).not.toBeNull();
+    expect(r.evidence?.[0]?.excerpt).toContain(c1);
+    expect(r.evidence?.[1]?.excerpt).toContain(c2);
+  });
+
+  it("INVARIANT: an unsupported verdict always names at least one missed claim", async () => {
+    // `unsupported` fails a build. A CI failure that names nothing is worse
+    // than no check at all, and the schema cannot express the reason anywhere
+    // else - `evidence` is gated off on a non-supported verdict. Asserted as a
+    // property over the ladder shapes that produce it, not one example.
+    const c1 = "spending rose sharply";
+    const c2 = "the review is ongoing";
+    const absent = "a phrase no page carries";
+    const shortReal = `<html><body><p>The committee report states that ${c1}.</p></body></html>`;
+    const fat = `<html><body>${"Access to this content is restricted for your region. ".repeat(120)}<p>Separately, ${c2}.</p></body></html>`;
+    const fatOnly = `<html><body>${"Access to this content is restricted for your region. ".repeat(120)}</body></html>`;
+    const scenarios: { name: string; claims: string[]; per: Parameters<typeof stub>[0] }[] = [
+      { name: "union covers everything", claims: [c1, c2], per: { node: { rawBody: shortReal, status: 200 }, curl: { rawBody: fat, status: 200 } } },
+      { name: "union covers everything but one", claims: [c1, c2, absent], per: { node: { rawBody: shortReal, status: 200 }, curl: { rawBody: fat, status: 200 } } },
+      { name: "nothing located anywhere", claims: [absent], per: { node: { rawBody: fatOnly, status: 200 } } },
+      { name: "one rung, partial match", claims: [c1, absent], per: { node: { rawBody: LONG_PROSE, status: 200 } } },
+      { name: "sub-floor read only", claims: [absent], per: { node: { rawBody: shortReal, status: 200 } } },
+    ];
+    for (const s of scenarios) {
+      const r = await check("https://e.com/committee-report", s.claims, { fetcher: stub(s.per) });
+      if (r.verdict !== "unsupported") continue;
+      expect(r.missed, s.name).toBeDefined();
+      expect((r.missed ?? []).length, s.name).toBeGreaterThan(0);
+    }
+  });
+
   it("does not consult HTTP status outside the 404/410 veto", async () => {
     // The property the design actually holds. A 400 or a 500 says nothing
     // about whether the bytes are the document - spec 6.3 records a 400
