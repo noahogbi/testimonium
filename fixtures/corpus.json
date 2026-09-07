@@ -12,6 +12,12 @@
     "title": ""
   },
   {
+    "path": "fixtures/challenge/blog-cloudflare-com-cloudflare-incident-on-november-18-2025-.html",
+    "kind": "challenge",
+    "url": "https://blog.cloudflare.com/cloudflare-incident-on-november-18-2025/",
+    "title": "Page Not Found — Cloudflare Blog"
+  },
+  {
     "path": "fixtures/challenge/bloomberg-wall.html",
     "kind": "challenge",
     "url": "",
@@ -126,10 +132,10 @@
     "title": ""
   },
   {
-    "path": "fixtures/challenge/blog-cloudflare-com-cloudflare-incident-on-november-18-2025-.html",
+    "path": "fixtures/challenge/www-ecb-europa-eu-press-pr-date-2024-html-index-en-html.html",
     "kind": "challenge",
-    "url": "https://blog.cloudflare.com/cloudflare-incident-on-november-18-2025/",
-    "title": "Page Not Found — Cloudflare Blog"
+    "url": "https://www.ecb.europa.eu/press/pr/date/2024/html/index.en.html",
+    "title": "Sorry, this page does not exist."
   },
   {
     "path": "fixtures/challenge/www-federalregister-gov-documents-2024-01-29-2024-01580-.html",
