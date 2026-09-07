@@ -302,27 +302,37 @@ PROOF OF READ - BODY-DERIVED ONLY
       This is the origin's CHALLENGE_MAX_CHARS cap generalized from a
       signature-gated special case into the primary instrument.
 
-CORROBORATION - never sole licence to accuse
+REPORTED, NEVER LICENSING - neither of these can permit an accusation
   C1  Slug correlation IN THE BODY: content words from the URL path and
-      from the author's own footnote label appear in the extracted text.
-      Language-agnostic, no list to maintain. A challenge served for
-      /eli/reg/2024/1689 does not contain "artificial intelligence"; the
-      regulation does.
+      from the author's footnote label appear in the extracted text.
 
-      NOT the document's own <title>. Draft 2 included it and that was
-      wrong: the title arrives in the SAME RESPONSE as the body, so every
-      page contains its own title by construction. Measured over the
-      fixture corpus, all 12 fixtures carrying a title scored title-only
-      overlap of exactly 1.00 - challenge and document alike. The title
-      contributes zero discriminating power and disguised that fact by
-      inflating every score to the ceiling. Only authored inputs - the URL
-      the citation names, and the label the author wrote beside it - can
-      testify that the page we read is the page that was cited.
+      **WITHDRAWN FROM THE VERDICT. Measured, twice, and it does not
+      work.** Draft 2 made it a required half of the accusation gate.
+      Calibration killed that in two rounds:
 
-      C1 is weak, and known to be. It is calibrated against the DOCUMENT
-      population only: 21 of 24 challenge fixtures carry no URL or title,
-      so their 0.00 is an absent input rather than a measurement, and
-      calibrating a threshold against it would be fitting to noise.
+      Round 1 - it drew words from the document's own <title>, which
+      arrives in the SAME RESPONSE as the body, so every page contains
+      its own title by construction. All 12 fixtures carrying a title
+      scored exactly 1.00, challenge and document alike.
+
+      Round 2 - with the title removed, a real blog index at
+      blog.mozilla.org/en/ scored a vacuous 0.00, because "en" is two
+      characters and falls under the content-word floor. That is the
+      identical score to a Federal Register anti-scraping wall. The two
+      populations share their minimum, so no threshold separates them:
+      414 threshold pairs satisfy the assertions and every one of them is
+      NEGATIVE, which is C1 switched off wearing a number.
+
+      And the ordering is inverted where it is measurable at all: the
+      highest challenge overlap (0.80, Federal Register) OUTRANKS the
+      lowest real document (0.75, MDN). C1 is not merely weak on this
+      evidence, it is anti-correlated.
+
+      It stays computed and reported, because it is useful diagnostics
+      under --explain-fetch and it is the natural place to start if
+      someone finds a corpus where it does discriminate. It does not
+      gate. A gate that does no work while implying safety is worse than
+      no gate.
   C2  Head markers: og:type=article, json-ld articleBody or datePublished.
       REPORTED, NEVER LICENSING. These prove a page exists at that URL.
       They do not prove its body was read - a paywall stub keeps the
@@ -363,16 +373,21 @@ VERDICT
   claims.length == 0                          -> unclaimed   (never supported)
   N1 | N2 | N3 | N4                           -> unreachable
   matched == claims.length                    -> supported
-  P2 && C1 && matched > 0                     -> unsupported
-  P2 && C1 && matched == 0                    -> unsupported
+  P2                                          -> unsupported
   otherwise                                   -> unreachable
 ```
+
+Accusation rests on P2 and the four vetoes. Measured separation on the
+fixture corpus: largest non-vetoed challenge 1,180 characters, smallest
+real document 6,858 - a gap of 5,678, with the floor licensed at 4,500.
+N4 removes the padded error shells that prose volume cannot see; nothing
+else needs removing.
 
 **Read the table's shape, because it is the whole correction.** Attestation and
 accusation have different burdens. A full match is its own proof of a read and
 needs nothing further. An accusation requires body-derived evidence that we read
-a document - prose volume AND slug/title correlation in the body - and no veto.
-`matched > 0` no longer licenses an accusation on its own.
+a document - prose volume - plus no veto. `matched > 0` no longer licenses an
+accusation on its own.
 
 That asymmetry is what closes the two false-accusation paths this scheme had in
 draft 1:
