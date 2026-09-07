@@ -57,7 +57,10 @@ for (const url of DOCUMENTS) {
     const body = await r.text();
     const title = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(body)?.[1]?.trim() ?? "";
     writeFileSync(path, body, "utf8");
-    manifest.push({ path, kind: "document", url, title });
+    // status is PERSISTED, not merely logged: the N4 veto (HTTP 404/410)
+    // reads it, and the first version of this script dropped it on the
+    // floor - the statuses had to be reconstructed by hand afterwards.
+    manifest.push({ path, kind: "document", url, title, status: r.status });
     console.log(`captured ${r.status} ${body.length} bytes -> ${path}`);
   } catch (e) {
     // A capture failure is a fact about today's web, not an error. Record it

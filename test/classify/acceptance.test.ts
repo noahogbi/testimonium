@@ -12,11 +12,11 @@ const read = (f: Fixture) => toText(readFileSync(f.path, "utf8"));
  *  exist needs no body analysis. */
 const documentGone = (f: Fixture): boolean => f.status === 404 || f.status === 410;
 
-/** THE ACCUSATION GATE. This conjunction - not prose volume alone - is what
- *  the verdict reducer requires before it will return `unsupported`. The
- *  acceptance test is written against it because spec 6.3 phrases its
- *  requirement through the VERDICT, and the verdict's accusation branch is
- *  the conjunction. */
+/** THE ACCUSATION GATE. The verdict reducer checks whether prose volume meets
+ *  the minimum threshold before it will return `unsupported`. The acceptance
+ *  test is written against this gate because spec 6.3 phrases its requirement
+ *  through the VERDICT, and the verdict's accusation branch enforces this
+ *  prose-volume floor. */
 const passesAccusationGate = (f: Fixture): boolean => proseVolume(read(f)) >= THRESHOLDS.minProseChars;
 
 /** The full rejection path: vetoed, or unable to clear the gate. */
@@ -36,10 +36,9 @@ describe("acceptance test - spec section 6.3", () => {
     expect(failures).toEqual([]);
   });
 
-  it("every challenge fixture NOT vetoed by status fails the gate with margin on at least one dimension", () => {
+  it("every challenge fixture NOT vetoed by status fails the gate with margin on prose volume", () => {
     // A fixture that only just fails is one edit away from passing. Each must
-    // be clear of the threshold on prose volume OR on overlap - it does not
-    // matter which, but "barely" on both is not separation. Status-vetoed
+    // be clear of the prose threshold by margin - not borderline. Status-vetoed
     // fixtures are exempt: N4 rejects them outright, so no margin is needed.
     const marginal = corpus
       .filter((f) => f.kind === "challenge" && !documentGone(f))
@@ -48,7 +47,7 @@ describe("acceptance test - spec section 6.3", () => {
     expect(marginal).toEqual([]);
   });
 
-  it("every real document clears both thresholds with margin", () => {
+  it("every real document clears the prose floor with margin", () => {
     const marginal = corpus
       .filter((f) => f.kind === "document")
       .filter((f) => proseVolume(read(f)) < THRESHOLDS.minProseChars + 200)
