@@ -1,174 +1,216 @@
-# Calibration of `minProseChars` and `minSlugTitleOverlap`
+# Calibration of `minProseChars` and `minSlugOverlap`
 
-**Date:** 2026-09-06
+**Date:** 2026-09-07 (round 2, after ruling C6) — supersedes the 2026-09-06 round-1 record
 **Corpus:** `fixtures/corpus.json` — 33 fixtures: 24 `challenge`, 9 `document`
-**Instrument:** `toText` (Task 3) → `proseVolume` / `slugTitleOverlap` (`src/classify/thresholds.ts`)
-**Reproduce:** `npm run build && node scripts/calibrate.mjs`
+**Instrument:** `toText` (Task 3) then `proseVolume` / `slugLabelOverlap`
+(`src/classify/thresholds.ts`), with N4 (HTTP 404/410 veto) applied first
+**Reproduce:** `npm run build && node scripts/calibrate.mjs && npx vitest run`
 
-## Outcome: BLOCKED — the gate does not close
+## Outcome: STILL BLOCKED — but the failure has moved to the other side
 
-**No pair of thresholds satisfies the four assertions in `test/classify/acceptance.test.ts`.**
-This is not a tuning shortfall. An exhaustive search over 24,915 candidate pairs
-(every `minProseChars` value at which an assertion outcome can change, crossed with
-`minSlugTitleOverlap` from 0.00 to 1.50 in steps of 0.01) returned **zero** solutions.
+Ruling C6 worked for what it was aimed at. **Assertions 1 and 3 now pass.** N4 vetoes the
+ECB 404 before its body is consulted, and dropping the fetched `<title>` from C1 removed
+the tautology that pinned every overlap score to 1.00.
 
-The values recorded in `src/classify/thresholds.ts` are therefore the best *available*
-pair, not a licensed calibration. Two of the four assertions are red at them, and at
-every other pair as well.
+Removing the title, however, exposed the mirror image of the same defect at the other end.
+`blog.mozilla.org/en/` is a genuine document whose **URL path contributes no content words
+at all** — the path is `/en/`, and `en` is two characters, below the four-character floor
+in `contentWords`. `slugLabelOverlap` therefore returns its documented vacuous **0.00**,
+which is the *identical score* to the Federal Register challenge fixture.
+
+A threshold cannot be placed between two equal values. **Assertions 2 and 4 now fail, on
+that one fixture.**
 
 | chosen | value | status |
 |---|---:|---|
-| `minProseChars` | 4,500 | provisional — mid-gap for 32 of 33 fixtures |
-| `minSlugTitleOverlap` | 0.30 | provisional — dimension does not separate |
+| `minProseChars` | 4,500 | **licensed** — every prose-dimension assertion passes at it |
+| `minSlugOverlap` | 0.30 | **NOT licensed** — no non-negative value satisfies the suite |
+
+### The search
+
+Exhaustive evaluation of 33,165 threshold pairs (every `minProseChars` at which an
+assertion outcome can change, crossed with `minSlugOverlap` from -0.50 to 1.50 in steps of
+0.01):
+
+```
+searched 165 x 201 = 33165 pairs (V from -0.50 to 1.50)
+SOLUTIONS (any V):        414
+SOLUTIONS (V >= 0):       0   <-- meaningful range
+  V range of solutions: [-0.50, -0.05]  P range: [1380, 6658]
+```
+
+**Every solution requires a negative `minSlugOverlap`.** That is not a calibration of C1,
+it is C1 switched off: `overlap >= V` becomes a tautology for a function whose range is
+[0, 1], and the deliberate vacuous 0.00 that the doc comment says must send a citation to
+`unreachable` would instead become a pass. Shipping -0.05 would silently re-enable exactly
+the "2,500-char unlisted wall at `/p?id=93714`" case the function was written to deny. It
+is therefore recorded as unavailable, and 0.3 is left in place as the meaningful-range
+placeholder.
+
+## Why no non-negative pair works — the proof
+
+Write `P = minProseChars`, `V = minSlugOverlap`.
+
+Assertion 4 requires every document to clear both thresholds by margin. The Mozilla blog
+scores overlap **0.00**, so `0.00 >= V + 0.05`, hence **`V <= -0.05`**. (Assertion 2 alone
+already forces `V <= 0.00`.)
+
+Assertion 3 requires every non-vetoed challenge to be clear by margin on prose *or* on
+overlap. The Federal Register fixture also scores overlap 0.00, so the overlap route needs
+`0.00 <= V - 0.05`, i.e. `V >= 0.05` — which contradicts `V <= -0.05`. It must therefore
+be cleared on prose: `1,180 <= P - 200`, hence `P >= 1,380`. Assertion 4's prose half caps
+`P <= 6,658`.
+
+The feasible set is exactly `P in [1,380, 6,658]` **and** `V <= -0.05`, matching the
+search. Constrained to the meaningful range `V >= 0`, it is empty.
 
 ## The two populations
 
 ### `challenge` (n = 24)
 
-Prose volume: **min 43, max 13,221**; median 190. Excluding the ECB outlier: max **2,154**.
-Overlap: 21 fixtures score 0.00, but see the vacuity caveat below. The three with
-url/title score **0.60, 0.80, 1.00**.
+Prose volume: min 43, max 13,221; excluding the two N4-vetoed fixtures, **max 1,180**.
+Overlap: **22 of 24 score 0.00**, including the Federal Register capture, the only
+non-vetoed challenge that has a real URL. The two non-zero scores (0.33 and 1.00) both
+belong to N4-vetoed fixtures and never reach the body-derived gate.
 
 ### `document` (n = 9)
 
-Prose volume: **min 6,858, max 108,257**; median 26,592.
-Overlap: **min 0.75, max 1.00**; 8 of 9 score 1.00.
+Prose volume: min 6,858, max 108,257. Status: all 200.
+Overlap: **min 0.00, max 1.00** — seven score 1.00, one scores 0.50, one scores 0.00.
 
 ### Read together
 
-On prose volume the populations separate cleanly **except for one fixture**: the gap
-between the challenge runner-up (2,154) and the lowest document (6,858) is 4,704
-characters wide, and the ECB 404 sits at 13,221 — inside the document range, above two
-real documents.
+On **prose volume** the populations now separate cleanly and with room to spare: the
+largest non-vetoed challenge is 1,180 and the smallest document is 6,858, a gap of 5,678
+characters. `minProseChars = 4,500` sits inside it with 3,320 clear below and 2,358 clear
+above, comfortably past the 200-character margin requirement.
 
-On overlap the populations **do not separate at all**. The highest-scoring challenge
-with real metadata (0.80) outranks the lowest-scoring real document (0.75), and the ECB
-404 ties the maximum at 1.00.
+On **overlap** the populations do not separate at all. Their ranges are not merely
+adjacent — they **share their minimum**: 0.00 appears on both sides. C1 contributes
+nothing that prose volume does not already contribute, and the one thing it does
+contribute is a false rejection of a real document.
 
-## Per-fixture data (all 33)
+## C1 is calibrated against the document population only
 
-`overlap` marked `*` is vacuous — see caveat. `cleared by` names the dimension(s) on
-which the fixture is clear of its threshold **by the required margin** (200 chars / 0.05).
+This has to be stated plainly, because the number in the file otherwise looks better
+supported than it is. **`minSlugOverlap` has no challenge-side evidence in this corpus.**
 
-| # | fixture | kind | prose chars | overlap | passes gate? | cleared by |
-|---:|---|---|---:|---:|---|---|
-| 1 | `challenge/datadome-block.html` | challenge | 43 | 0.00 * | no | both |
-| 2 | `challenge/stock-react-vite-noscript-shell.html` | challenge | 46 | 0.00 * | no | both |
-| 3 | `challenge/cloudflare-noscript-line.html` | challenge | 58 | 0.00 * | no | both |
-| 4 | `challenge/imperva-incapsula.html` | challenge | 80 | 0.00 * | no | both |
-| 5 | `challenge/perimeterx-human-press-and-hold.html` | challenge | 106 | 0.00 * | no | both |
-| 6 | `challenge/gdpr-geo-block-at-200.html` | challenge | 107 | 0.00 * | no | both |
-| 7 | `challenge/paywall-stub-at-200.html` | challenge | 111 | 0.00 * | no | both |
-| 8 | `challenge/soft-404-served-at-200.html` | challenge | 128 | 0.00 * | no | both |
-| 9 | `challenge/vercel-security-checkpoint.html` | challenge | 138 | 0.00 * | no | both |
-| 10 | `challenge/eurlex-202-the-fixture.html` | challenge | 157 | 0.00 * | no | both |
-| 11 | `challenge/amazon-robot-check.html` | challenge | 165 | 0.00 * | no | both |
-| 12 | `challenge/eur-lex-french.html` | challenge | 174 | 0.00 * | no | both |
-| 13 | `challenge/cookie-consent-wall-at-200.html` | challenge | 175 | 0.00 * | no | both |
-| 14 | `challenge/cloudflare-retired-pre-2023-wording.html` | challenge | 200 | 0.00 * | no | both |
-| 15 | `challenge/anubis-foss-site-bot-wall.html` | challenge | 207 | 0.00 * | no | both |
-| 16 | `challenge/cloudflare-turnstile-checkbox-page.html` | challenge | 214 | 0.00 * | no | both |
-| 17 | `challenge/bloomberg-wall.html` | challenge | 223 | 0.00 * | no | both |
-| 18 | `challenge/cloudflare-managed-challenge-ing-form.html` | challenge | 281 | 0.00 * | no | both |
-| 19 | `challenge/google-sorry-page.html` | challenge | 396 | 0.00 * | no | both |
-| 20 | `challenge/perimeterx-block-page.html` | challenge | 466 | 0.00 * | no | both |
-| 21 | `challenge/cloudflare-turnstile-cookie-privacy-boilerplate-800-chars.html` | challenge | 982 | 0.00 * | no | both |
-| 22 | `challenge/www-federalregister-gov-documents-2024-01-29-2024-01580-.html` | challenge | 1,180 | 0.80 | no | prose |
-| 23 | `challenge/blog-cloudflare-com-cloudflare-incident-on-november-18-2025-.html` | challenge | 2,154 | 0.60 | no | prose |
-| 24 | `challenge/www-ecb-europa-eu-press-pr-date-2024-html-index-en-html.html` | challenge | 13,221 | 1.00 | **YES** | **NEITHER** |
-| 25 | `documents/blog-mozilla-org-en-.html` | document | 6,858 | 1.00 | **YES** | both |
-| 26 | `documents/www-theverge-com-tech.html` | document | 16,449 | 1.00 | **YES** | both |
-| 27 | `documents/developer-mozilla-org-en-US-docs-Web-HTTP-Status.html` | document | 23,601 | 0.75 | **YES** | both |
-| 28 | `documents/www-bls-gov-news-release-cpi-nr0-htm.html` | document | 24,254 | 1.00 | **YES** | both |
-| 29 | `documents/docs-python-org-3-library-json-html.html` | document | 26,592 | 1.00 | **YES** | both |
-| 30 | `documents/www-gov-uk-government-news.html` | document | 33,076 | 1.00 | **YES** | both |
-| 31 | `documents/apnews-com-hub-technology.html` | document | 45,390 | 1.00 | **YES** | both |
-| 32 | `documents/openai-com-index-gpt-4o-system-card-.html` | document | 76,936 | 1.00 | **YES** | both |
-| 33 | `documents/en-wikipedia-org-wiki-Textual-criticism.html` | document | 108,257 | 1.00 | **YES** | both |
+- 21 of 24 challenge fixtures are constructed battery bodies carrying no URL, so their
+  0.00 is the *absence of an input*, not a measurement of the signal.
+- The one remaining non-vetoed challenge, Federal Register, does have a real URL — and
+  scores 0.00, the same as a real document. It is separated by prose, not by overlap.
+- The two challenge fixtures with informative overlap scores (0.33 and 1.00) are both
+  vetoed by N4 first and never reach C1 at all.
+
+So every constraint that shaped `minSlugOverlap` came from the nine documents. There is
+not one fixture in the corpus that C1 rejects and prose volume admits. Any future claim
+that C1 carries weight needs challenge fixtures with real, specific URLs whose words are
+genuinely absent from the served body — the corpus does not currently contain one.
 
 ## Which dimension does the separating
 
-- **Prose volume does all the real work.** It clears 23 of the 24 challenge fixtures
-  (#1–#23) with margin, including both fixtures that overlap fails to clear (#22 at 0.80
-  and #23 at 0.60, each above `minSlugTitleOverlap`).
-- **Overlap separates nothing that prose volume does not already separate.** There is no
-  fixture in the corpus that overlap rejects and prose volume admits. Its measured role
-  in this corpus is zero.
-- **Neither dimension separates #24, the ECB 404.** It is the only fixture on either side
-  of the corpus that the accusation gate classifies wrongly.
+| mechanism | fixtures it decides | notes |
+|---|---|---|
+| **N4 (404/410 veto)** | 2 challenge (#23, #24) | Both measured 404, twice. This is what finally handles the ECB page that defeated round 1. |
+| **Prose volume** | 22 challenge (#1-#22) | Does all the body-derived work, every one with margin. The largest is 1,180 against a 4,500 floor. |
+| **Overlap** | **0 fixtures** | Rejects nothing prose volume does not already reject, and wrongly blocks document #25. |
 
-### Caveat: 21 of the 24 challenge overlap scores are vacuous
+## Statuses: how each one was obtained
 
-Fixtures #1–#21 carry `"url": ""` and `"title": ""` in `fixtures/corpus.json`. With no
-url and no title there are no content words, and `slugTitleOverlap` returns 0 by its
-documented "return 0, not 1, when there is nothing to test" rule. **Those 0.00s are not
-measurements of the overlap signal — they are the absence of an input.** The overlap
-dimension is genuinely exercised by exactly 3 challenge fixtures and 9 documents, and on
-those 12 it does not separate the populations. Any future claim that overlap is carrying
-weight must be re-established against challenge fixtures that actually have metadata.
+The brief states that `fixtures/challenge-battery.mjs` "declares the status each case was
+built to represent." **It does not.** Its case tuples are `[name, isBotCheck, text]` —
+there is no status field anywhere in that file. Statuses were therefore obtained three
+different ways, and the corpus now mixes evidence of three different strengths:
 
-## Why no pair of thresholds works — the proof
+1. **Measured (12 fixtures).** `scripts/capture-fixtures.mjs` logged `r.status` at capture
+   time, and that stdout is preserved verbatim in `task-3-report.md`. A re-fetch of all 12
+   URLs on 2026-09-07 agreed **12 of 12** on status. Two are 404 (ECB, Cloudflare blog);
+   ten are 200. Note that the capture script logged the status but never persisted it to
+   the manifest, which is why this had to be recovered rather than simply read.
+2. **Declared by name (4 fixtures).** `paywall-stub-at-200`, `soft-404-served-at-200`,
+   `gdpr-geo-block-at-200` and `cookie-consent-wall-at-200` carry "at 200" in their case
+   names, and the battery's header comment groups them as "the adjacent open class of 2xx
+   pages that are NOT bot checks".
+3. **Stipulated (17 fixtures, marked with a dagger below).** The constructed bot-wall
+   bodies have no response attached and no declared status. 200 was stipulated as the
+   **adversarial worst case**: it is the value that gives the fixture the greatest chance
+   of passing the gate, so it cannot make the suite artificially green, and it matches the
+   tool's own premise that walls served at 200 are what defeat link checkers. Since N4
+   keys only on 404/410, any non-404/410 value produces identical results for every
+   assertion. **No fixture was assigned 404 or 410 that was not measured as such.**
 
-Write `P` for `minProseChars` and `V` for `minSlugTitleOverlap`.
+`soft-404-served-at-200` deserves a specific note: it is semantically a 404, but its
+declared status is 200, so N4 correctly does **not** veto it. It is rejected on prose
+instead. That is the right outcome, and it confirms N4 is not quietly doing the
+soft-404's work.
 
-**Assertion 4** (every real document clears both thresholds with margin) requires, for
-every document, `prose ≥ P + 200` and `overlap ≥ V + 0.05`. The lowest document is 6,858
-chars and the lowest document overlap is 0.75, so:
+## Per-fixture data (all 33)
 
-> `P ≤ 6,658` and `V ≤ 0.70`
+A dagger in the status column marks a stipulated status. Measurements are at
+`P = 4,500`, `V = 0.30`.
 
-**Assertion 1** (no challenge passes the accusation gate) requires, for the ECB fixture,
-`NOT (13,221 ≥ P AND 1.00 ≥ V)` — that is, `P > 13,221` **or** `V > 1.00`. But
-`P ≤ 6,658 < 13,221` and `V ≤ 0.70 < 1.00`, so both disjuncts are false.
+| # | fixture | kind | status | prose | overlap | outcome | separated by |
+|---:|---|---|---:|---:|---:|---|---|
+| 1 | `challenge/datadome-block.html` | challenge | 200 † | 43 | 0.00 | rejected (gate) | prose + overlap |
+| 2 | `challenge/stock-react-vite-noscript-shell.html` | challenge | 200 † | 46 | 0.00 | rejected (gate) | prose + overlap |
+| 3 | `challenge/cloudflare-noscript-line.html` | challenge | 200 † | 58 | 0.00 | rejected (gate) | prose + overlap |
+| 4 | `challenge/imperva-incapsula.html` | challenge | 200 † | 80 | 0.00 | rejected (gate) | prose + overlap |
+| 5 | `challenge/perimeterx-human-press-and-hold.html` | challenge | 200 † | 106 | 0.00 | rejected (gate) | prose + overlap |
+| 6 | `challenge/gdpr-geo-block-at-200.html` | challenge | 200 | 107 | 0.00 | rejected (gate) | prose + overlap |
+| 7 | `challenge/paywall-stub-at-200.html` | challenge | 200 | 111 | 0.00 | rejected (gate) | prose + overlap |
+| 8 | `challenge/soft-404-served-at-200.html` | challenge | 200 | 128 | 0.00 | rejected (gate) | prose + overlap |
+| 9 | `challenge/vercel-security-checkpoint.html` | challenge | 200 † | 138 | 0.00 | rejected (gate) | prose + overlap |
+| 10 | `challenge/eurlex-202-the-fixture.html` | challenge | 200 † | 157 | 0.00 | rejected (gate) | prose + overlap |
+| 11 | `challenge/amazon-robot-check.html` | challenge | 200 † | 165 | 0.00 | rejected (gate) | prose + overlap |
+| 12 | `challenge/eur-lex-french.html` | challenge | 200 † | 174 | 0.00 | rejected (gate) | prose + overlap |
+| 13 | `challenge/cookie-consent-wall-at-200.html` | challenge | 200 | 175 | 0.00 | rejected (gate) | prose + overlap |
+| 14 | `challenge/cloudflare-retired-pre-2023-wording.html` | challenge | 200 † | 200 | 0.00 | rejected (gate) | prose + overlap |
+| 15 | `challenge/anubis-foss-site-bot-wall.html` | challenge | 200 † | 207 | 0.00 | rejected (gate) | prose + overlap |
+| 16 | `challenge/cloudflare-turnstile-checkbox-page.html` | challenge | 200 † | 214 | 0.00 | rejected (gate) | prose + overlap |
+| 17 | `challenge/bloomberg-wall.html` | challenge | 200 † | 223 | 0.00 | rejected (gate) | prose + overlap |
+| 18 | `challenge/cloudflare-managed-challenge-ing-form.html` | challenge | 200 † | 281 | 0.00 | rejected (gate) | prose + overlap |
+| 19 | `challenge/google-sorry-page.html` | challenge | 200 † | 396 | 0.00 | rejected (gate) | prose + overlap |
+| 20 | `challenge/perimeterx-block-page.html` | challenge | 200 † | 466 | 0.00 | rejected (gate) | prose + overlap |
+| 21 | `challenge/cloudflare-turnstile-cookie-privacy-boilerplate-800-chars.html` | challenge | 200 † | 982 | 0.00 | rejected (gate) | prose + overlap |
+| 22 | `challenge/www-federalregister-gov-documents-2024-01-29-2024-01580-.html` | challenge | 200 | 1,180 | 0.00 | rejected (gate) | prose + overlap |
+| 23 | `challenge/blog-cloudflare-com-cloudflare-incident-on-november-18-2025-.html` | challenge | 404 | 2,154 | 0.33 | rejected (N4 veto) | N4 status |
+| 24 | `challenge/www-ecb-europa-eu-press-pr-date-2024-html-index-en-html.html` | challenge | 404 | 13,221 | 1.00 | rejected (N4 veto) | N4 status |
+| 25 | `documents/blog-mozilla-org-en-.html` | document | 200 | 6,858 | 0.00 | **BLOCKED** | **FAILS overlap** |
+| 26 | `documents/www-theverge-com-tech.html` | document | 200 | 16,449 | 1.00 | reaches accusation | both clear |
+| 27 | `documents/developer-mozilla-org-en-US-docs-Web-HTTP-Status.html` | document | 200 | 23,601 | 0.50 | reaches accusation | both clear |
+| 28 | `documents/www-bls-gov-news-release-cpi-nr0-htm.html` | document | 200 | 24,254 | 1.00 | reaches accusation | both clear |
+| 29 | `documents/docs-python-org-3-library-json-html.html` | document | 200 | 26,592 | 1.00 | reaches accusation | both clear |
+| 30 | `documents/www-gov-uk-government-news.html` | document | 200 | 33,076 | 1.00 | reaches accusation | both clear |
+| 31 | `documents/apnews-com-hub-technology.html` | document | 200 | 45,390 | 1.00 | reaches accusation | both clear |
+| 32 | `documents/openai-com-index-gpt-4o-system-card-.html` | document | 200 | 76,936 | 1.00 | reaches accusation | both clear |
+| 33 | `documents/en-wikipedia-org-wiki-Textual-criticism.html` | document | 200 | 108,257 | 1.00 | reaches accusation | both clear |
 
-**Assertions 1 and 4 are jointly unsatisfiable.** Assertion 3 fails on the same fixture
-for the same reason and is likewise unsatisfiable: clearing it would need `P ≥ 13,421` or
-`V ≥ 1.05`.
+## Candidate resolutions (for ruling — NOT implemented)
 
-Exhaustive search confirms the algebra: 0 solutions in 24,915 pairs. With fixture #24
-alone removed from the corpus, **249** pairs satisfy all four assertions
-(`P ∈ [1,380, 6,658]`, `V ∈ [0.00, 0.70]`). The design is one fixture away from working,
-and that fixture is a real page a real citation can point at.
+1. **Give the corpus a `label` field.** `slugLabelOverlap` already accepts a third
+   argument, and the acceptance test currently calls it with two. An author citing the
+   Mozilla blog would write something like "The Mozilla Blog" beside the link, and those
+   content words do appear in the body. This is the resolution the function's own doc
+   comment anticipates. **Hazard:** the label must be genuinely authored. Populating it
+   from the fetched `<title>` would reintroduce the exact circularity ruling C6 just
+   removed, and would do so invisibly, because the field would still be named "label".
+2. **Accept that a vacuous C1 sends the citation to `unreachable`**, and exempt fixtures
+   with no authored content words from assertion 2 — the same shape as the N4 exemption
+   already added to assertion 3. This is consistent with the declared policy for short
+   legitimate documents (a lost `supported` is the safe direction), but it is a spec change
+   and it widens the class of documents against which the tool silently stops working.
+3. **Drop C1 from the accusation gate** and let N4 plus prose volume carry it. The
+   measurement supports this for *this* corpus, but the corpus contains no fixture that
+   tests what C1 was for, so this would be deciding on absent evidence.
 
-## Diagnosis
-
-The ECB 404 defeats the accusation gate on both dimensions at once, for two independent
-reasons.
-
-**Prose volume.** The page is a full ECB site chrome — global navigation, a language
-switcher, a press-release date index, and a footer — wrapped around a one-line error
-message. Chrome is prose to a tag stripper. 13,221 characters of it outweighs two
-genuine documents in the corpus.
-
-**Overlap — and this is the structural half.** `slugTitleOverlap` draws its content words
-from the URL path *and the title*, but **the title is fetched from the same response as
-the body**. When that response is an error shell, the title is the error shell's own
-title, so its words are present in the body by construction. Every fixture in this corpus
-that has a title scores **title-only overlap of exactly 1.00 — all 12 of them, challenge
-and document alike.** The title contributes no evidence whatsoever; it is circular in
-precisely the way the function's own doc comment argues a URL is not.
-
-For the ECB fixture the URL path contributes only `press` and `date` after stopwording
-(`html`, `index` and the numeric `2024` are all removed), and both appear in the nav
-chrome — so path-only overlap is also 1.00. The title contributes `sorry`, `does`,
-`exist`, which are the 404 message's own words. Every one of the five content words is a
-guaranteed hit:
-
-```
-words:   [press, date, sorry, does, exist]
-matched: [press, date, sorry, does, exist]   → 1.00
-```
-
-Restricting the metric to the URL path does **not** rescue it: ECB scores 1.00 path-only,
-while the MDN document scores 0.50 and the Mozilla blog has no path content words at all
-(vacuous). Path-only ordering is *worse*, not better.
-
-The signal design is what is wrong, not the numbers. Two dimensions that both fail on the
-same page are not two dimensions. Task 4 stops here, per its stop condition.
+I have no basis to choose between these, and each is a spec-level change rather than a
+calibration. Reporting instead of picking.
 
 ## What was NOT done
 
-Per the stop condition, none of the following were used to turn the suite green: no
-fixture was dropped, omitted, or reclassified; the 200-character and 0.05 margins are
-untouched; no assertion was weakened or deleted; `proseVolume` and `slugTitleOverlap` are
-byte-for-byte as specified in the task brief.
+Per the stop condition: no fixture dropped, omitted, or reclassified; the 200-character
+and 0.05 margins untouched; no assertion weakened or deleted; `proseVolume` and
+`slugLabelOverlap` are byte-for-byte as specified in the regenerated brief; and
+`minSlugOverlap` was **not** set to the negative value that would turn the suite green by
+nullifying the dimension. No status was guessed, and none was set to 404 or 410 for
+convenience.

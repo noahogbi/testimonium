@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { toText } from "../../src/text/extract.js";
-import { THRESHOLDS, proseVolume, slugTitleOverlap } from "../../src/classify/thresholds.js";
+import { THRESHOLDS, proseVolume, slugLabelOverlap } from "../../src/classify/thresholds.js";
 
-type Fixture = { path: string; kind: "challenge" | "document"; url: string; title: string };
+type Fixture = { path: string; kind: "challenge" | "document"; url: string; title: string; status: number };
 const corpus: Fixture[] = JSON.parse(readFileSync("fixtures/corpus.json", "utf8"));
 const read = (f: Fixture) => toText(readFileSync(f.path, "utf8"));
+
+/** N4: the document is gone. Checked BEFORE the body-derived gate, exactly as
+ *  the verdict reducer checks it, because a page the origin says does not
+ *  exist needs no body analysis. */
+const documentGone = (f: Fixture): boolean => f.status === 404 || f.status === 410;
 
 /** THE ACCUSATION GATE. This conjunction - not prose volume alone - is what
  *  the verdict reducer requires before it will return `unsupported`. The
@@ -16,34 +21,38 @@ const passesAccusationGate = (f: Fixture): boolean => {
   const text = read(f);
   return (
     proseVolume(text) >= THRESHOLDS.minProseChars &&
-    slugTitleOverlap(text, f.url, f.title) >= THRESHOLDS.minSlugTitleOverlap
+    slugLabelOverlap(text, f.url) >= THRESHOLDS.minSlugOverlap
   );
 };
 
+/** The full rejection path: vetoed, or unable to clear the gate. */
+const rejected = (f: Fixture): boolean => documentGone(f) || !passesAccusationGate(f);
+
 describe("acceptance test - spec section 6.3", () => {
-  it("NO challenge or error shell can pass the accusation gate", () => {
-    const failures = corpus.filter((f) => f.kind === "challenge").filter(passesAccusationGate).map((f) => f.path);
+  it("NO challenge or error shell can reach an accusation", () => {
+    const failures = corpus.filter((f) => f.kind === "challenge").filter((f) => !rejected(f)).map((f) => f.path);
     expect(failures).toEqual([]);
   });
 
-  it("EVERY real document passes the accusation gate", () => {
+  it("EVERY real document can reach an accusation", () => {
     // Required in this direction too: a document that cannot pass the gate can
     // never have a genuine miss reported against it, so the tool would
     // silently stop working rather than fail loudly.
-    const failures = corpus.filter((f) => f.kind === "document").filter((f) => !passesAccusationGate(f)).map((f) => f.path);
+    const failures = corpus.filter((f) => f.kind === "document").filter(rejected).map((f) => f.path);
     expect(failures).toEqual([]);
   });
 
-  it("every challenge fixture fails the gate with margin on at least one dimension", () => {
+  it("every challenge fixture NOT vetoed by status fails the gate with margin on at least one dimension", () => {
     // A fixture that only just fails is one edit away from passing. Each must
     // be clear of the threshold on prose volume OR on overlap - it does not
-    // matter which, but "barely" on both is not separation.
+    // matter which, but "barely" on both is not separation. Status-vetoed
+    // fixtures are exempt: N4 rejects them outright, so no margin is needed.
     const marginal = corpus
-      .filter((f) => f.kind === "challenge")
+      .filter((f) => f.kind === "challenge" && !documentGone(f))
       .filter((f) => {
         const text = read(f);
         const proseClear = proseVolume(text) <= THRESHOLDS.minProseChars - 200;
-        const overlapClear = slugTitleOverlap(text, f.url, f.title) <= THRESHOLDS.minSlugTitleOverlap - 0.05;
+        const overlapClear = slugLabelOverlap(text, f.url) <= THRESHOLDS.minSlugOverlap - 0.05;
         return !proseClear && !overlapClear;
       })
       .map((f) => f.path);
@@ -57,7 +66,7 @@ describe("acceptance test - spec section 6.3", () => {
         const text = read(f);
         return (
           proseVolume(text) < THRESHOLDS.minProseChars + 200 ||
-          slugTitleOverlap(text, f.url, f.title) < THRESHOLDS.minSlugTitleOverlap + 0.05
+          slugLabelOverlap(text, f.url) < THRESHOLDS.minSlugOverlap + 0.05
         );
       })
       .map((f) => f.path);
