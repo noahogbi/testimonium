@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { computeSignals } from "../../src/classify/signals.js";
 import { verdict } from "../../src/classify/verdict.js";
 import { toText } from "../../src/text/extract.js";
+import { proseVolume, THRESHOLDS } from "../../src/classify/thresholds.js";
 
 type Fixture = { path: string; kind: "challenge" | "document" | "known-gap"; url: string; title: string; status: number };
 const corpus: Fixture[] = JSON.parse(readFileSync("fixtures/corpus.json", "utf8"));
@@ -18,6 +19,22 @@ const run = (f: Fixture, claims: string[]) =>
       sourceLabel: f.title,
     }).signals,
   );
+
+// Written as a reader SEES it, not as the fixture SPELLS it: the fixture
+// encodes the same sentence with HTML entities (&mdash;, &eacute;, &Eacute;,
+// &hellip;), and this string must stay ASCII, so its non-ASCII characters are
+// built from code points rather than typed literally.
+const RENDERED_CLAIM =
+  "The panel" +
+  String.fromCodePoint(0x2014) + // em dash
+  "chaired by Ren" +
+  String.fromCodePoint(0xe9) + // e-acute
+  " " +
+  String.fromCodePoint(0xc9) + // E-acute
+  "lodie" +
+  String.fromCodePoint(0x2014) + // em dash
+  "paused before the vote" +
+  String.fromCodePoint(0x2026); // horizontal ellipsis
 
 describe("spec 6.3 acceptance, through the verdict reducer", () => {
   it("returns unreachable for EVERY non-document, whatever the claims", () => {
@@ -46,6 +63,39 @@ describe("spec 6.3 acceptance, through the verdict reducer", () => {
       })
       .filter((r) => r.got !== "supported" && r.got !== "skip");
     expect(wrong).toEqual([]);
+  });
+});
+
+describe("body shapes the corpus previously never held", () => {
+  it("rejects a PDF binary served at 200 with no .pdf in the url", () => {
+    // The arxiv shape. Before N5 this measured over a million characters of
+    // "prose", cleared every threshold, and accused an accurate citation.
+    const f = corpus.find((x) => x.path.includes("pdf-binary-served-at-200"));
+    expect(f, "fixture missing from corpus.json").toBeDefined();
+    expect(run(f!, ["any claim at all"])).toBe("unreachable");
+  });
+
+  it("clears the prose floor on its own, so N5 - not the floor - is what rejects it", () => {
+    // N5 fires either way in this file's headers:{} context, so without this
+    // assertion the fixture above could be silently too small to matter and
+    // every test would stay green regardless.
+    const f = corpus.find((x) => x.path.includes("pdf-binary-served-at-200"));
+    expect(f, "fixture missing from corpus.json").toBeDefined();
+    expect(
+      proseVolume(toText(readFileSync(f!.path, "utf8"))),
+      "fixture must be rejected by N5, not by the prose floor",
+    ).toBeGreaterThanOrEqual(THRESHOLDS.minProseChars);
+  });
+
+  it("reads an entity-heavy document and supports a claim in its RENDERED form", () => {
+    // NOT `run(f, [])`: verdict() returns "unclaimed" on total === 0 before any
+    // veto, so that would pass for any input including a challenge shell - the
+    // test-that-asserts-nothing shape this file already warns about. The claim
+    // below is written as a reader sees it; the fixture spells it with
+    // entities. This is the only end-to-end pin of Task 1.
+    const f = corpus.find((x) => x.path.includes("entity-heavy-article"));
+    expect(f, "fixture missing from corpus.json").toBeDefined();
+    expect(run(f!, [RENDERED_CLAIM])).toBe("supported");
   });
 });
 

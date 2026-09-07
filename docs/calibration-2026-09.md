@@ -236,6 +236,49 @@ cost on both sides (raising the floor loses genuine short documents; extending t
 signature veto to long bodies loses articles that discuss bot walls). Moving a calibrated
 number is not a bug fix, and it would invalidate this page's measurements.
 
+## Two new body shapes (Task 3, plan 1.1)
+
+**Added 2026-09-07.** Every fixture calibrated above — all 33 rows, and the known-gap
+duplicate — is a friendly HTML page. Nothing in the corpus was ever a binary body or a body
+dense with HTML entities, which is precisely why the two defects this plan fixes (the
+un-vetoed content-negotiated PDF, and gaps in the entity table) survived sixteen reviews of
+the original work. Two fixtures close that hole. The corpus is now 36 entries: 25
+`challenge`, 10 `document`, 1 `known-gap`.
+
+### `challenge/pdf-binary-served-at-200.bin`
+
+A synthetic but structurally faithful PDF — `%PDF-1.7` header, object dictionaries, a
+16,384-byte binary `stream`/`endstream` block, an `xref` table — filed `kind: "challenge"`,
+`status: 200`, at `https://arxiv.org/abs/2401.01234v2` (no `.pdf`, no `/pdf/` segment: the
+content-negotiated shape N4/N3 cannot see and N5 exists for).
+
+This pins N5 (`notText`, the "body is not text at all" veto added in `78881e3`). Decoded as
+UTF-8 and run through `toText`, the binary stream extracts to 6,221 characters —
+**above** the 4,500-char floor by 1,721, with plenty of margin. That is the load-bearing
+property: an earlier size (8KB of stream) was rejected in review because it measured a
+median of 4,087 extracted characters across 200 random draws and fell below the floor
+75.5% of the time — meaning the fixture would have pinned nothing, and pass or fail purely
+on the floor rather than on N5. `test/classify/corpus-verdict.test.ts` asserts
+`proseVolume(toText(...)) >= THRESHOLDS.minProseChars` directly on this fixture so that
+claim cannot silently stop being true; without that assertion the fixture would fail
+*silently*, because N5 vetoes either way in this file's `headers: {}` context and every
+test would stay green regardless of which gate actually did the rejecting.
+
+### `documents/entity-heavy-article.html`
+
+A real-shaped news article using six spellings of non-ASCII prose across its body:
+`&mdash;`, `&#8212;`, and `&#x2014;` (three encodings of the same em dash), `&eacute;` /
+`&Eacute;`, `&hellip;`, `&nbsp;`, `&amp;`, and `&lt;`. `kind: "document"`, `status: 200`.
+Extracts to 6,394 characters, clear of the floor (and the 200-char margin) by 1,894.
+
+This is the only end-to-end pin of Task 1's entity-table work. The corresponding test does
+**not** call `run(f, [])` — `verdict()` returns `"unclaimed"` on `total === 0` before any
+veto runs, so an empty-claims call would pass for any fixture, challenge shells included,
+and assert nothing. Instead the test supplies a claim written the way a reader would type
+it after reading the rendered page — `RENDERED_CLAIM`, built with `String.fromCodePoint`
+so the test file itself stays ASCII — while the fixture spells the identical sentence with
+entities. The pipeline is required to decode the entities and report `"supported"`.
+
 ## What was NOT done
 
 No fixture was dropped, omitted, or reclassified across any of the three rounds. The
