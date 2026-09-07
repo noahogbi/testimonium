@@ -1,0 +1,111 @@
+{
+  "version": 1,
+  "results": [
+    {
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404",
+      "verdict": "supported",
+      "rungsAttempted": [
+        "node"
+      ],
+      "rungsAvailable": [
+        "node",
+        "curl",
+        "pdftotext"
+      ],
+      "ladderTruncated": false,
+      "evidence": [
+        {
+          "claims": [
+            "The HTTP 404 Not Found client error response status code indicates that the server cannot find the requested resource."
+          ],
+          "excerpt": "…(do Brasil) Русский 中文 (简体) 正體中文 (繁體) 404 Not Found The HTTP 404 Not Found client error response status code indicates that the server cannot find the requested resource.…",
+          "rung": "node"
+        }
+      ],
+      "retrievedAt": "2026-09-07T12:09:13.896Z"
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/HTTP_404",
+      "verdict": "supported",
+      "rungsAttempted": [
+        "node"
+      ],
+      "rungsAvailable": [
+        "node",
+        "curl",
+        "pdftotext"
+      ],
+      "ladderTruncated": false,
+      "evidence": [
+        {
+          "claims": [
+            "The code is often associated with response reason Not Found and is often referred to as page not found or file not found."
+          ],
+          "excerpt": "…[ 1 ] The code is often associated with response reason Not Found and is often referred to as page not found or file not found .…",
+          "rung": "node"
+        },
+        {
+          "claims": [
+            "A 404 error is often returned when pages have been moved or deleted."
+          ],
+          "excerpt": "…A 404 error is often returned when pages have been moved or deleted.…",
+          "rung": "node"
+        }
+      ],
+      "retrievedAt": "2026-09-07T12:09:14.098Z"
+    },
+    {
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/410",
+      "verdict": "supported",
+      "rungsAttempted": [
+        "node"
+      ],
+      "rungsAvailable": [
+        "node",
+        "curl",
+        "pdftotext"
+      ],
+      "ladderTruncated": false,
+      "evidence": [
+        {
+          "claims": [
+            "The HTTP 410 Gone client error response status code indicates that the target resource is no longer available at the origin server and that this condition is likely to be permanent."
+          ],
+          "excerpt": "…中文 (简体) 正體中文 (繁體) 410 Gone The HTTP 410 Gone client error response status code indicates that the target resource is no longer available at the origin server and that this condition is likely to be permanent.…",
+          "rung": "node"
+        }
+      ],
+      "retrievedAt": "2026-09-07T12:09:14.147Z"
+    },
+    {
+      "url": "https://www.rfc-editor.org/rfc/rfc9110.html",
+      "verdict": "supported",
+      "rungsAttempted": [
+        "node"
+      ],
+      "rungsAvailable": [
+        "node",
+        "curl",
+        "pdftotext"
+      ],
+      "ladderTruncated": false,
+      "evidence": [
+        {
+          "claims": [
+            "The 404 (Not Found) status code indicates that the origin server did not find a current representation for the target resource or is not willing to disclose that one exists."
+          ],
+          "excerpt": "…404 Not Found The 404 (Not Found) status code indicates that the origin server did not find a current representation for the target resource or is not willing to disclose that one exists.…",
+          "rung": "node"
+        },
+        {
+          "claims": [
+            "The 410 response is primarily intended to assist the task of web maintenance by notifying the recipient that the resource is intentionally unavailable and that the server owners desire that remote links to that resource be removed."
+          ],
+          "excerpt": "…¶ The 410 response is primarily intended to assist the task of web maintenance by notifying the recipient that the resource is intentionally unavailable and that the server owners desire that remote links to that resource be removed.…",
+          "rung": "node"
+        }
+      ],
+      "retrievedAt": "2026-09-07T12:09:14.650Z"
+    }
+  ]
+}

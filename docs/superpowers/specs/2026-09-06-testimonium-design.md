@@ -302,12 +302,37 @@ PROOF OF READ - BODY-DERIVED ONLY
       This is the origin's CHALLENGE_MAX_CHARS cap generalized from a
       signature-gated special case into the primary instrument.
 
-CORROBORATION - never sole licence to accuse
-  C1  Slug/title correlation IN THE BODY: content words from the URL path
-      and the document's own title appear in the extracted text.
-      Language-agnostic, no list to maintain. A challenge served for
-      /eli/reg/2024/1689 does not contain "artificial intelligence"; the
-      regulation does.
+REPORTED, NEVER LICENSING - neither of these can permit an accusation
+  C1  Slug correlation IN THE BODY: content words from the URL path and
+      from the author's footnote label appear in the extracted text.
+
+      **WITHDRAWN FROM THE VERDICT. Measured, twice, and it does not
+      work.** Draft 2 made it a required half of the accusation gate.
+      Calibration killed that in two rounds:
+
+      Round 1 - it drew words from the document's own <title>, which
+      arrives in the SAME RESPONSE as the body, so every page contains
+      its own title by construction. All 12 fixtures carrying a title
+      scored exactly 1.00, challenge and document alike.
+
+      Round 2 - with the title removed, a real blog index at
+      blog.mozilla.org/en/ scored a vacuous 0.00, because "en" is two
+      characters and falls under the content-word floor. That is the
+      identical score to a Federal Register anti-scraping wall. The two
+      populations share their minimum, so no threshold separates them:
+      414 threshold pairs satisfy the assertions and every one of them is
+      NEGATIVE, which is C1 switched off wearing a number.
+
+      And the ordering is inverted where it is measurable at all: the
+      highest challenge overlap (0.80, Federal Register) OUTRANKS the
+      lowest real document (0.75, MDN). C1 is not merely weak on this
+      evidence, it is anti-correlated.
+
+      It stays computed and reported, because it is useful diagnostics
+      under --explain-fetch and it is the natural place to start if
+      someone finds a corpus where it does discriminate. It does not
+      gate. A gate that does no work while implying safety is worse than
+      no gate.
   C2  Head markers: og:type=article, json-ld articleBody or datePublished.
       REPORTED, NEVER LICENSING. These prove a page exists at that URL.
       They do not prove its body was read - a paywall stub keeps the
@@ -324,21 +349,45 @@ VETO - overrides everything, including P1
   N2  finalUrl after redirects lands on a declared challenge or consent
       path. The path list is dated data under 7.2, not a constant.
   N3  Challenge signature match AND body under the length cap.
+  N4  HTTP 404 or 410. The document is gone.
+
+      This is the ONE place status is consulted, and the asymmetry is the
+      whole justification. A server is not authoritative about PRESENCE -
+      6.3 records a 400 serving 253KB and a 404 serving 112KB - which is
+      why 2xx is never proof of a read. But a server saying 404 or 410 IS
+      authoritative about ABSENCE: it is the origin stating that the
+      resource it was asked for does not exist. Refusing to believe that,
+      while also refusing to believe 2xx, would leave nothing believable.
+
+      Draft 2 deferred this, noting only that "a 404 distinguishes 'this
+      document is gone' from 'this document was read', which is
+      information recheck will want even though check does not act on
+      it." Calibration proved check must act on it: a real ECB 404 serving
+      13,221 characters of navigation chrome cleared every body-derived
+      test - prose volume above two of nine real documents, overlap 1.00 -
+      and no threshold pair could reject it. Exhaustive search over 24,915
+      pairs returned zero solutions with that fixture and 249 without it.
+      Body shape cannot see what the status line says plainly.
 
 VERDICT
   claims.length == 0                          -> unclaimed   (never supported)
-  N1 | N2 | N3                                -> unreachable
+  N1 | N2 | N3 | N4                           -> unreachable
   matched == claims.length                    -> supported
-  P2 && C1 && matched > 0                     -> unsupported
-  P2 && C1 && matched == 0                    -> unsupported
+  P2                                          -> unsupported
   otherwise                                   -> unreachable
 ```
+
+Accusation rests on P2 and the four vetoes. Measured separation on the
+fixture corpus: largest non-vetoed challenge 1,180 characters, smallest
+real document 6,858 - a gap of 5,678, with the floor licensed at 4,500.
+N4 removes the padded error shells that prose volume cannot see; nothing
+else needs removing.
 
 **Read the table's shape, because it is the whole correction.** Attestation and
 accusation have different burdens. A full match is its own proof of a read and
 needs nothing further. An accusation requires body-derived evidence that we read
-a document - prose volume AND slug/title correlation in the body - and no veto.
-`matched > 0` no longer licenses an accusation on its own.
+a document - prose volume - plus no veto. `matched > 0` no longer licenses an
+accusation on its own.
 
 That asymmetry is what closes the two false-accusation paths this scheme had in
 draft 1:
@@ -616,7 +665,18 @@ testimonium recheck <doc>        drift, against stored evidence and the archive
 testimonium reachability <doc>   preflight. no claims needed
 ```
 
-Global flags: `--json`, `--explain-fetch`, `--fetcher <id>`, `--rules <path>`.
+Global flags: `--json`, `--rules <path>`. `check` additionally takes
+`--explain-fetch` (not global: `reachability` has no fired-rule provenance to
+print).
+
+**Amended 2026-09-07, plan 1:** `--fetcher <id>` above was never shipped as a
+CLI flag. Plan 1 de-scoped it to a programmatic option only -
+`CheckOptions.fetcher` - because a CLI fetcher registry (resolving an `<id>`
+string to a loaded plugin, validating it, reporting a bad id) is a
+plugin-resolution design nothing in this plan required. The README documents
+the programmatic option and the absence of a CLI equivalent. Reintroducing
+`--fetcher <id>` at the CLI needs that design done first, not just a flag
+added.
 
 **`check`** is the gate. Adapters parse the document; claims join by URL; each
 source goes through `check()`; results write to the evidence file.

@@ -1,0 +1,120 @@
+import { describe, expect, it } from "vitest";
+import { parseGfmFootnotes } from "../../src/adapters/gfm-footnotes.js";
+
+const DOC = `Some prose with a citation.[^1] And another.[^2] And a third.[^note]
+
+[^1]: Jane Roe, "The Report", *Example Gov*, 12 May 2026. https://example.gov/report
+[^2]: See the earlier piece at /posts/previous for background.
+[^note]: Bare link <https://example.com/b> in angle brackets.
+`;
+
+describe("parseGfmFootnotes", () => {
+  it("extracts each footnote definition in document order", () => {
+    expect(parseGfmFootnotes(DOC).footnotes.map((f) => f.n)).toEqual([1, 2, 3]);
+  });
+
+  it("takes the first external URL as the source", () => {
+    expect(parseGfmFootnotes(DOC).footnotes[0]!.url).toBe("https://example.gov/report");
+  });
+
+  it("returns null for a footnote with no external URL", () => {
+    expect(parseGfmFootnotes(DOC).footnotes[1]!.url).toBeNull();
+  });
+
+  it("handles angle-bracket autolinks", () => {
+    expect(parseGfmFootnotes(DOC).footnotes[2]!.url).toBe("https://example.com/b");
+  });
+
+  it("numbers non-numeric labels by document position", () => {
+    expect(parseGfmFootnotes(DOC).footnotes[2]!.n).toBe(3);
+  });
+
+  it("keeps the definition text as the label, without the marker", () => {
+    expect(parseGfmFootnotes(DOC).footnotes[0]!.label).toContain("The Report");
+    expect(parseGfmFootnotes(DOC).footnotes[0]!.label).not.toContain("[^1]:");
+  });
+
+  it("does not treat a reference in the body as a definition", () => {
+    expect(parseGfmFootnotes("Text.[^1]\n").footnotes).toEqual([]);
+  });
+
+  it("strips trailing punctuation from a bare URL", () => {
+    const d = parseGfmFootnotes("[^1]: See https://example.gov/report.\n");
+    expect(d.footnotes[0]!.url).toBe("https://example.gov/report");
+  });
+
+  it("keeps a parenthesised path intact, bare and as a markdown link", () => {
+    // /wiki/Mercury_(planet) is an ordinary URL shape. Excluding ")" from the
+    // character class truncated it mid-URL; the truncated URL then fetches,
+    // 404s, and reports unreachable - indistinguishable from a broken link.
+    const bare = parseGfmFootnotes("[^1]: See https://en.wikipedia.org/wiki/Mercury_(planet) for details.\n");
+    expect(bare.footnotes[0]!.url).toBe("https://en.wikipedia.org/wiki/Mercury_(planet)");
+    const md = parseGfmFootnotes("[^1]: See [the article](https://en.wikipedia.org/wiki/Mercury_(planet)) here.\n");
+    expect(md.footnotes[0]!.url).toBe("https://en.wikipedia.org/wiki/Mercury_(planet)");
+  });
+
+  it("still strips an unbalanced closing paren from a prose aside", () => {
+    // The reason ")" was excluded in the first place. Balance, not exclusion,
+    // is what tells these two cases apart.
+    const d = parseGfmFootnotes("[^1]: Background (see https://example.com/x) and more.\n");
+    expect(d.footnotes[0]!.url).toBe("https://example.com/x");
+  });
+
+  it("reads an indented continuation line under CRLF as well as LF", () => {
+    // A JS regex `.` never matches \r, so the continuation alternative failed
+    // silently on every CRLF document and the URL vanished into url: null.
+    const lf = parseGfmFootnotes("[^1]: Jane Roe, The Report.\n    https://example.gov/report\n");
+    const crlf = parseGfmFootnotes("[^1]: Jane Roe, The Report.\r\n    https://example.gov/report\r\n");
+    expect(lf.footnotes[0]!.url).toBe("https://example.gov/report");
+    expect(crlf.footnotes[0]!.url).toBe("https://example.gov/report");
+  });
+
+  it("does NOT absorb an unindented following paragraph", () => {
+    // The most dangerous shape found: a continuation rule that excluded blank
+    // lines but never required indentation pulled the next paragraph in and
+    // attributed ITS url to the citation. The tool would then fetch and
+    // verify claims against a source the author never cited.
+    const d = parseGfmFootnotes(
+      "[^1]: See the discussion at /posts/previous for background.\n" +
+        "Meanwhile, in unrelated news, https://unrelated.example.com/wrong was published.\n",
+    );
+    expect(d.footnotes[0]!.url).toBeNull();
+    expect(d.footnotes[0]!.label).not.toContain("unrelated");
+  });
+
+  it("ignores footnote syntax inside a fenced code block", () => {
+    // A code sample showing footnote syntax is documentation, not a citation.
+    const d = parseGfmFootnotes(
+      "Docs:\n\n```markdown\n[^1]: Example https://example.com/sample\n```\n\n[^1]: Real https://example.gov/real\n",
+    );
+    expect(d.footnotes).toHaveLength(1);
+    expect(d.footnotes[0]!.url).toBe("https://example.gov/real");
+  });
+
+  it("closes a fence only on a run of the same character, at least as long", () => {
+    // A four-tick fence wrapping a three-tick example is how documentation
+    // about markdown is written. Truncating the marker to three characters let
+    // the inner ``` close early: the trapped example leaked out as a live
+    // citation, and the real closer became a new opener that swallowed every
+    // footnote after it.
+    const doc =
+      "````markdown\n" +
+      "To close a normal fence, write:\n" +
+      "```\n" +
+      "[^1]: Trapped https://example.com/trapped\n" +
+      "````\n\n" +
+      "[^2]: Real https://example.gov/real\n";
+    const d = parseGfmFootnotes(doc);
+    expect(d.footnotes).toHaveLength(1);
+    expect(d.footnotes[0]!.url).toBe("https://example.gov/real");
+  });
+
+  it("does not treat a prose reference NEAR a url as a definition", () => {
+    // The original version of this test used text containing no URL at all,
+    // so a parser that merely scanned for https:// would also have passed it.
+    const d = parseGfmFootnotes(
+      "See the discussion at https://example.com/prose-mention for background.[^1] No definition follows.\n",
+    );
+    expect(d.footnotes).toEqual([]);
+  });
+});

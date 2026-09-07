@@ -1,0 +1,196 @@
+# First real run
+
+**Date:** 2026-09-07
+**Document:** `example/sample.md` (four GFM footnotes)
+**Command:** `npm run build && node dist/bin.js reachability example/sample.md`, then `node dist/bin.js check example/sample.md`
+
+Every other task in this plan was verified against fixtures and stubs; nothing had
+ever made a network request. This is that first request, by hand, against sources
+picked for this run and read by hand to copy their claims.
+
+## URLs used
+
+| # | URL | Source |
+|---|---|---|
+| 1 | `https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404` | MDN Web Docs |
+| 2 | `https://en.wikipedia.org/wiki/HTTP_404` | Wikipedia |
+| 3 | `https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/410` | MDN Web Docs |
+| 4 | `https://www.rfc-editor.org/rfc/rfc9110.html` | IETF, RFC 9110 (standards body) |
+
+All four were reachable on the first attempt; no walled or paywalled host was
+encountered, so there is no "picked one, it was walled, picked another" story to
+tell here - the corpus is small and every source is a stable reference page or
+standards document chosen specifically to avoid that outcome.
+
+## Reachability preflight
+
+```
+node dist/bin.js reachability example/sample.md
+```
+
+Literal output:
+
+```
+  readable    https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404 (12164 chars via node)
+  readable    https://en.wikipedia.org/wiki/HTTP_404 (16301 chars via node)
+  readable    https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/410 (11161 chars via node)
+  readable    https://www.rfc-editor.org/rfc/rfc9110.html (451673 chars via node)
+
+4/4 readable (100.0%)
+This is YOUR corpus's number. Do not compare it to anyone else's.
+```
+
+**4/4 readable, 100.0%.** All four were served by the `node` rung - the cheapest
+rung in the ladder. `curl` and `pdftotext` are both available on this machine
+(they show up in `rungsAvailable` in the evidence file below) but neither was
+needed: none of the four sources returned a challenge, a non-2xx status, or
+prose under the 4,500-character floor on the first attempt, so the ladder never
+escalated. As the tool itself says, this 100% is this corpus's number, not a
+claim about the web generally - these four sources were picked specifically for
+stability (a standards body, a reference wiki, a documentation site) and
+avoiding exactly the walls this tool exists to detect.
+
+## The gate, clean
+
+```
+node dist/bin.js check example/sample.md
+```
+
+Literal output:
+
+```
+  [1] supported (1 claims) - https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404
+  [2] supported (2 claims) - https://en.wikipedia.org/wiki/HTTP_404
+  [3] supported (1 claims) - https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/410
+  [4] supported (2 claims) - https://www.rfc-editor.org/rfc/rfc9110.html
+
+0 unsupported, 0 unreachable, 0 without claims
+```
+
+`echo $?` → **0**
+
+Six claim phrases were checked across four footnotes (1 + 2 + 1 + 2). Every
+footnote reports `supported`. The evidence file `example/sample.evidence.json`
+records `"rung": "node"` for all six matched claims and `rungsAttempted:
+["node"]` for all four sources - the first rung tried was also the last, for
+every citation.
+
+## `--explain-fetch`
+
+```
+node dist/bin.js check example/sample.md --explain-fetch
+```
+
+Output was **identical** to the plain `check` run above - no extra `rule
+fired:` lines appeared for any of the four citations. That is correct, not
+broken, but the reason is not the one this document originally gave.
+
+`--explain-fetch` prints `firedRule`, and `firedRule` is **not** a host rule.
+It is set in `src/classify/signals.ts` as `pathRule ?? sigRule`: the
+**challenge-path list** (did the final, post-redirect URL land on something
+like `/cdn-cgi/challenge-platform/`?) and the **challenge-signature list**
+(does the extracted text carry known wall wording, on a body short enough for
+the length conjunction to apply?), both from `src/rules/challenge.ts` and
+both extensible through `--rules`. `src/rules/hosts.ts` is a different
+mechanism entirely - it feeds the default fetcher's user-agent and identity
+handling (`sec.gov` requires a declared identity, `bloomberg.com` is known
+hard-blocked) and it never appears in `firedRule`.
+
+So the empty output means what it should mean: **none of these four pages was
+a challenge**. A `rule fired:` line is a statement that the tool believes it
+was blocked - it is a diagnostic for `unreachable`, not a per-host
+explanation of every fetch decision. A corpus of four clean documentation
+pages will always look like this.
+
+## Proving the gate can fail
+
+`example/sample.claims.json` entry 4 (RFC 9110) was changed by one word, from:
+
+> "The 404 (Not Found) status code indicates that the origin server did not
+> find a **current** representation for the target resource or is not willing
+> to disclose that one exists."
+
+to:
+
+> "The 404 (Not Found) status code indicates that the origin server did not
+> find a **stale** representation for the target resource or is not willing
+> to disclose that one exists."
+
+Re-running `check`:
+
+```
+  [1] supported (1 claims) - https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/404
+  [2] supported (2 claims) - https://en.wikipedia.org/wiki/HTTP_404
+  [3] supported (1 claims) - https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/410
+  [4] unsupported - https://www.rfc-editor.org/rfc/rfc9110.html
+        MISS: "The 404 (Not Found) status code indicates that the origin server did not find a stale representation for the target resource or is not willing to disclose that one exists."
+
+1 unsupported, 0 unreachable, 0 without claims
+```
+
+`echo $?` → **1**
+
+Footnote 4 flips to `unsupported`, the altered phrase is printed under `MISS:`,
+and the process exits 1. The phrase was then restored to `current` and `check`
+was re-run to confirm it returns to the clean state recorded above (0
+unsupported, 0 unreachable, exit 0).
+
+## What surprised me
+
+**The gate failed on the first real attempt, for a reason that had nothing to
+do with the claim being false.** Before deliberately breaking anything, the
+first honest `check` run reported footnote 2 (Wikipedia) as `unsupported`:
+
+```
+  [2] unsupported - https://en.wikipedia.org/wiki/HTTP_404
+        MISS: "The code is often associated with response reason Not Found and is often referred to as page not found or file not found."
+```
+
+The phrase was copied by eye from the rendered Wikipedia article, where it
+reads as ordinary prose ending "...or file not found." But Wikipedia's HTML
+wraps "page not found" and "file not found" in `<i>` tags, and `src/text/
+extract.ts`'s `toText` replaces each tag with a literal space - including the
+`</i>` immediately before the closing period, which has no space in the
+source markup. The tool's own extracted text therefore reads "...or file not
+found ." - **a space before the period that no human reader of the rendered
+page ever sees.** My hand-copied phrase, punctuated the way a person would
+punctuate it, did not match the extracted text a machine actually produces.
+
+**This was recorded here as "not a bug". That was wrong, and it has since been
+fixed as a defect.** The workaround at the time was to paste the extractor's
+own output into the claims file - `"...or file not found ."`, space and all -
+which asks the author to know that `toText` exists and to punctuate against a
+machine's intermediate representation rather than against the page. Worse, the
+failure it produced was not a harmless miss: Wikipedia's article extracts far
+past the 4,500-character prose floor, so the verdict was `unsupported` - **a
+false accusation manufactured entirely by the tool's own extractor**, against
+a citation that was exactly right. That is the single outcome this whole
+design exists to prevent, so a "sharp edge worth recording" was the wrong
+category for it.
+
+The fix lives in `src/text/normalize.ts`: `norm()` now pulls a space back onto
+the preceding word before `. ; : ! ? % ) ] }` and forward off `( [ {`, on
+**both** sides of the comparison. It only ever deletes, so it can only add
+matches, and an added match can only move a verdict toward `supported` - the
+safe direction. The space *after* terminal punctuation is deliberately left
+alone, so the claim `"1.5"` still cannot match a list rendering `"1. 5
+things"`. `src/text/excerpt.ts` reproduces the same rule inside its index map,
+because a claim rescued by the matcher but unlocatable by the map would return
+`supported` with a null excerpt - a verdict with no passage behind it.
+`example/sample.claims.json` has been restored to the page's actual words,
+and `check` still exits 0 against the live sources.
+
+The general shape of the hazard is still worth knowing when authoring claims:
+**a phrase that spans an inline-formatted word boundary (italics, bold, a
+hyperlink) can pick up whitespace that is invisible in a browser but present
+in `toText`'s output.** Punctuation is now handled; other renderings may not
+be. This cost about five minutes to diagnose and is exactly the kind of thing
+a fixture-only test suite cannot surface, because no fixture happened to have
+this shape - which is why `test/text/extract.test.ts` now carries one case per
+punctuation class.
+
+Everything else about the run behaved exactly as documented: the reachability
+preflight was free and accurate, the evidence file captured which rung read
+each source, and breaking one word in one claim produced precisely one
+`unsupported` footnote with the miss printed and a nonzero exit code - nothing
+else changed.
