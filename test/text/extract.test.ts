@@ -47,6 +47,53 @@ describe("a claim copied from the rendered page survives toText's tag spacing", 
   });
 });
 
+const CP = String.fromCodePoint;
+const EM = CP(0x2014); // em dash
+const EN = CP(0x2013); // en dash
+const EACUTE = CP(0xe9); // e-acute
+const HELLIP = CP(0x2026);
+const LDQUO = CP(0x201c);
+const RDQUO = CP(0x201d);
+
+describe("entity decoding is canonical", () => {
+  it("decodes every spelling of one code point identically", () => {
+    // toText once disagreed with ITSELF: &#8212; and &mdash; became "--" while
+    // &#x2014; fell through to the numeric branch and produced the literal
+    // character, which norm folds to "-". A claim copied verbatim from a
+    // rendered page then matched or missed depending on how the SOURCE markup
+    // spelled a character no author can see.
+    const forms = ["&mdash;", "&#8212;", "&#x2014;", EM];
+    const out = forms.map((f) => toText("<p>profits" + f + "up sharply</p>"));
+    expect(new Set(out).size, JSON.stringify(out)).toBe(1);
+  });
+
+  it("agrees with norm on every dash spelling", () => {
+    for (const f of ["&mdash;", "&#8212;", "&#x2014;", EM, "&ndash;", "&#8211;", EN]) {
+      const text = toText("<p>profits" + f + "up sharply</p>");
+      expect(phraseFound(text, "profits" + EM + "up sharply"), f).toBe(true);
+    }
+  });
+
+  it("decodes the named entities a real citation hits", () => {
+    expect(toText("<p>caf&eacute;</p>")).toBe("caf" + EACUTE);
+    expect(toText("<p>&Eacute;cole</p>")).toBe(CP(0xc9) + "cole");
+    expect(toText("<p>fen&ecirc;tre</p>")).toBe("fen" + CP(0xea) + "tre");
+    expect(toText("<p>TNF-&alpha;</p>")).toBe("TNF-" + CP(0x3b1));
+    expect(toText("<p>and so on&hellip;</p>")).toBe("and so on" + HELLIP);
+    expect(toText("<p>a &lt; b &gt; c</p>")).toBe("a < b > c");
+    expect(toText("<p>&ldquo;quoted&rdquo;</p>")).toBe(LDQUO + "quoted" + RDQUO);
+  });
+
+  it("still decodes &amp; LAST so an escaped entity does not double-decode", () => {
+    // "&amp;#x27;" is a literal "&#x27;" on the page, not an apostrophe.
+    expect(toText("<p>&amp;#x27;</p>")).toBe("&#x27;");
+  });
+
+  it("leaves an unknown entity raw rather than guessing", () => {
+    expect(toText("<p>&nosuchentity;</p>")).toBe("&nosuchentity;");
+  });
+});
+
 describe("fixture corpus", () => {
   const corpus = JSON.parse(readFileSync("fixtures/corpus.json", "utf8"));
 
