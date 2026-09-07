@@ -1,7 +1,8 @@
 # testimonium: making "sourced" mean "supported"
 
 **Date:** 2026-09-06
-**Status:** Draft 1 - awaiting Fable review, then editor review, then `writing-plans`.
+**Status:** Draft 2 - Fable review returned REVISE with five blockers; all five are
+addressed below. Awaiting editor review, then `writing-plans`.
 **Language:** TypeScript, Node >= 20, npm.
 **Sibling to:** `urtext`. Not a subcommand of it. See section 3.
 
@@ -20,6 +21,21 @@ this project and had uncommitted work in flight while it was written.
 
 Line numbers move. Where a line number appears, the behavioural claim attached to
 it was checked, not merely the line's existence.
+
+**Draft 2 note.** Every citation in draft 1 was independently re-verified during
+review at HEAD `3eaf353`, and all resolved with their behavioural claims intact -
+with one exception. Section 6.3 cited two pages as large readable documents
+served under error statuses; re-fetching them showed both to be large *error
+shells* extracting to 12 and 522 characters respectively. That is precisely the
+failure this section exists to prevent, committed in the document that declares
+it. The claim is withdrawn and the correction is kept visible in 6.3 rather than
+quietly deleted.
+
+The `[measured]` battery result was independently rerun during review and its
+headline number confirmed: 11 of 17 realistic walls evade the shipped signature
+list, zero false positives. One precision error was corrected (PerimeterX). The
+`[reported]` EUR-Lex account is corroborated by the origin repo's commit history
+but remains same-author testimony rather than independent confirmation.
 
 ---
 
@@ -256,11 +272,12 @@ The signature list is the fastest-rotting artifact in the system:
   the repair caught the Turnstile checkbox variant and missed the automatic
   variant of the same vendor. "Enable JavaScript **and cookies** to continue"
   defeats `enable javascript to continue`. Also through: Amazon's robot check,
-  DataDome's abbreviated "Please enable JS", Anubis, PerimeterX, Imperva,
-  Google's sorry page, Vercel's checkpoint, EUR-Lex's own wording **in French**,
-  and a genuine Turnstile page padded past the 800-character cap by ordinary
-  cookie boilerplate. **Zero false positives** - the exposure is entirely on the
-  false-negative side.
+  DataDome's abbreviated "Please enable JS", Anubis, PerimeterX's press-and-hold
+  variant (its block page *was* caught), Imperva, Google's sorry page, Vercel's
+  checkpoint, EUR-Lex's own wording **in French**, and a genuine Turnstile page
+  padded past the 800-character cap by ordinary cookie boilerplate. **Zero false
+  positives** - the exposure is entirely on the false-negative side.
+  `[independently rerun and confirmed during review, 2026-09-06]`
 - Several of those evasions are currently harmless only because those vendors
   happen to serve non-2xx. **The keystone guarantee is presently underwritten by
   Cloudflare's HTTP conventions**, a fact outside the tool's control.
@@ -276,67 +293,176 @@ phrases known to have been on the page.** The claims are an oracle no generic
 fetcher has.
 
 ```
-POSITIVE-READ SIGNALS
-  P1  At least one claim phrase matched.
-      Strongest, and dominant: a challenge page does not contain the claim.
-  P2  Slug/title correlation: content words from the URL path or <title>
-      appear in the body above a threshold. Language-agnostic, no list to
-      maintain. A challenge for /eli/reg/2024/1689 will not contain
-      "artificial intelligence"; the document will.
-  P3  Prose shape, computed on RAW HTML, not extracted text: text-to-markup
-      ratio and sentence density above thresholds. Challenge shells are
-      script-dominant with noscript fallbacks - a structural fact that
-      survives every rewording and every language.
-  P4  Document markers: og:type=article, json-ld with articleBody or
-      datePublished.
+PROOF OF READ - BODY-DERIVED ONLY
+  P1  At least one claim phrase matched in the extracted body.
+  P2  Extracted prose volume above a calibrated floor.
+      NOT a text-to-markup ratio. See 6.5 for why the ratio is the wrong
+      instrument. Measured separation on real pages: challenge and error
+      shells extract 12-600 characters; real articles extract 7,000-33,000.
+      This is the origin's CHALLENGE_MAX_CHARS cap generalized from a
+      signature-gated special case into the primary instrument.
 
-NEGATIVE-READ SIGNALS (consulted only when P1 does not hold)
-  N1  A vendor challenge header. cf-mitigated: challenge is Cloudflare's own
-      documented machine-readable marker: it catches every CF variant, in
-      every language, at any body length, and it is more durable than any
-      copy string.
-  N2  finalUrl after redirects lands on a challenge or consent path.
+CORROBORATION - never sole licence to accuse
+  C1  Slug/title correlation IN THE BODY: content words from the URL path
+      and the document's own title appear in the extracted text.
+      Language-agnostic, no list to maintain. A challenge served for
+      /eli/reg/2024/1689 does not contain "artificial intelligence"; the
+      regulation does.
+  C2  Head markers: og:type=article, json-ld articleBody or datePublished.
+      REPORTED, NEVER LICENSING. These prove a page exists at that URL.
+      They do not prove its body was read - a paywall stub keeps the
+      article's whole head. See 6.5.
+
+VETO - overrides everything, including P1
+  N1  A vendor challenge header. `cf-mitigated: challenge` is Cloudflare's
+      own documented marker, present on every Challenge Page type, in every
+      language, at any body length. Cloudflare's challenge page REPLACES the
+      resource, so a body carrying this header cannot be the document -
+      which makes the veto cost-free.
+      [verified: developers.cloudflare.com/cloudflare-challenges/ detect-response,
+      updated 2026-05-05, read as raw page rather than as a fetch summary]
+  N2  finalUrl after redirects lands on a declared challenge or consent
+      path. The path list is dated data under 7.2, not a constant.
   N3  Challenge signature match AND body under the length cap.
 
 VERDICT
-  matched == claims.length                        -> supported
-  matched >  0                                    -> unsupported   (P1 holds)
-  matched == 0 && (P2|P3|P4) && !(N1|N2|N3)       -> unsupported
-  matched == 0 && otherwise                       -> unreachable
+  claims.length == 0                          -> unclaimed   (never supported)
+  N1 | N2 | N3                                -> unreachable
+  matched == claims.length                    -> supported
+  P2 && C1 && matched > 0                     -> unsupported
+  P2 && C1 && matched == 0                    -> unsupported
+  otherwise                                   -> unreachable
 ```
 
-### 6.3 What the inversion buys
+**Read the table's shape, because it is the whole correction.** Attestation and
+accusation have different burdens. A full match is its own proof of a read and
+needs nothing further. An accusation requires body-derived evidence that we read
+a document - prose volume AND slug/title correlation in the body - and no veto.
+`matched > 0` no longer licenses an accusation on its own.
 
-**All 11 walls the battery got through degrade to `unreachable` without any of
-them having been foreseen.** That is the property that matters: correctness stops
-depending on the completeness of a list that provably cannot be completed.
+That asymmetry is what closes the two false-accusation paths this scheme had in
+draft 1:
+
+- **The paywall stub.** Head intact, `og:type=article`, no challenge involved,
+  body a stub. C2 is now reporting-only and P2 fails, so the verdict is
+  `unreachable` rather than a red CI failure against hand-verified work.
+- **Partial match inside a wall.** One boilerplate phrase - a cookie-policy
+  sentence in a padded challenge page - matching while the real claims miss.
+  Under draft 1 that gave `matched > 0 -> unsupported`: an accusation *minted by
+  the wall*, failing the run. P2 now gates it to `unreachable`.
+
+### 6.3 What the inversion buys, and what remains to be proved
 
 **The signature list demotes to an optimization.** Its job becomes triggering the
 curl fall-through early, not deciding a verdict. It may rot freely; the cost is
-latency and reach, never truth.
+latency and reach, never truth. This much follows from the structure of the
+verdict table and needs no measurement.
 
-**HTTP status stops mattering in both directions**, which is what the origin
-spec's section 2 already concluded and the code never absorbed. `www.meta.com`
-served 254,088 bytes of rendered HTML under an HTTP 400, and `news.skhynix.com`
-serves a 404 as a 112,610-byte styled page. Today the curl rung refuses non-2xx
-bodies outright (`source-fetch.mjs:335`), so that quarter-megabyte of readable
-document is discarded. Under the inversion it becomes a confirmed read the moment
-a claim matches in it.
+**An accusation stops depending on the completeness of a list that provably
+cannot be completed.** Every wall in the battery - listed or not, English or not,
+inflected or padded - fails P2, because a challenge page has no prose volume. The
+defence is a property of what a wall *is*, not of what we have written down
+about it.
+
+**What is NOT yet established, and must not be claimed until it is.** Draft 1 of
+this spec asserted that all 11 evading walls "degrade to `unreachable`." That was
+unverifiable when written and is withdrawn. The battery exercises
+`isChallengePage` only; P2, C1 and the N-signals do not exist yet, so the
+property depends entirely on thresholds nobody has calibrated.
+
+> **Acceptance test, binding on the implementation plan.** Over the fixture
+> corpus - every challenge and error shell on one side, every real article and
+> PDF on the other - the verdict reducer must return `unreachable` for 100% of
+> non-documents and must not return `unreachable` for any real document whose
+> claims are present. The calibration that achieves this, and the thresholds it
+> yields, are recorded in the repo. Until that test is green, "all walls degrade
+> safely" is a design intention, not a property.
+
+**On HTTP status.** The origin spec's section 2 concluded that a status code is
+unreliable in both directions, and that conclusion stands on its own: this scheme
+consults no status, so a document served under a 400 or a 404 is judged by its
+body like any other.
+
+Draft 1 supported that point with two examples and both were wrong, in the exact
+manner section 0 of this document warns against. `www.meta.com`'s 253KB under an
+HTTP 400 extracts to **12 characters** of visible text under the title "Error |
+Meta"; `news.skhynix.com`'s 112KB 404 extracts to 522 characters of "404, Page
+Not Found." They are large *error shells*, not readable documents. The origin
+spec said "rendered HTML under a 400" and was accurate; draft 1 escalated that to
+"readable document" and made it false. Neither page is rescued by this scheme -
+both fail P2 and stay `unreachable`, exactly as before.
+`[verified: both URLs re-fetched and extracted, 2026-09-06]`
+
+The honest form of the claim is therefore a-priori rather than empirical: status
+is not consulted because body evidence is strictly better evidence, and the cases
+where a real document sits under an error status - a misconfigured SPA, a
+mis-routed CMS - are then handled by the same rule as everything else. **One
+caveat to carry into implementation:** a 404 is the one status that distinguishes
+"this document is gone" from "this document was read," which is information
+`recheck` will want even though `check` does not act on it.
 
 ### 6.4 What it costs, stated plainly
 
 Fabricated claims cited to a walled host pass as `unreachable` rather than
-failing the run. This is not a new weakening: `unreachable` already does not fail
-a run, by the keystone rule. The inversion does not change the policy; it makes
-the implementation match the policy it already claims.
+failing the run. This is not a new weakening: `unreachable` does not fail a run
+**by default**, by the keystone rule. The inversion does not change that policy;
+it makes the implementation match the policy it already claims.
 
-**Residual risk, unresolved:** P1 dominance assumes a challenge page cannot
-contain a claim phrase. A very short or generic claim could in principle match
-inside a wall, producing `supported` with an excerpt drawn from a challenge page.
-The excerpt would be visibly wrong to a human, and `--explain-fetch` would show
-it, but nothing mechanical catches it. Mitigations to evaluate during
-implementation: a minimum claim length, or refusing P1 when N1 holds. See
-section 13.
+Two things must be said rather than smuggled:
+
+**"Does not fail a run" is a default, not an invariant.** Section 5.2 exposes
+`failOn: { unreachable? }`, and a caller may switch it on - the origin's bulletin
+does exactly that. The keystone rule constrains what `unreachable` may *render to
+a reader*, not what a caller may choose to gate its own pipeline on.
+
+**`unreachable` is silent to the reader, never to the author.** `check` MUST list
+every unreachable citation in its author-facing output, with its URL and the rung
+history that produced it. Without that requirement a fabricated citation to a
+walled host becomes invisible rather than merely non-failing, and the tool would
+be hiding the case it most needs a human to look at. The origin gate already
+prints "Read each one and decide"; that behaviour is mandatory here, not
+incidental.
+
+**Residual risk, and it is narrower than draft 1's but real.** A wall padded with
+enough genuine prose to clear P2, whose padding also happens to carry the
+document's slug or title words (clearing C1), and which serves no vendor
+challenge header - Anubis, PerimeterX press-and-hold and Google's sorry page all
+send no `cf-mitigated` - would be treated as a read document. If a claim matched
+in that padding, the result is `supported` with a nonsense excerpt; if none
+matched, `unsupported` against possibly accurate work.
+
+Draft 1 named only the first half of this and called it benign. The second half
+is the one that matters, because it is the false accusation the whole design
+exists to prevent. It is now gated behind three conditions rather than one, but
+it is not closed. Closing it further is a calibration question for the fixture
+corpus (6.3's acceptance test), and any residue must be documented in the README
+rather than discovered by a user.
+
+### 6.5 Why prose volume and not a markup ratio
+
+Draft 1 specified P3 as text-to-markup ratio plus sentence density on raw HTML,
+reasoning that challenge shells are script-dominant. **Measurement inverted it.**
+`[measured: raw-HTML ratios computed over live pages, 2026-09-06]`
+
+| Page | text:markup |
+|---|---|
+| skhynix article | 0.048 |
+| Cloudflare blog article | 0.061 |
+| The Verge homepage | 0.020 |
+| Vercel blog index | 0.009 |
+
+Modern real pages are script-dominant. Meanwhile the walls that most need
+catching - Google's sorry page, Amazon's robot check, Anubis - are short prose
+with minimal markup, so they score *at or above* the band real articles occupy.
+The ratio discriminates in the wrong direction, and a P3 built on it would fire
+on prose-shaped walls and hand back `unsupported`: the inversion reintroducing
+the very failure it was designed to remove, with the defence rotating back to the
+signature list section 6 exists to demote.
+
+What separated the sample cleanly was **absolute extracted-prose volume** -
+shells 12 to 600 characters, real articles 7,000 to 33,000. That is the
+instrument, and it is not a new idea: it is the origin's `CHALLENGE_MAX_CHARS`
+promoted from a signature-gated special case to the primary test.
 
 ---
 
@@ -370,6 +496,16 @@ The output contract widens *before* the purity boundary. The current classifier
 is starved: it sees post-extraction text plus `{method, status, bytes}`, so
 headers, the redirect chain, and raw HTML structure - the three most durable
 challenge signals - die upstream.
+
+**`headers` and `finalUrl` are new code with no precedent in the origin, and N1
+depends on them.** `curlWithStatus` captures neither: it uses `-o` for the body
+and `-w %{http_code}` for the status, and nothing else. Capturing headers across
+a `-L` redirect chain means parsing `curl -D` multi-block dumps - one block per
+hop, plus `100 Continue` blocks, plus duplicate keys - and getting the *final*
+hop's headers rather than the first. This is genuinely new work in the layer
+least covered by tests, and it is a dependency of the most durable veto in
+section 6. Plan it as its own task with its own fixtures, not as a field added to
+a return type.
 
 **Rung availability is provenance.** A serverless caller has no `curl` and no
 `pdftotext`, so its ladder is truncated and it will produce more `unreachable`
@@ -427,6 +563,22 @@ much smaller check: a claimed URL is no longer cited in the document.
 The object form answers the origin spec's open question 1: `notApplicable` carries
 an author-facing reason rather than being a silent omission.
 
+**URL keying needs declared join semantics, or it reintroduces the failure it
+cures - quietly.** If the document cites `https://example.gov/report/` and the
+claims file says `https://example.gov/report`, the join misses and the citation
+silently becomes *unclaimed* rather than checked. That is the same class of
+defect as the misattached-claims problem, minus the alarm. The normalization is
+therefore part of the contract, not an implementation detail: lowercase scheme
+and host, strip a default port, strip a trailing slash on a pathless URL, strip a
+declared list of tracking parameters (`utm_*` and kin), preserve everything else
+including case in the path and the fragment. Two URLs that normalize equal join;
+anything else does not.
+
+A claimed URL that appears in no footnote is a **warning by default**, listed in
+the output and settable to a failure through `failOn: { unclaimedInDocument? }`.
+It usually means the citation was removed from the prose and the claims file was
+not updated.
+
 Phrases must come from what the **source** says, not from what the article says
 about it. Matching normalizes typography and the billion/bn and million/mn
 renderings; paraphrase does not match and is not meant to.
@@ -481,14 +633,35 @@ what is readable, so a new user gets their own number before investing in a
 claims file at all. This is the antidote to the 96.8% figure being mistaken for a
 general property of the web.
 
-**Archive on success.** When a source reads cleanly, push a snapshot to
-web.archive.org and record the URL. This is not a nicety: it is what makes
-`recheck` interpretable. On a failed re-check, run the same pipeline over the
-archived copy - if the archive still matches, the source changed (real drift); if
-the archive also misses, the extractor changed (a `toText` regression, a site
-redesign). Without stored bytes, every drift alarm is confounded with the
-pipeline's own evolution, and the fetch layer's history guarantees it will
-evolve. Archiving must never fail a run.
+**Archive on success** belongs with `recheck`, not with `check`. When a source
+reads cleanly, push a snapshot to web.archive.org and record the URL. This is not
+a nicety: it is what makes `recheck` interpretable. On a failed re-check, run the
+same pipeline over the archived copy - if the archive still matches, the source
+changed (real drift); if the archive also misses, the extractor changed (a
+`toText` regression, a site redesign). Without stored bytes, every drift alarm is
+confounded with the pipeline's own evolution, and the fetch layer's history
+guarantees it will evolve. Archiving must never fail a run.
+
+It sits in `check`'s hot path only if it is free, and it is not: web.archive.org's
+save-page-now is authenticated, rate-limited well below "every source on every
+green run," and asynchronous - a job to poll, not a call to make. Its cost is
+carried by the plan that needs it.
+
+### 8.1 This spec is three implementation plans, not one
+
+The commands above are one release, but they are not one plan. Attempting them as
+a single plan front-loads unresolved questions onto work that does not depend on
+them.
+
+| Plan | Contents | Blocked on |
+|---|---|---|
+| 1. Core | TS port of the fetch ladder, header/finalUrl capture, pure classifier, verdict reducer, claims and evidence files, one adapter, `check`, `reachability` | Q1, Q2 - both resolved below |
+| 2. Harvest | `harvest` and its boilerplate exclusion | Q3, Q5 |
+| 3. Drift | `recheck`, archive-on-success, archive-as-control-arm | Q4 |
+
+`reachability` rides nearly free on plan 1's fetch layer, which is why it stays
+there rather than waiting: it is the command that stops a new user misreading
+their own corpus, and it costs almost nothing once the ladder exists.
 
 **Files, versioned beside the prose:**
 
@@ -543,9 +716,15 @@ the one commons a small community can realistically sustain: a behavioural rule
 ("axios 403s UA-only curl, intermittently") is hard to verify and easy to get
 wrong, while a recorded body - "here are the 159 bytes EUR-Lex served me at HTTP
 202" - is trivially verifiable. **Community contributions target fixtures, not
-rules.** The suite seeds from the 23-case battery already written
-(`challenge-battery.mjs`, in this session's scratchpad), which must be carried
-into the repo as the first fixture set.
+rules.** The suite seeds from the 23-case battery at
+`fixtures/challenge-battery.mjs`, already committed. It is not yet portable - it
+hard-codes an absolute path into the origin repo - so turning it into the first
+real fixture set is a task in plan 1, not a completed step.
+
+The corpus needs both halves. The battery supplies challenge and error shells;
+6.3's acceptance test also requires real articles and PDFs on the other side,
+captured as fixtures, so that P2's floor and C1's threshold are calibrated
+against something rather than guessed.
 
 **Perishable, tested only by a scheduled live-probe suite in this tool's own CI -
 never on a user's machine.** Its output is precisely the `lastConfirmed` dates the
@@ -563,15 +742,18 @@ reference dangling inside a loop body survives an import.
    `(document, claims) -> verdicts + excerpts`, and the CLI persists to files.
 2. **Input.** The origin parses one author's convention, `<li id="fn-N">`
    containing an `<a href>`. `testimonium` needs an adapter layer: Markdown
-   footnotes at minimum, plus generic HTML `<ol>`.
+   footnotes at minimum, plus generic HTML `<ol>`. **Footnotes are not
+   CommonMark**, so the flavour must be named: plan 1 targets GitHub-Flavored
+   Markdown's `[^1]` definition syntax, which pandoc also accepts. Other
+   flavours are adapters someone writes later, not a v1 obligation.
 3. **System dependencies.** `curl` and `pdftotext` become declared rungs. Their
    absence truncates the ladder and is reported as provenance, rather than
    crashing or silently degrading.
 4. **Identity.** `SEC_UA` moves to configuration (section 7.2).
 5. **Editorial advice in code paths.** The Bloomberg rule moves to dated output.
 
-**Port risk.** The fetch layer is roughly 285 lines in which nearly every line
-records a specific defeat. Translating it to TypeScript is where behaviour gets
+**Port risk.** The fetch layer is 348 lines, 182 excluding comments and blanks,
+and nearly every one of those 182 records a specific defeat. Translating it to TypeScript is where behaviour gets
 silently changed. The fixture suite must be green before and after, and the port
 is not a read-and-retype: each per-host rule carries its comment across intact,
 because the comment is the evidence for the rule.
@@ -605,7 +787,18 @@ roughly ten evidenced documents exist and read the number. `testimonium` ships
 the instrument that produces that number. It must not ship the apparatus that
 presumes the answer.
 
-**P1 dominance.** See section 6.4.
+**Calibrating P2 and C1 after the verdict reducer is built.** The most expensive
+mistake available, and the one this spec came closest to making. Draft 1
+specified a metric that measurement showed to be inverted (6.5); had that been
+discovered mid-plan rather than mid-review, it would have reshaped the ladder,
+its whole test suite, and the README's central safety claim. *Mitigation:*
+calibration is the first task of plan 1, gated by 6.3's acceptance test, before
+the reducer exists.
+
+**Header capture in the curl rung.** N1 is the most durable veto in section 6 and
+it depends on plumbing with no precedent in the origin. See 7.1.
+
+**P1 no longer dominates, but the residual is not closed.** See section 6.4.
 
 **Port fidelity.** See section 11.
 
@@ -613,25 +806,42 @@ presumes the answer.
 
 ## 13. Open questions
 
-1. **Thresholds for P2 and P3** are unmeasured. They must be calibrated against
-   the fixture corpus - challenge bodies on one side, real articles on the other -
-   before v1, and the calibration recorded.
-2. **P1 versus N1.** Should a claim matching inside a body that carries
-   `cf-mitigated: challenge` still produce `supported`? Simplicity says P1
-   dominates; caution says a vendor challenge header should veto. Decide with a
-   fixture, not an intuition.
+**Q1 and Q2 were pre-plan blockers and are now resolved. They are recorded here
+with their resolutions rather than deleted, so the reasoning survives.**
+
+1. ~~**Thresholds for P2 and P3.**~~ **RESOLVED at spec level, 2026-09-06.** The
+   problem was the metric, not the threshold: text-to-markup ratio discriminates
+   in the wrong direction (6.5). P3 is withdrawn and replaced by P2, extracted
+   prose volume. What remains is genuine calibration - the floor for P2 and the
+   threshold for C1 - and it is bound by 6.3's acceptance test as the first task
+   of plan 1, before the verdict reducer is written. Calibrating after the
+   reducer and its tests exist is the single most expensive mistake available
+   here.
+2. ~~**P1 versus N1.**~~ **RESOLVED: N1 vetoes P1.** Cloudflare's documentation
+   states that the `cf-mitigated: challenge` header is present on every Challenge
+   Page type, and that the challenge page *replaces* the requested resource. A
+   body carrying that header therefore cannot be the document, so the veto costs
+   nothing and closes the Cloudflare slice of 6.4's residual. Generalized in the
+   verdict table: every N-signal vetoes, including over P1.
+   `[verified: developers.cloudflare.com/cloudflare-challenges/ detect-response,
+   updated 2026-05-05, read as the raw page rather than as a fetch summary]`
 3. **Minimum claim length.** A short generic phrase is both more likely to match
    spuriously and less useful as evidence. Is there a floor, and is it a warning
    or a refusal?
-4. **Archive failures.** web.archive.org's save-page-now is rate-limited and
-   sometimes refuses. Confirmed: this must never fail a run. Open: does a
-   failed archive attempt get recorded, retried, or silently skipped?
+4. **Archive failures.** web.archive.org's save-page-now is authenticated,
+   rate-limited well below one call per source per run, and asynchronous - a job
+   to poll rather than a request to make. Confirmed: it must never fail a run.
+   Open, and larger than draft 1 assumed: API key configuration, job polling,
+   queueing and backoff. Belongs to plan 3, which is why archive moved out of
+   `check`.
 5. **Harvest boilerplate exclusion.** Common substrings between a draft and a
    source will include navigation text, cookie notices, and the outlet's own
    name. What excludes them - a length floor, a stopword ratio, position in the
-   document, or a fixture-calibrated heuristic?
-6. **GitHub Action in v1?** It is the CI on-ramp and cheap, but it is also a
-   second distribution surface with its own versioning discipline.
+   document, or a fixture-calibrated heuristic? Blocks plan 2.
+6. ~~**GitHub Action in v1?**~~ **RESOLVED: cut.** It is a second distribution
+   surface with its own versioning and release discipline, and nothing in plan 1
+   depends on it. `npx testimonium check` in a workflow step is the on-ramp until
+   the CLI's interface has stopped moving.
 
 ---
 
@@ -647,10 +857,17 @@ Recorded so they are not relitigated without new information.
 | `check()` owns the verdict; primitives sealed behind `exports` | 5.1, 5.3 |
 | Three layers: fetcher, pure classifier, pure ladder reducer | 5 |
 | Burden-of-proof inversion; signature list demoted to an optimization | 6 |
+| Accusation requires body-derived proof; head markers never license one | 6.2 |
+| Every N-signal vetoes, including over P1 | 6.2, 13 Q2 |
+| Prose volume, not text-to-markup ratio | 6.5 |
+| Calibration precedes the verdict reducer, bound by an acceptance test | 6.3 |
+| `unreachable` is silent to the reader, never to the author | 6.4 |
 | Fetcher output type has no `ok` or `http2xx` field | 7.1 |
 | Host rules are dated, additive-only, locally overridable data | 7.2 |
-| Claims key by URL, not footnote ordinal | 7.3 |
+| Claims key by URL, with declared join semantics | 7.3 |
 | Non-`supported` results carry no renderable fields | 7.4 |
 | v1 commands: `check`, `harvest`, `recheck`, `reachability` | 8 |
+| Three implementation plans, not one; archive belongs to plan 3 | 8.1 |
+| No GitHub Action in v1 | 13 Q6 |
 | No model in any command | 9 |
 | No renderer, no cron, no storage backend in v1 | 8, 9 |
