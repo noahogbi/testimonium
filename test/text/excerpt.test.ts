@@ -64,6 +64,17 @@ describe("excerptFor", () => {
   it("caps the window so a quotation stays a sentence, not a paragraph", () => {
     expect(excerptFor(LONG, "spending rose")!.length).toBeLessThanOrEqual(260);
   });
+
+  it("locates a claim across every Unicode dash norm() folds", () => {
+    // norm() folds all seven; FOLD once reproduced only two, so a source using
+    // U+2011 matched but could not be located - supported verdict, no passage.
+    for (const dash of ["‐", "‑", "‒", "–", "—", "―", "−"]) {
+      const doc = `The committee reviewed GPT${dash}4 in detail. ` + "Further discussion followed at length. ".repeat(8);
+      const e = excerptFor(doc, "GPT-4 in detail");
+      expect(e, `dash U+${dash.codePointAt(0)!.toString(16)}`).not.toBeNull();
+      expect(phraseFound(e!, "GPT-4 in detail"), `dash U+${dash.codePointAt(0)!.toString(16)}`).toBe(true);
+    }
+  });
 });
 
 describe("dedupeEvidence", () => {

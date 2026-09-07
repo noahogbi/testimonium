@@ -22,7 +22,12 @@ const MAX_LEAD = 90;
 const FOLD: Record<string, string> = {
   "’": "'", "‘": "'",
   "“": '"', "”": '"',
-  "—": "-", "–": "-",
+  // The FULL Unicode dash range, matching norm()'s fold exactly. All seven are
+  // 1:1 length-preserving, so the index map handles them like any other
+  // character. Reproducing only em and en dash meant a source using U+2011
+  // (OpenAI model names) matched via phraseFound but located as null - the
+  // verdict said supported while the reader saw no passage.
+  "‐": "-", "‑": "-", "‒": "-", "–": "-", "—": "-", "―": "-", "−": "-",
 };
 
 /** Characters norm() deletes outright. Dropping is safe for the index map:
