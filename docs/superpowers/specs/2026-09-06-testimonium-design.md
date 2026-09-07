@@ -303,11 +303,26 @@ PROOF OF READ - BODY-DERIVED ONLY
       signature-gated special case into the primary instrument.
 
 CORROBORATION - never sole licence to accuse
-  C1  Slug/title correlation IN THE BODY: content words from the URL path
-      and the document's own title appear in the extracted text.
+  C1  Slug correlation IN THE BODY: content words from the URL path and
+      from the author's own footnote label appear in the extracted text.
       Language-agnostic, no list to maintain. A challenge served for
       /eli/reg/2024/1689 does not contain "artificial intelligence"; the
       regulation does.
+
+      NOT the document's own <title>. Draft 2 included it and that was
+      wrong: the title arrives in the SAME RESPONSE as the body, so every
+      page contains its own title by construction. Measured over the
+      fixture corpus, all 12 fixtures carrying a title scored title-only
+      overlap of exactly 1.00 - challenge and document alike. The title
+      contributes zero discriminating power and disguised that fact by
+      inflating every score to the ceiling. Only authored inputs - the URL
+      the citation names, and the label the author wrote beside it - can
+      testify that the page we read is the page that was cited.
+
+      C1 is weak, and known to be. It is calibrated against the DOCUMENT
+      population only: 21 of 24 challenge fixtures carry no URL or title,
+      so their 0.00 is an absent input rather than a measurement, and
+      calibrating a threshold against it would be fitting to noise.
   C2  Head markers: og:type=article, json-ld articleBody or datePublished.
       REPORTED, NEVER LICENSING. These prove a page exists at that URL.
       They do not prove its body was read - a paywall stub keeps the
@@ -324,10 +339,29 @@ VETO - overrides everything, including P1
   N2  finalUrl after redirects lands on a declared challenge or consent
       path. The path list is dated data under 7.2, not a constant.
   N3  Challenge signature match AND body under the length cap.
+  N4  HTTP 404 or 410. The document is gone.
+
+      This is the ONE place status is consulted, and the asymmetry is the
+      whole justification. A server is not authoritative about PRESENCE -
+      6.3 records a 400 serving 253KB and a 404 serving 112KB - which is
+      why 2xx is never proof of a read. But a server saying 404 or 410 IS
+      authoritative about ABSENCE: it is the origin stating that the
+      resource it was asked for does not exist. Refusing to believe that,
+      while also refusing to believe 2xx, would leave nothing believable.
+
+      Draft 2 deferred this, noting only that "a 404 distinguishes 'this
+      document is gone' from 'this document was read', which is
+      information recheck will want even though check does not act on
+      it." Calibration proved check must act on it: a real ECB 404 serving
+      13,221 characters of navigation chrome cleared every body-derived
+      test - prose volume above two of nine real documents, overlap 1.00 -
+      and no threshold pair could reject it. Exhaustive search over 24,915
+      pairs returned zero solutions with that fixture and 249 without it.
+      Body shape cannot see what the status line says plainly.
 
 VERDICT
   claims.length == 0                          -> unclaimed   (never supported)
-  N1 | N2 | N3                                -> unreachable
+  N1 | N2 | N3 | N4                           -> unreachable
   matched == claims.length                    -> supported
   P2 && C1 && matched > 0                     -> unsupported
   P2 && C1 && matched == 0                    -> unsupported
