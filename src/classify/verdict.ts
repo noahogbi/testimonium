@@ -23,7 +23,7 @@ export interface Signals {
    *  serving 253KB, a 404 serving 112KB), which is why 2xx is never proof of
    *  a read. But 404/410 IS the origin stating the resource does not exist,
    *  and that it is authoritative about. Calibration forced this: a real ECB
-   *  404 serving 13,221 characters of nav chrome cleared every body-derived
+   *  404 serving 13,216 characters of nav chrome cleared every body-derived
    *  test - prose above two of nine real documents, overlap 1.00 - and no
    *  threshold pair could reject it. Body shape cannot see what the status
    *  line says plainly. */
@@ -55,7 +55,7 @@ export interface Signals {
  * here without a fixture.
  */
 /**
- * The four vetoes, in ONE place, because two callers ask this question.
+ * The five vetoes, in ONE place, because two callers ask this question.
  *
  * `reachability` (the preflight) asked it separately and its copy omitted N4,
  * so a 404 serving intact navigation chrome read `readable` in the preflight
@@ -73,8 +73,9 @@ export function verdict(s: Signals): Verdict {
   if (isBlocked(s)) return "unreachable";
   if (s.matched === s.total) return "supported";
   // C1 (slugLabelOverlap) is reported on Signals but deliberately NOT consulted
-  // here - see thresholds.ts. Prose volume plus the four vetoes carry the whole
+  // here - see thresholds.ts. Prose volume plus the five vetoes carry the whole
   // separation: largest non-vetoed challenge 1,180 chars, smallest real
-  // document 6,858, floor licensed at 4,500.
+  // document 6,394, floor licensed at 4,500. (Re-run scripts/calibrate.mjs to
+  // reproduce; see docs/calibration-2026-09.md.)
   return s.proseChars >= THRESHOLDS.minProseChars ? "unsupported" : "unreachable";
 }

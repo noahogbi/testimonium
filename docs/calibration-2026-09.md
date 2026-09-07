@@ -1,12 +1,19 @@
 # Calibration of `minProseChars`
 
-**Date:** 2026-09-07 (round 3, after ruling C7) — supersedes the round-1 and round-2 records
-**Corpus:** `fixtures/corpus.json` — 33 calibrated fixtures: 24 `challenge`, 9 `document`.
-A 34th row was added later with `"kind": "known-gap"`; it is **not** a population member and
-no number on this page counts it. See "Known gap" below.
+**Date:** 2026-09-07 (round 3, after ruling C7) — supersedes the round-1 and round-2 records.
+Round 3's own baseline numbers were then overtaken twice more, same day: the entity-decoding
+fix (`6932e5e`, `4e47996`) changed several fixtures' extracted length before Task 3 added two
+more fixtures on top. **Every number on this page has been re-verified against both changes**
+by Task 4 (plan 1.1) - re-run the reproduce line below rather than trust a number here that
+looks stale.
+**Corpus:** `fixtures/corpus.json` — round 3 calibrated against 33 fixtures: 24 `challenge`,
+9 `document`. Task 3 added 2 more (see "Two new body shapes" below), and a known-gap row
+(below that) is filed separately; the corpus is now 36 rows: 25 `challenge`, 10 `document`,
+1 `known-gap`. The known-gap row is **not** a population member and no number on this page
+counts it.
 **Instrument:** `toText` (Task 3) then `proseVolume` (`src/classify/thresholds.ts`), with
-N4 (HTTP 404/410 veto) applied first
-**Reproduce:** `npm run build && node scripts/calibrate.mjs && npx vitest run`
+N4 (HTTP 404/410 veto) and N5 (non-text veto, Task 2) applied first
+**Reproduce:** `npm run build && node scripts/calibrate.mjs && node scripts/sweep-floor.mjs && npx vitest run`
 
 ## Outcome: the gate closes
 
@@ -24,49 +31,71 @@ otherwise try to add it back.
 
 ## What licenses the floor
 
+**Re-verified for Task 4 (plan 1.1)** against the current 36-row corpus. Two of round 3's
+own numbers below moved since they were first recorded - the smallest real document dropped
+from 6,858 to 6,394 (the entity-heavy fixture Task 3 added is smaller than round 3's
+smallest), and the ECB fixture's extracted length dropped from 13,221 to 13,216 once the
+entity-decoding fix landed (`6932e5e`, `4e47996`) - and every downstream figure that depends
+on them (gap, clear air, the sweep) is recomputed from the corrected numbers, not carried
+forward by arithmetic on the old ones.
+
 | quantity | value |
 |---|---:|
-| largest challenge fixture **not** vetoed by N4 | 1,180 |
-| smallest real document | 6,858 |
-| gap | 5,678 |
+| largest challenge fixture that no veto rejects | 1,180 |
+| smallest real document | 6,394 |
+| gap | 5,214 |
 | **chosen floor** | **4,500** |
 | clear air below the floor | 3,320 |
-| clear air above the floor | 2,358 |
+| clear air above the floor | 1,894 |
 
-Both margins are more than ten times the 200-character margin the acceptance test
-requires. A sweep of every integer floor from 1 to 120,000 finds **5,279 values** that
-satisfy all four assertions, a contiguous range of `[1,380, 6,658]`; 4,500 sits 3,120
-above its lower bound and 2,158 below its upper. The choice is not delicate.
+Both margins are more than nine times the 200-character margin the acceptance test
+requires. `scripts/sweep-floor.mjs` (added for this re-verification, so the figure can be
+re-run rather than trusted) sweeps every integer floor from 1 to 120,000 and checks all four
+acceptance assertions at each one; it finds **4,815 values** that satisfy every assertion, a
+contiguous range of `[1,380, 6,194]`. 4,500 sits 3,120 above its lower bound and 1,694 below
+its upper. The choice is not delicate.
 
-The two challenge fixtures that extract far past this floor — the Cloudflare blog 404 at
-2,154 and the ECB 404 at 13,221 — are both served **404** and are rejected by N4 before
-prose volume is consulted. That is the whole reason the floor gets to be this comfortable.
-**N4 is load-bearing**: without it, the ECB page alone makes these assertions
-unsatisfiable, which is exactly what round 1 measured.
+The three challenge fixtures that extract far past this floor — the Cloudflare blog 404 at
+2,154, the PDF-binary fixture (Task 3) at 6,221, and the ECB 404 at 13,216 — never reach
+prose volume: the two 404s are rejected by **N4** and the PDF binary, served at 200, is
+rejected by **N5** (it is not text at all). That is the whole reason the floor gets to be
+this comfortable. **N4 and N5 are both load-bearing now**: without N4, the ECB page alone
+makes these assertions unsatisfiable (round 1's finding); without N5, the PDF-binary
+fixture's 6,221 extracted characters would sit inside the gap between 1,180 and 6,394 and
+collapse most of it.
 
 ## The two populations
 
-### `challenge` (n = 24)
+**Re-verified for Task 4 (plan 1.1)** to include Task 3's two additions and the
+entity-decoding drift; both population counts and the challenge maximum changed from
+round 3's original record.
 
-Prose volume: min 43, max 13,221. **Excluding the two N4-vetoed fixtures: 43 to 1,180.**
-Status: 22 at 200, 2 at 404.
+### `challenge` (n = 25)
 
-### `document` (n = 9)
+Prose volume: min 43, max 13,216. **Excluding the three vetoed fixtures (two by N4, one by
+N5): 43 to 1,180.** Status: 23 at 200, 2 at 404.
 
-Prose volume: min 6,858, max 108,257. Status: all 200.
+### `document` (n = 10)
+
+Prose volume: min 6,394, max 108,248. Status: all 200.
 
 ### Read together
 
-The 22 challenge fixtures that reach the body-derived gate span 43–1,180. The nine
-documents span 6,858–108,257. Nothing lies between 1,180 and 6,858. The separation is not
-marginal, and no fixture sits near the boundary from either side.
+The 22 challenge fixtures that reach the body-derived gate span 43–1,180. The ten
+documents span 6,394–108,248. Nothing lies between 1,180 and 6,394 **among fixtures that
+reach the gate** - but the PDF-binary fixture's own raw prose volume, 6,221, sits inside
+that numeric gap. It never reaches prose volume at all: N5 vetoes it first, on body shape
+rather than length, which is exactly why N5 has to run before the floor is consulted rather
+than being another number to tune. The separation among fixtures the floor actually judges
+is not marginal, and no such fixture sits near the boundary from either side.
 
 ## Which mechanism does the separating, for which fixtures
 
 | mechanism | fixtures decided | notes |
 |---|---:|---|
 | **N4 (HTTP 404/410 veto)** | 2 challenge (#23, #24) | The Cloudflare blog 404 and the ECB 404. Both statuses measured twice. Neither is separable by body shape — the ECB page out-extracts two real documents. |
-| **Prose volume >= 4,500** | 22 challenge (#1–#22), 9 document (#25–#33) | Every one clears by margin. Largest challenge in this group is 1,180 against a 4,500 floor; smallest document is 6,858. |
+| **N5 (non-text veto, Task 2)** | 1 challenge (`pdf-binary-served-at-200.bin`, Task 3 - not one of the 33 numbered rows below; see "Two new body shapes") | Extracts to 6,221 characters, past the 4,500 floor on length alone, and served at 200 so N4 does not see it either. Only a check on the raw body's own bytes catches it. |
+| **Prose volume >= 4,500** | 22 challenge (#1–#22), 10 document (#25–#33 plus `entity-heavy-article.html`, Task 3 - not row-numbered below) | Every one clears by margin. Largest challenge in this group is 1,180 against a 4,500 floor; smallest document is 6,394 (`entity-heavy-article.html`), not 6,858 as recorded when this table was first written - see "Two new body shapes". |
 | **Slug/label overlap** | **0** | Withdrawn from the verdict. Still computed and printed. See below. |
 
 ## Why C1 was withdrawn — the finding worth keeping
@@ -150,7 +179,10 @@ prose volume instead.
 
 ## Per-fixture data (all 33)
 
-A dagger marks a stipulated status. Overlap is reported but does not gate.
+A dagger marks a stipulated status. Overlap is reported but does not gate. This table is
+round 3's original 33 rows only; Task 3's two additions (`pdf-binary-served-at-200.bin` and
+`entity-heavy-article.html`) are not numbered here - see "Two new body shapes" below for
+those.
 
 | # | fixture | kind | status | prose | overlap | outcome | decided by |
 |---:|---|---|---:|---:|---:|---|---|
@@ -177,16 +209,21 @@ A dagger marks a stipulated status. Overlap is reported but does not gate.
 | 21 | `challenge/cloudflare-turnstile-cookie-privacy-boilerplate-800-chars.html` | challenge | 200 † | 982 | 0.00 | rejected | prose (3,518 clear) |
 | 22 | `challenge/www-federalregister-gov-documents-2024-01-29-2024-01580-.html` | challenge | 200 | 1,180 | 0.00 * | rejected | prose (3,320 clear) |
 | 23 | `challenge/blog-cloudflare-com-cloudflare-incident-on-november-18-2025-.html` | challenge | 404 | 2,154 | 0.33 | rejected | **N4 veto** |
-| 24 | `challenge/www-ecb-europa-eu-press-pr-date-2024-html-index-en-html.html` | challenge | 404 | 13,221 | 1.00 | rejected | **N4 veto** |
+| 24 | `challenge/www-ecb-europa-eu-press-pr-date-2024-html-index-en-html.html` | challenge | 404 | 13,216 | 1.00 | rejected | **N4 veto** |
 | 25 | `documents/blog-mozilla-org-en-.html` | document | 200 | 6,858 | 0.00 | reaches accusation | prose (2,358 clear) |
 | 26 | `documents/www-theverge-com-tech.html` | document | 200 | 16,449 | 1.00 | reaches accusation | prose (11,949 clear) |
-| 27 | `documents/developer-mozilla-org-en-US-docs-Web-HTTP-Status.html` | document | 200 | 23,601 | 0.50 * | reaches accusation | prose (19,101 clear) |
-| 28 | `documents/www-bls-gov-news-release-cpi-nr0-htm.html` | document | 200 | 24,254 | 1.00 | reaches accusation | prose (19,754 clear) |
-| 29 | `documents/docs-python-org-3-library-json-html.html` | document | 200 | 26,592 | 1.00 | reaches accusation | prose (22,092 clear) |
-| 30 | `documents/www-gov-uk-government-news.html` | document | 200 | 33,076 | 1.00 | reaches accusation | prose (28,576 clear) |
+| 27 | `documents/developer-mozilla-org-en-US-docs-Web-HTTP-Status.html` | document | 200 | 23,595 | 0.50 * | reaches accusation | prose (19,095 clear) |
+| 28 | `documents/www-bls-gov-news-release-cpi-nr0-htm.html` | document | 200 | 24,248 | 1.00 | reaches accusation | prose (19,748 clear) |
+| 29 | `documents/docs-python-org-3-library-json-html.html` | document | 200 | 26,208 | 1.00 | reaches accusation | prose (21,708 clear) |
+| 30 | `documents/www-gov-uk-government-news.html` | document | 200 | 33,070 | 1.00 | reaches accusation | prose (28,570 clear) |
 | 31 | `documents/apnews-com-hub-technology.html` | document | 200 | 45,390 | 1.00 | reaches accusation | prose (40,890 clear) |
-| 32 | `documents/openai-com-index-gpt-4o-system-card-.html` | document | 200 | 76,936 | 1.00 | reaches accusation | prose (72,436 clear) |
-| 33 | `documents/en-wikipedia-org-wiki-Textual-criticism.html` | document | 200 | 108,257 | 1.00 | reaches accusation | prose (103,757 clear) |
+| 32 | `documents/openai-com-index-gpt-4o-system-card-.html` | document | 200 | 76,930 | 1.00 | reaches accusation | prose (72,430 clear) |
+| 33 | `documents/en-wikipedia-org-wiki-Textual-criticism.html` | document | 200 | 108,248 | 1.00 | reaches accusation | prose (103,748 clear) |
+
+*(Rows 24, 27–30, 32, and 33 were corrected for Task 4, plan 1.1: their extracted lengths
+shifted by a few characters each after the entity-decoding fix (`6932e5e`, `4e47996`) landed,
+after round 3's numbers above were first recorded. Confirmed directly against `toText`'s
+current output, not carried forward from the old table by arithmetic.)*
 
 The overlap column is what `scripts/calibrate.mjs` prints today: the current
 `slugLabelOverlap`, URL path only, with no label supplied by the corpus. `*` marks the two
@@ -213,11 +250,11 @@ What it exposes, measured through the shipped pipeline:
 
 | body | status | prose | bundled signature? | verdict |
 |---|---:|---:|---|---|
-| ECB error page, real capture | 404 | 13,221 | none matches | `unreachable` (N4) |
-| the identical bytes | 200 | 13,221 | none matches | **`unsupported`** |
+| ECB error page, real capture | 404 | 13,216 | none matches | `unreachable` (N4) |
+| the identical bytes | 200 | 13,216 | none matches | **`unsupported`** |
 
 So on this page **N4 is the only thing standing between an author and a false
-accusation.** Nothing about the body rejects it: 13,221 characters of intact navigation
+accusation.** Nothing about the body rejects it: 13,216 characters of intact navigation
 chrome out-extracts two real documents in the corpus, and it carries no wording the
 challenge-signature list recognizes.
 
@@ -235,6 +272,47 @@ should accuse on a body it cannot distinguish from chrome is a design question w
 cost on both sides (raising the floor loses genuine short documents; extending the
 signature veto to long bodies loses articles that discuss bot walls). Moving a calibrated
 number is not a bug fix, and it would invalidate this page's measurements.
+
+## Three more known gaps, disclosed but not fixed (Task 4, plan 1.1)
+
+**Added 2026-09-07.** Found during Task 2's and Task 3's reviews, none pinned by a fixture -
+two are code-shape gaps a corpus fixture cannot cleanly isolate without also demonstrating
+the fix, and the third is fixed nowhere in this plan on purpose. Recorded the same way the
+ECB known-gap above is: named plainly rather than left to be found in production.
+
+### All-ASCII non-prose evades N5
+
+N5's `looksBinary` (`src/classify/signals.ts`) counts replacement characters and control
+bytes. Text encoded as base64, ASCII85, or PostScript's own text operators is neither of
+those - it is printable ASCII, just not prose - so under a textual (or absent) `content-type`
+it passes both of N5's checks. Measured directly: a 26,668-character body of pure base64
+(`Buffer.from(...).toString("base64")`, headers `{}`, status 200) computes `notText: false`
+and reaches `verdict: "unsupported"` against a claim it plainly does not contain - a live
+route to a false accusation, not a theoretical one. Closing it needs a design for what
+"not prose" means beyond byte-level noise, which this plan has not done.
+
+### A binary tail past 64KB evades `looksBinary`
+
+`looksBinary` samples only the first 65,536 characters of the raw body. Measured directly: a
+72,000-character clean ASCII prose head followed by a control-byte tail (16,000 more
+characters) computes `notText: false`, because the sample never reaches the tail. Narrow -
+the real arxiv PDF fixture behind Step 1's recovery is already about 59% binary within its
+own first 64KB when decoded as UTF-8 (measured directly against the live paper at
+`https://arxiv.org/pdf/1706.03762v7`, 38,579 of 65,517 sampled code points), so a real PDF is
+unlikely to trigger this - but nothing stops a body deliberately shaped to keep its binary
+content past the sample boundary. Widening or removing the sample is an unreviewed change to
+a shipped veto's behavior, not a documentation fix, so it is disclosed here instead.
+
+### A claim inside an HTML comment can attest `supported`
+
+Verified live on current `main`: `toText` strips HTML tags but not comment bodies, and a
+commented-out block of markup always contains a `>`, which is enough to leak into the
+extracted prose. A claims-file phrase present only inside `<!-- ... -->` - never in anything
+a reader would see rendered - can therefore verify as `supported`: a false attestation from
+text no reader sees. It is disclosed rather than fixed here because fixing it can only move a
+verdict *toward* `unsupported`, which this plan's constraints forbid; it is plan 2 work. See
+the README's "What this does not do" for the same disclosure aimed at a user rather than a
+maintainer.
 
 ## Two new body shapes (Task 3, plan 1.1)
 
@@ -284,7 +362,9 @@ entities. The pipeline is required to decode the entities and report `"supported
 No fixture was dropped, omitted, or reclassified across any of the three rounds. The
 200-character margin is untouched. No assertion was weakened or deleted — the two margin
 assertions still demand 200 characters of clear air, and every fixture now provides at
-least 2,358. `proseVolume` and `slugLabelOverlap` are byte-for-byte as specified in the
+least 1,894 (`entity-heavy-article.html`, the new smallest document - see above; unchanged
+on the challenge side, where the tightest margin is still 3,320). `proseVolume` and
+`slugLabelOverlap` are byte-for-byte as specified in the
 brief. No status was guessed, and none was set to 404 or 410 for convenience.
 
 The gate closes because a signal that could not do its job was removed after being

@@ -1,7 +1,7 @@
 import { hostRuleFor, type HostRule } from "../rules/hosts.js";
 import { curlAvailable, curlFetch } from "./curl.js";
 import { nodeFetch } from "./node.js";
-import { pdfFetch, pdftotextAvailable } from "./pdf.js";
+import { pdfFetch, pdfRungAvailable } from "./pdf.js";
 import type { Fetcher, RawResponse, RungId } from "./types.js";
 
 const BROWSER_UA =
@@ -38,7 +38,10 @@ export function userAgentFor(url: string, opts: FetcherOptions): string {
 export function defaultFetcher(opts: FetcherOptions = {}): Fetcher {
   const rungs: RungId[] = ["node"];
   if (curlAvailable()) rungs.push("curl");
-  if (pdftotextAvailable()) rungs.push("pdftotext");
+  // Both binaries, not pdftotext alone: pdfFetch downloads via curl first.
+  // See pdfRungAvailable's doc comment for what advertising this on
+  // pdftotext alone used to cost.
+  if (pdfRungAvailable()) rungs.push("pdftotext");
 
   return {
     rungs,

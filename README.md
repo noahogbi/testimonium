@@ -111,13 +111,41 @@ before you trust a green run to mean more than it does.
   contain is the honest half of that sentence; the rest of it used to read
   "every verdict is a string search over fetched text, nothing more", and
   that was false. `supported` and the `missed` list are string searches.
-  `unreachable` is decided from **five** inputs: the HTTP status (404/410),
+  `unreachable` is decided from **six** inputs: the HTTP status (404/410),
   a vendor challenge response header, the post-redirect URL, a length
-  threshold on the extracted text, and a match against the bundled
-  challenge-signature list. That fifth input *is* a search of the prose -
-  twelve regexes over the normalized extracted text
-  (`src/rules/challenge.ts`), and a hit feeds the blocked decision directly.
-  What none of the five involve is a model.
+  threshold on the extracted text, a match against the bundled
+  challenge-signature list, and whether the fetched body is text at all.
+  The fifth of those *is* a search of the prose - twelve regexes over the
+  normalized extracted text (`src/rules/challenge.ts`), and a hit feeds the
+  blocked decision directly. The sixth is a binary check on the raw body,
+  before any tag-stripping: bytes decoded as UTF-8 that are dense with
+  replacement characters and control codes are not prose, in any script -
+  this is what stops a content-negotiated PDF from reading as a giant wall
+  of "text" and turning an accurate citation into an accusation. What none
+  of the six involve is a model.
+- **A PDF cited from a URL carrying neither `.pdf` nor a `/pdf/` path
+  segment reads as `unreachable`.** The PDF rung has to be chosen before any
+  fetch happens (see N5, above), and the URL is all that choice has to go
+  on - `isPdf` recognizes a `.pdf` suffix and a `/pdf/` path segment, nothing
+  else. That is a capability traded for a fix, not a free improvement: before
+  N5 existed, a URL like this was fetched as HTML, a binary PDF stream
+  decoded as a "document" of a million characters, and cleared every
+  threshold - turning an accurate citation into a false accusation. Now the
+  tool declines to judge a body it cannot first confirm is text at all. This
+  does **not** mean PDFs are unsupported: `.pdf` URLs and `/pdf/`-segment
+  URLs - including arxiv's content-negotiated `/pdf/<id>` links - are read
+  normally. Recognizing more PDF URL shapes without a pre-fetch guess is
+  future work, not done here.
+- **A claim that appears only inside an HTML comment can return
+  `supported`.** `toText` strips tags but not comment bodies, and
+  commented-out markup - which always contains a `>` - leaks into the
+  extracted prose as a result. A claims-file phrase present only inside
+  `<!-- ... -->`, never in anything a reader would see rendered, can
+  therefore verify as `supported`: a false attestation from text no reader
+  sees. Verified live on current `main`. It is disclosed rather than fixed
+  here because closing it can only move a verdict *toward* `unsupported`,
+  which this plan's constraints forbid - it is plan 2 work. See
+  `docs/calibration-2026-09.md` for how this was checked.
 - **The audience is small**, and that is a limit, not a roadmap item - the
   way `urtext` says three of seven analyzers find nothing in a Python repo.
   Direct fit is people who already keep verbatim source quotes and are
@@ -156,7 +184,7 @@ will eventually surprise a real user if it isn't said here first.
 - **A heavy-chrome error page served at HTTP 200 can evade both the status
   veto and the prose floor.** This route *is* pinned by a fixture:
   `fixtures/corpus.json` files the real ECB error capture a second time at
-  status 200 (`"kind": "known-gap"`), where its 13,221 characters of intact
+  status 200 (`"kind": "known-gap"`), where its 13,216 characters of intact
   navigation chrome clear the prose floor and reach an accusation. That page
   matches **none** of the twelve bundled challenge signatures - verified, 0
   of 12 - so at its real 404 the status veto is the *only* thing rejecting
@@ -189,10 +217,12 @@ will eventually surprise a real user if it isn't said here first.
   tell you, honestly, that it could not look.
 - **A `supported` verdict from a truncated ladder does not mean the same
   thing as one from a full ladder.** The ladder shells out: `curl` for the
-  second HTML rung, `pdftotext` for PDFs. On a slim container or a
-  serverless runtime that has neither, `check` still runs and still exits 0 -
-  but every PDF citation attempts *nothing at all*, reports `unreachable`,
-  and passes. `rungsAvailable` and `ladderTruncated` are on every result for
+  second HTML rung, and **both** `curl` and `pdftotext` for the PDF rung -
+  `pdfFetch` downloads with curl before it converts, so pdftotext alone is
+  not enough. On a slim container or a serverless runtime missing either
+  one, `check` still runs and still exits 0 - but every PDF citation
+  attempts *nothing at all*, reports `unreachable`, and passes.
+  `rungsAvailable` and `ladderTruncated` are on every result for
   exactly this reason, and the CLI prints "ladder truncated" beside each
   affected *unreachable* citation - a `supported` verdict reached from a
   truncated ladder prints no such note, even though the same caveat applies

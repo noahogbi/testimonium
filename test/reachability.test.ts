@@ -49,7 +49,7 @@ describe("reachability", () => {
   it("agrees with the gate on a 404 that still serves a full page of chrome", async () => {
     // The preflight computed `blocked` from the three challenge signals and
     // omitted N4, so a 404 serving intact navigation - the real ECB capture
-    // extracts 13,221 characters of it - read `readable` here and
+    // extracts 13,216 characters of it - read `readable` here and
     // `unreachable` at the gate. A preflight that contradicts the gate is
     // worse than no preflight; both now call the SAME predicate.
     const r = await reachability(["https://e.com/gone"], {

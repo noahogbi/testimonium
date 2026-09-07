@@ -9,12 +9,15 @@
  */
 export const THRESHOLDS = {
   /** Extracted prose characters below which we have not read a document.
-   *  Measured 2026-09 against the 33-fixture corpus: the largest challenge
-   *  shell that N4 does not veto is 1,180 chars and the smallest real document
-   *  is 6,858, so 4,500 sits in that gap with 3,320 of clear air below and
-   *  2,358 above - both well past the 200-char margin the acceptance test
-   *  demands. (Two challenge fixtures extract far more than 1,180 - 2,154 and
-   *  13,221 - but both are served 404 and never reach this floor.) */
+   *  Measured 2026-09 against the 35-fixture corpus (25 challenge, 10
+   *  document; excludes the known-gap row - re-run scripts/calibrate.mjs to
+   *  reproduce): the largest challenge shell that no veto rejects is 1,180
+   *  chars and the smallest real document is 6,394, so 4,500 sits in that gap
+   *  with 3,320 of clear air below and 1,894 above - both well past the
+   *  200-char margin the acceptance test demands. (Three challenge fixtures
+   *  extract far more than 1,180 but never reach this floor: 2,154 and
+   *  13,216 are both served 404, vetoed by N4; 6,221 is a content-negotiated
+   *  PDF, vetoed by N5 as non-text.) */
   minProseChars: 4500,
   // minSlugOverlap is DELIBERATELY ABSENT. C1 was withdrawn from the verdict
   // after two calibration rounds proved it cannot separate the populations:
@@ -74,11 +77,16 @@ function contentWords(s: string): string[] {
  *  and disguised that by pinning every score to the ceiling. Only an authored
  *  input can testify that the page we read is the page that was cited.
  *
- *  Returns 0, NOT 1, when there is nothing to test. A vacuous pass would let
- *  prose volume alone license an accusation for any opaque URL. Returning 0
- *  sends that case to `unreachable`, the safe direction. Removing the title
- *  made this vacuous case common enough to matter: blog.mozilla.org/en/ has
- *  path /en/, which yields no content words at all.
+ *  Returns 0, NOT 1, when there is nothing to test. A vacuous pass would read
+ *  as full correlation in `--explain-fetch` output and misreport an opaque
+ *  URL as confirmed against authored content it was never checked against.
+ *  THIS DOES NOT GATE THE VERDICT (see above), so today 0 sends the case
+ *  nowhere - the number is reported, not consulted - but it is still the
+ *  honest answer to the question the function asks, and staying honest here
+ *  is what keeps the number usable if a future calibration round finds a
+ *  corpus where it can be reintroduced. Removing the title made this vacuous
+ *  case common enough to matter: blog.mozilla.org/en/ has path /en/, which
+ *  yields no content words at all.
  *
  *  The footnote label is why this is rarely vacuous in practice: a PDF served
  *  from a hashed URL has no usable slug, but its author wrote "Jane Roe, The

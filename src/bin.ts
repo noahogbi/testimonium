@@ -41,6 +41,31 @@ export function classifyRun(t: RunTally, failOn: FailOn): 0 | 1 | 2 {
   return fail ? 1 : 0;
 }
 
+const KNOWN_FLAGS = new Set([
+  "--json",
+  "--rules",
+  "--fail-on-unreachable",
+  "--allow-unclaimed",
+  "--explain-fetch",
+]);
+
+/**
+ * The first `--flag` in argv this build does not recognize, or null when
+ * every one is known.
+ *
+ * Without this, `node dist/bin.js check doc.md --fail-on-unrechable` (a
+ * typo) exits 0 and prints nothing: a user who believes they hardened CI has
+ * not, invisibly. That is the same silent-no-op class the bare `--rules`
+ * guard below already exists for. `main()` is not exported, so this is
+ * exported instead - tests call it directly rather than spawning a process.
+ */
+export function validateFlags(argv: readonly string[]): string | null {
+  for (const a of argv) {
+    if (a.startsWith("--") && !KNOWN_FLAGS.has(a)) return a;
+  }
+  return null;
+}
+
 function claimsPathFor(doc: string): string {
   return join(dirname(doc), `${basename(doc).replace(/\.[^.]+$/, "")}.claims.json`);
 }
@@ -50,6 +75,11 @@ function evidencePathFor(doc: string): string {
 }
 
 async function main(argv: string[]): Promise<number> {
+  const unknownFlag = validateFlags(argv);
+  if (unknownFlag) {
+    console.error(`unknown flag ${unknownFlag}`);
+    return 2;
+  }
   const [command, doc] = argv;
   const flags = new Set(argv.filter((a) => a.startsWith("--")));
   if (!command || !doc) {

@@ -333,7 +333,7 @@ describe("check", () => {
     // A server is not authoritative about PRESENCE, which is why 2xx is never
     // proof of a read - but it IS authoritative when it says a resource does
     // not exist. Calibration forced this: no prose floor could reject a real
-    // ECB 404 serving 13,221 characters of navigation chrome, and with the
+    // ECB 404 serving 13,216 characters of navigation chrome, and with the
     // veto removed zero thresholds satisfied the acceptance test.
     //
     // The cost is recorded and accepted: a misconfigured host serving a real

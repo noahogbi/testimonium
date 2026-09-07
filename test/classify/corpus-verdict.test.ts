@@ -104,7 +104,7 @@ describe("known gap, pinned as a fixture", () => {
   // purpose, so the exposure the README discloses cannot quietly change
   // without someone reading this comment.
   //
-  // The ECB capture is a real 404 page carrying 13,221 characters of intact
+  // The ECB capture is a real 404 page carrying 13,216 characters of intact
   // navigation chrome. N4 (the status veto) is the ONLY thing that rejects it:
   // it matches no bundled challenge signature, so served at 200 it clears the
   // 4,500 prose floor and reaches an accusation against an author whose
