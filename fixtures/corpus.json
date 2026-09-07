@@ -1,0 +1,194 @@
+[
+  {
+    "path": "fixtures/challenge/amazon-robot-check.html",
+    "kind": "challenge",
+    "url": "",
+    "title": ""
+  },
+  {
+    "path": "fixtures/challenge/anubis-foss-site-bot-wall.html",
+    "kind": "challenge",
+    "url": "",
+    "title": ""
+  },
+  {
+    "path": "fixtures/challenge/bloomberg-wall.html",
+    "kind": "challenge",
+    "url": "",
+    "title": ""
+  },
+  {
+    "path": "fixtures/challenge/cloudflare-managed-challenge-ing-form.html",
+    "kind": "challenge",
+    "url": "",
+    "title": ""
+  },
+  {
+    "path": "fixtures/challenge/cloudflare-noscript-line.html",
+    "kind": "challenge",
+    "url": "",
+    "title": ""
+  },
+  {
+    "path": "fixtures/challenge/cloudflare-retired-pre-2023-wording.html",
+    "kind": "challenge",
+    "url": "",
+    "title": ""
+  },
+  {
+    "path": "fixtures/challenge/cloudflare-turnstile-checkbox-page.html",
+    "kind": "challenge",
+    "url": "",
+    "title": ""
+  },
+  {
+    "path": "fixtures/challenge/cloudflare-turnstile-cookie-privacy-boilerplate-800-chars.html",
+    "kind": "challenge",
+    "url": "",
+    "title": ""
+  },
+  {
+    "path": "fixtures/challenge/cookie-consent-wall-at-200.html",
+    "kind": "challenge",
+    "url": "",
+    "title": ""
+  },
+  {
+    "path": "fixtures/challenge/datadome-block.html",
+    "kind": "challenge",
+    "url": "",
+    "title": ""
+  },
+  {
+    "path": "fixtures/challenge/eur-lex-french.html",
+    "kind": "challenge",
+    "url": "",
+    "title": ""
+  },
+  {
+    "path": "fixtures/challenge/eurlex-202-the-fixture.html",
+    "kind": "challenge",
+    "url": "",
+    "title": ""
+  },
+  {
+    "path": "fixtures/challenge/gdpr-geo-block-at-200.html",
+    "kind": "challenge",
+    "url": "",
+    "title": ""
+  },
+  {
+    "path": "fixtures/challenge/google-sorry-page.html",
+    "kind": "challenge",
+    "url": "",
+    "title": ""
+  },
+  {
+    "path": "fixtures/challenge/imperva-incapsula.html",
+    "kind": "challenge",
+    "url": "",
+    "title": ""
+  },
+  {
+    "path": "fixtures/challenge/paywall-stub-at-200.html",
+    "kind": "challenge",
+    "url": "",
+    "title": ""
+  },
+  {
+    "path": "fixtures/challenge/perimeterx-block-page.html",
+    "kind": "challenge",
+    "url": "",
+    "title": ""
+  },
+  {
+    "path": "fixtures/challenge/perimeterx-human-press-and-hold.html",
+    "kind": "challenge",
+    "url": "",
+    "title": ""
+  },
+  {
+    "path": "fixtures/challenge/soft-404-served-at-200.html",
+    "kind": "challenge",
+    "url": "",
+    "title": ""
+  },
+  {
+    "path": "fixtures/challenge/stock-react-vite-noscript-shell.html",
+    "kind": "challenge",
+    "url": "",
+    "title": ""
+  },
+  {
+    "path": "fixtures/challenge/vercel-security-checkpoint.html",
+    "kind": "challenge",
+    "url": "",
+    "title": ""
+  },
+  {
+    "path": "fixtures/challenge/blog-cloudflare-com-cloudflare-incident-on-november-18-2025-.html",
+    "kind": "challenge",
+    "url": "https://blog.cloudflare.com/cloudflare-incident-on-november-18-2025/",
+    "title": "Page Not Found — Cloudflare Blog"
+  },
+  {
+    "path": "fixtures/challenge/www-federalregister-gov-documents-2024-01-29-2024-01580-.html",
+    "kind": "challenge",
+    "url": "https://www.federalregister.gov/documents/2024/01/29/2024-01580/",
+    "title": "Federal Register :: Request Access"
+  },
+  {
+    "path": "fixtures/documents/apnews-com-hub-technology.html",
+    "kind": "document",
+    "url": "https://apnews.com/hub/technology",
+    "title": "Technology: Latest Tech News Articles Today | AP News"
+  },
+  {
+    "path": "fixtures/documents/blog-mozilla-org-en-.html",
+    "kind": "document",
+    "url": "https://blog.mozilla.org/en/",
+    "title": "The Mozilla Blog"
+  },
+  {
+    "path": "fixtures/documents/developer-mozilla-org-en-US-docs-Web-HTTP-Status.html",
+    "kind": "document",
+    "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status",
+    "title": "HTTP response status codes - HTTP | MDN"
+  },
+  {
+    "path": "fixtures/documents/docs-python-org-3-library-json-html.html",
+    "kind": "document",
+    "url": "https://docs.python.org/3/library/json.html",
+    "title": "json — JSON encoder and decoder &#8212; Python 3.14.7 documentation"
+  },
+  {
+    "path": "fixtures/documents/en-wikipedia-org-wiki-Textual-criticism.html",
+    "kind": "document",
+    "url": "https://en.wikipedia.org/wiki/Textual_criticism",
+    "title": "Textual criticism - Wikipedia"
+  },
+  {
+    "path": "fixtures/documents/openai-com-index-gpt-4o-system-card-.html",
+    "kind": "document",
+    "url": "https://openai.com/index/gpt-4o-system-card/",
+    "title": "GPT-4o System Card | OpenAI"
+  },
+  {
+    "path": "fixtures/documents/www-bls-gov-news-release-cpi-nr0-htm.html",
+    "kind": "document",
+    "url": "https://www.bls.gov/news.release/cpi.nr0.htm",
+    "title": "Consumer Price Index Summary \r - 2026 M07 Results"
+  },
+  {
+    "path": "fixtures/documents/www-gov-uk-government-news.html",
+    "kind": "document",
+    "url": "https://www.gov.uk/government/news",
+    "title": "News and communications - GOV.UK"
+  },
+  {
+    "path": "fixtures/documents/www-theverge-com-tech.html",
+    "kind": "document",
+    "url": "https://www.theverge.com/tech",
+    "title": "Tech | The Verge"
+  }
+]

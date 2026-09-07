@@ -1,10 +1,31 @@
-import { pathToFileURL } from "node:url";
-const mod = await import(pathToFileURL("<origin repo path withheld>/scripts/lib/source-fetch.mjs").href);
-const { isChallengePage, classify2xxBody } = mod;
+/**
+ * The bot-challenge battery: constructed bodies covering real-world wall
+ * wording (Cloudflare, PerimeterX, DataDome, Imperva, Anubis, Google, Amazon,
+ * Bloomberg, eur-lex, Vercel) plus the adjacent open class of 2xx pages that
+ * are NOT bot checks (paywall stub, soft-404, geo-block, consent wall) and
+ * two false-positive probes (a short legitimate page, an article ABOUT bot
+ * walls) that must never be misclassified as walls.
+ *
+ * This file used to import a classifier from a sibling repo at a hard-coded
+ * absolute path (<origin repo path withheld>/scripts/lib/source-fetch.mjs)
+ * and is not portable that way. It no longer imports anything from outside
+ * this repo: it now writes each constructed body out as its own HTML file
+ * under fixtures/challenge/<name>.html, for the fixture corpus that
+ * fixtures/corpus.json indexes. Classification into "challenge" vs "omit"
+ * happens by hand in fixtures/corpus.json, not in this file - see
+ * .superpowers/sdd/2026-09-06-plan-1-core/task-3-report.md for the reasoning
+ * behind each case.
+ *
+ *   node fixtures/challenge-battery.mjs
+ */
+import { writeFileSync, mkdirSync } from "node:fs";
 
-// Each case: [name, expectedChallenge, text]. Copy is the real-world wording of
-// each wall as served in 2025-2026, in text-extracted form.
-const cases = [
+// Each case: [name, isBotCheck, text]. isBotCheck records whether a bot-check
+// classifier (Task 5's job) should fire on this body - it is NOT the same
+// question as "is this a readable document". A paywall stub is
+// isBotCheck=false but is still not a readable document; see the corpus
+// classification notes in the task-3 report.
+export const cases = [
   // --- shipped-fix regression checks (should HIT) ---
   ["eurlex-202 (the fixture)", true,
    "JavaScript is disabled In order to continue, we need to verify that you're not a robot. This requires JavaScript. Enable JavaScript and then reload the page."],
@@ -62,17 +83,30 @@ const cases = [
    "The regulator's new site now asks visitors to verify they are human, a change publishers criticised this week."],
 ];
 
-let rows = [];
-for (const [name, expected, text] of cases) {
-  const got = isChallengePage(text);
-  const verdictPath = got ? "unreachable (safe)" : "read -> all claims miss -> UNSUPPORTED";
-  const mark = got === expected ? "  ok " : "MISS ";
-  rows.push(`${mark} | detected=${got} wanted=${expected} | ${name} | len=${text.length}` + (got === expected ? "" : ` | consequence: ${verdictPath}`));
+function slug(name) {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
 }
-console.log(rows.join("\n"));
 
-// classify2xxBody shape checks
-const ch = classify2xxBody({ text: "JavaScript is disabled In order to continue, we need to verify that you're not a robot.", method: "fetch", status: 202, bytes: 159 });
-console.log("\nclassify2xxBody on challenge:", JSON.stringify(ch));
-const rd = classify2xxBody({ text: "A long real document body...", method: "fetch", status: 200, bytes: 90000 });
-console.log("classify2xxBody on document:", JSON.stringify(rd));
+/** Wrap a constructed wall/stub body as a minimal HTML page. A <script> tag
+ *  is included so toText's script-stripping is exercised by these fixtures
+ *  too; nothing else is added that would inflate the extracted character
+ *  count past the raw text length (Task 4's floor arithmetic depends on
+ *  these extracting to close to their raw text length, not more). */
+function wrap(text) {
+  return `<!doctype html>\n<html>\n<head><meta charset="utf-8"></head>\n<body>\n<script>var ping = 1;</script>\n<p>${text}</p>\n</body>\n</html>\n`;
+}
+
+mkdirSync("fixtures/challenge", { recursive: true });
+
+for (const [name, , text] of cases) {
+  const path = `fixtures/challenge/${slug(name)}.html`;
+  writeFileSync(path, wrap(text), "utf8");
+  console.log(`wrote ${path} (${text.length} raw chars)`);
+}
+
+console.log(`\n${cases.length} constructed bodies written to fixtures/challenge/`);
+console.log("Classification into corpus.json kinds happens by hand - see task-3-report.md.");
