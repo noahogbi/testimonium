@@ -115,6 +115,50 @@ describe("check", () => {
     expect(r.missed ?? []).toEqual([]);
   });
 
+  it("ACCEPTED EXPOSURE: a sub-floor stub that proves the claim outranks a larger clean document read later", async () => {
+    // NOT a desired behaviour - a deliberately accepted exposure, disclosed in
+    // the README's "Measured limits" (the paywall-stub bullet) and in
+    // docs/calibration-2026-09.md. A full match is its own proof of a read
+    // (verdict.ts), so the FIRST rung to prove every claim settles the
+    // verdict and the ladder never reconsiders once a later, larger, clean
+    // rung shows up with no claim in it. A short unrecognised stub - nothing
+    // here trips any challenge signal, header, path, or 404/410 - carrying the
+    // claim beats a bigger document that plainly does not carry it. Do not
+    // "fix" this by picking the largest read instead: that is the exact
+    // regression Critical 1 (round 1 of this fix wave) already fixed the other
+    // way, where a fat block page on `curl` overturned a claim `node` had
+    // already proven.
+    const shortStub = `<html><body><p>The committee report states that spending rose sharply.</p></body></html>`;
+    const largerCleanWithoutClaim = `<html><title>The Committee Report</title><body>${"The committee report covers many other matters entirely, none of them this one. ".repeat(80)}</body></html>`;
+    const r = await check("https://e.com/committee-report", ["spending rose sharply"], {
+      fetcher: stub({ node: { rawBody: shortStub, status: 200 }, curl: { rawBody: largerCleanWithoutClaim, status: 200 } }),
+    });
+    expect(r.rungsAttempted).toEqual(["node", "curl"]);
+    expect(r.verdict).toBe("supported");
+    expect(r.evidence?.[0]?.rung).toBe("node");
+    expect(r.missed ?? []).toEqual([]);
+  });
+
+  it("ACCEPTED EXPOSURE: a stub that proves the claim at 200 outranks a later rung's 404 veto", async () => {
+    // NOT a desired behaviour - a deliberately accepted exposure, same design
+    // choice as the test above and disclosed in the same places. N4 (the
+    // 404/410 veto) is real and load-bearing (see "a 404 or 410 vetoes even a
+    // full match, end to end" below), but it only vetoes the READ IT APPLIES
+    // TO. It cannot retroactively overturn a verdict an earlier rung already
+    // proved, because `proven` is found by scanning `reads` for the first one
+    // whose OWN verdict is `supported` - a rung that comes later and is itself
+    // gone does not get consulted at all once that happens.
+    const shortStub = `<html><body><p>The committee report states that spending rose sharply.</p></body></html>`;
+    const gone = `<html><body>Not Found</body></html>`;
+    const r = await check("https://e.com/committee-report", ["spending rose sharply"], {
+      fetcher: stub({ node: { rawBody: shortStub, status: 200 }, curl: { rawBody: gone, status: 404 } }),
+    });
+    expect(r.rungsAttempted).toEqual(["node", "curl"]);
+    expect(r.verdict).toBe("supported");
+    expect(r.evidence?.[0]?.rung).toBe("node");
+    expect(r.missed ?? []).toEqual([]);
+  });
+
   it("never names a claim in `missed` that some rung located", async () => {
     // The partial case, which is worse than the all-or-nothing one: two claims
     // found on `node`, the third found nowhere, and a fat block page on `curl`.

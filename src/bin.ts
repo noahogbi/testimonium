@@ -55,7 +55,8 @@ async function main(argv: string[]): Promise<number> {
   if (!command || !doc) {
     console.error(
       "usage: testimonium <check|reachability> <doc.md> " +
-        "[--json] [--fail-on-unreachable] [--allow-unclaimed] [--explain-fetch] [--rules <path>]",
+        "[--json] [--rules <path>] " +
+        "(check only: [--fail-on-unreachable] [--allow-unclaimed] [--explain-fetch])",
     );
     return 2;
   }

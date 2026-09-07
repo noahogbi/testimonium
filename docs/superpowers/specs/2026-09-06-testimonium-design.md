@@ -665,7 +665,18 @@ testimonium recheck <doc>        drift, against stored evidence and the archive
 testimonium reachability <doc>   preflight. no claims needed
 ```
 
-Global flags: `--json`, `--explain-fetch`, `--fetcher <id>`, `--rules <path>`.
+Global flags: `--json`, `--rules <path>`. `check` additionally takes
+`--explain-fetch` (not global: `reachability` has no fired-rule provenance to
+print).
+
+**Amended 2026-09-07, plan 1:** `--fetcher <id>` above was never shipped as a
+CLI flag. Plan 1 de-scoped it to a programmatic option only -
+`CheckOptions.fetcher` - because a CLI fetcher registry (resolving an `<id>`
+string to a loaded plugin, validating it, reporting a bad id) is a
+plugin-resolution design nothing in this plan required. The README documents
+the programmatic option and the absence of a CLI equivalent. Reintroducing
+`--fetcher <id>` at the CLI needs that design done first, not just a flag
+added.
 
 **`check`** is the gate. Adapters parse the document; claims join by URL; each
 source goes through `check()`; results write to the evidence file.

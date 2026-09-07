@@ -61,7 +61,16 @@ export function computeSignals(input: SignalInput): SignalResult {
       challengePath: pathRule !== null,
       // A signature only vetoes on a SHORT body. A real article discussing bot
       // walls matches the wording; the length conjunction is what keeps it a
-      // document. The prose floor catches anything this misses.
+      // document. That is NOT the whole story above the floor: the prose floor
+      // does not catch everything this conjunction misses. A wall that matches
+      // a bundled signature but is padded past ~4,500 extracted characters is
+      // vetoed by neither - the signature only applies below maxChallengeChars,
+      // and the floor only blocks an accusation on a SHORT body. This is a
+      // known, accepted gap with no fixture in the bundled corpus (the largest
+      // non-vetoed challenge fixture is 1,180 chars, comfortably under the
+      // floor); see the `known-gap` fixture in fixtures/corpus.json and
+      // docs/calibration-2026-09.md for the measured exposure and why the
+      // thresholds were left alone rather than "fixed".
       challengeSignature: sigRule !== null && proseVolume(text) < THRESHOLDS.maxChallengeChars,
       documentGone: input.status === 404 || input.status === 410,
     },

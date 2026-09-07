@@ -65,11 +65,14 @@ the phrase, fix the citation, or mark the footnote `{"notApplicable":
 "<reason>"}` if it deliberately rests on something other than the cited
 outlet.
 
-Global flags: `--json`, `--explain-fetch`, `--rules <path>`, and on `check`
-specifically `--allow-unclaimed` and `--fail-on-unreachable`. There is no
-`--fetcher` flag - swapping the fetcher (a headless browser, a paid proxy) is
-a programmatic option (`CheckOptions.fetcher`), not a CLI one, because a CLI
-plugin registry is a design nothing in this tool yet requires.
+Global flags: `--json`, `--rules <path>`. `check` additionally takes
+`--allow-unclaimed`, `--fail-on-unreachable`, and `--explain-fetch` - the last
+of these is **not** global: `reachability` never consults it, and its result
+type carries no fired-rule provenance to print, so passing it to
+`reachability` is a silent no-op. There is no `--fetcher` flag - swapping the
+fetcher (a headless browser, a paid proxy) is a programmatic option
+(`CheckOptions.fetcher`), not a CLI one, because a CLI plugin registry is a
+design nothing in this tool yet requires.
 
 ## A note on AI-drafted prose
 
@@ -191,8 +194,19 @@ will eventually surprise a real user if it isn't said here first.
   but every PDF citation attempts *nothing at all*, reports `unreachable`,
   and passes. `rungsAvailable` and `ladderTruncated` are on every result for
   exactly this reason, and the CLI prints "ladder truncated" beside each
-  affected citation. If your CI image is minimal, read those fields before
-  reading the exit code.
+  affected *unreachable* citation - a `supported` verdict reached from a
+  truncated ladder prints no such note, even though the same caveat applies
+  to it. If your CI image is minimal, read those fields before reading the
+  exit code.
+- **`reachability`'s preflight and `check`'s gate can disagree on a URL that is
+  challenged on one fetch rung and clean on another.** The preflight ORs the
+  challenge vetoes across every rung it attempts, so a single blocked rung
+  marks the URL unreadable even if a later rung read the real document
+  cleanly; the gate evaluates only the winning read. This has been verified
+  one-directional - a URL the preflight calls readable always gets read by the
+  gate - so the preflight only ever errs pessimistic and no wrong verdict
+  flows from it. Treat `reachability` as conservative and possibly
+  under-reporting; trust `check`'s verdict.
 
 ## Commands
 
