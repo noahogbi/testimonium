@@ -17,13 +17,7 @@ const documentGone = (f: Fixture): boolean => f.status === 404 || f.status === 4
  *  acceptance test is written against it because spec 6.3 phrases its
  *  requirement through the VERDICT, and the verdict's accusation branch is
  *  the conjunction. */
-const passesAccusationGate = (f: Fixture): boolean => {
-  const text = read(f);
-  return (
-    proseVolume(text) >= THRESHOLDS.minProseChars &&
-    slugLabelOverlap(text, f.url) >= THRESHOLDS.minSlugOverlap
-  );
-};
+const passesAccusationGate = (f: Fixture): boolean => proseVolume(read(f)) >= THRESHOLDS.minProseChars;
 
 /** The full rejection path: vetoed, or unable to clear the gate. */
 const rejected = (f: Fixture): boolean => documentGone(f) || !passesAccusationGate(f);
@@ -49,12 +43,7 @@ describe("acceptance test - spec section 6.3", () => {
     // fixtures are exempt: N4 rejects them outright, so no margin is needed.
     const marginal = corpus
       .filter((f) => f.kind === "challenge" && !documentGone(f))
-      .filter((f) => {
-        const text = read(f);
-        const proseClear = proseVolume(text) <= THRESHOLDS.minProseChars - 200;
-        const overlapClear = slugLabelOverlap(text, f.url) <= THRESHOLDS.minSlugOverlap - 0.05;
-        return !proseClear && !overlapClear;
-      })
+      .filter((f) => proseVolume(read(f)) > THRESHOLDS.minProseChars - 200)
       .map((f) => f.path);
     expect(marginal).toEqual([]);
   });
@@ -62,13 +51,7 @@ describe("acceptance test - spec section 6.3", () => {
   it("every real document clears both thresholds with margin", () => {
     const marginal = corpus
       .filter((f) => f.kind === "document")
-      .filter((f) => {
-        const text = read(f);
-        return (
-          proseVolume(text) < THRESHOLDS.minProseChars + 200 ||
-          slugLabelOverlap(text, f.url) < THRESHOLDS.minSlugOverlap + 0.05
-        );
-      })
+      .filter((f) => proseVolume(read(f)) < THRESHOLDS.minProseChars + 200)
       .map((f) => f.path);
     expect(marginal).toEqual([]);
   });

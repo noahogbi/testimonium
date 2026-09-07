@@ -6,40 +6,23 @@
  * document" and "we did not", and the acceptance test in
  * test/classify/acceptance.test.ts is what licenses them. Changing one without
  * rerunning scripts/calibrate.mjs against the corpus is a keystone violation.
- *
- * !! minSlugOverlap IS NOT LICENSED. The Task 4 gate is still RED. !!
- *
- * Round 2, after ruling C6 dropped the fetched title from C1 and added N4.
- * N4 fixed the ECB fixture: it is served 404 (measured twice) and is now
- * vetoed before the body is consulted. But removing the title exposed the
- * other end of the same problem. `blog.mozilla.org/en/` is a real document
- * whose URL path contributes NO content words at all ("en" is two letters),
- * so slugLabelOverlap returns its documented vacuous 0.00 - the identical
- * score to the Federal Register challenge fixture. A threshold cannot
- * separate two equal values. Assertions 2 and 4 therefore force
- * minSlugOverlap <= -0.05, which does not calibrate C1 but switches it off.
- *
- * The value below is 0.3, the meaningful-range placeholder, deliberately NOT
- * the negative number that would turn the suite green by nullifying the
- * dimension. See the doc for the proof and the two candidate resolutions.
  */
 export const THRESHOLDS = {
   /** Extracted prose characters below which we have not read a document.
-   *  Measured 2026-09: challenge shells 43-2,154 (the 13,221-char ECB outlier
-   *  is now handled by N4, not by this floor); real documents 6,858-108,257.
-   *  4,500 sits mid-gap between the largest non-vetoed challenge (1,180) and
-   *  the smallest document (6,858), ~3,300 clear on each side. THIS ONE IS
-   *  LICENSED: every prose assertion passes at it. */
+   *  Measured 2026-09 against the 33-fixture corpus: the largest challenge
+   *  shell that N4 does not veto is 1,180 chars and the smallest real document
+   *  is 6,858, so 4,500 sits in that gap with 3,320 of clear air below and
+   *  2,358 above - both well past the 200-char margin the acceptance test
+   *  demands. (Two challenge fixtures extract far more than 1,180 - 2,154 and
+   *  13,221 - but both are served 404 and never reach this floor.) */
   minProseChars: 4500,
-  /** Fraction of the URL slug and label's content words that must appear in
-   *  the body. A challenge served for /eli/reg/2024/1689 does not contain
-   *  "artificial intelligence"; the regulation does.
-   *
-   *  NOT LICENSED - see the header. Measured 2026-09 with the title removed:
-   *  documents score 0.00-1.00 and the lone non-vetoed challenge with a real
-   *  URL scores 0.00. The populations touch at the bottom, so C1 separates
-   *  nothing in this corpus. */
-  minSlugOverlap: 0.3,
+  // minSlugOverlap is DELIBERATELY ABSENT. C1 was withdrawn from the verdict
+  // after two calibration rounds proved it cannot separate the populations:
+  // with the fetched title included every page scored 1.00 by construction,
+  // and with it removed a real blog index scored a vacuous 0.00 identical to
+  // an anti-scraping wall. Where measurable at all the ordering is inverted -
+  // the highest challenge (0.80) outranks the lowest document (0.75). The
+  // overlap is still COMPUTED and REPORTED; it just does not gate.
   /** Above this, a body is a document even when it quotes challenge wording -
    *  an article ABOUT bot walls matches every signature in the list. Lives
    *  here rather than as a loose const beside the signatures, so every number
@@ -76,6 +59,13 @@ function contentWords(s: string): string[] {
  *  the citation names, and the label the author wrote beside it - measured
  *  against the BODY.
  *
+ *  **THIS DOES NOT GATE THE VERDICT.** Ruling C7 withdrew it after two
+ *  calibration rounds measured it and found it cannot separate the corpus.
+ *  It is computed, exported and printed by scripts/calibrate.mjs because it is
+ *  useful `--explain-fetch` material and the natural starting point if someone
+ *  later finds a corpus where it does discriminate. Nothing may reintroduce it
+ *  to the accusation path without a fresh calibration run showing separation.
+ *
  *  **NOT the document's own <title>.** That was the shape of this function in
  *  draft 2 and calibration proved it worthless: the title arrives in the same
  *  response as the body, so every page contains its own title by construction.
@@ -86,7 +76,9 @@ function contentWords(s: string): string[] {
  *
  *  Returns 0, NOT 1, when there is nothing to test. A vacuous pass would let
  *  prose volume alone license an accusation for any opaque URL. Returning 0
- *  sends that case to `unreachable`, the safe direction.
+ *  sends that case to `unreachable`, the safe direction. Removing the title
+ *  made this vacuous case common enough to matter: blog.mozilla.org/en/ has
+ *  path /en/, which yields no content words at all.
  *
  *  The footnote label is why this is rarely vacuous in practice: a PDF served
  *  from a hashed URL has no usable slug, but its author wrote "Jane Roe, The
@@ -95,9 +87,7 @@ function contentWords(s: string): string[] {
  *
  *  This signal is WEAK and known to be. It cannot reject a page whose URL is
  *  generic site chrome (`/press/pr/date/2024/`), because those words appear in
- *  every page's navigation. Its job is narrow: deny an accusation when the
- *  cited URL is specific and its words are absent from the body. N4 is what
- *  handles the generic-path error page. */
+ *  every page's navigation. N4 is what handles the generic-path error page. */
 export function slugLabelOverlap(extractedText: string, url: string, label = ""): number {
   let path = "";
   try {
