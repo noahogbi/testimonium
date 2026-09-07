@@ -564,15 +564,22 @@ The object form answers the origin spec's open question 1: `notApplicable` carri
 an author-facing reason rather than being a silent omission.
 
 **URL keying needs declared join semantics, or it reintroduces the failure it
-cures - quietly.** If the document cites `https://example.gov/report/` and the
-claims file says `https://example.gov/report`, the join misses and the citation
-silently becomes *unclaimed* rather than checked. That is the same class of
-defect as the misattached-claims problem, minus the alarm. The normalization is
-therefore part of the contract, not an implementation detail: lowercase scheme
-and host, strip a default port, strip a trailing slash on a pathless URL, strip a
-declared list of tracking parameters (`utm_*` and kin), preserve everything else
-including case in the path and the fragment. Two URLs that normalize equal join;
-anything else does not.
+cures.** If the document cites `https://Example.gov/report?utm_source=newsletter`
+and the claims file says `https://example.gov/report`, an exact-string join
+misses and the citation is never checked. The normalization is therefore part of
+the contract, not an implementation detail: lowercase scheme and host, strip a
+default port, strip a trailing slash on a **pathless** URL, strip a declared list
+of tracking parameters (`utm_*` and kin), preserve everything else including case
+in the path and the fragment. Two URLs that normalize equal join; anything else
+does not.
+
+**A trailing slash on a path is deliberately preserved**, so `/report/` and
+`/report` do not join. They can be different resources, and joining two
+different resources would attach claims to a source nobody checked them
+against - the precise failure URL keying exists to prevent. The cost of the
+conservative rule is that such a mismatch surfaces as `unclaimed`, and
+`unclaimed` fails the run by default: loud, and fixable by the author in one
+edit. That is the right trade. The alternative fails silently and wrongly.
 
 A claimed URL that appears in no footnote is a **warning by default**, listed in
 the output and settable to a failure through `failOn: { unclaimedInDocument? }`.
