@@ -69,8 +69,11 @@ async function main(argv: string[]): Promise<number> {
   }
 
   // --rules <path>: additive-only local override (Task 15). Loaded once, up
-  // front, so a bad local file is reported clearly rather than exploding
-  // mid-run on whichever citation happens to trip it first.
+  // front - before the command dispatch below - so it applies to BOTH
+  // `check` and `reachability`, and so a bad local file is reported clearly
+  // rather than exploding mid-run on whichever citation happens to trip it
+  // first. `reachability` walks the same ladder `check` does; a preflight
+  // that ignores a local rule the gate honors is worse than no preflight.
   const rulesIdx = argv.indexOf("--rules");
   const rulesPath = rulesIdx !== -1 ? argv[rulesIdx + 1] : undefined;
   let rules: RuleSet;
@@ -83,7 +86,7 @@ async function main(argv: string[]): Promise<number> {
 
   if (command === "reachability") {
     const urls = document.footnotes.map((f) => f.url).filter((u): u is string => u !== null);
-    const r = await reachability(urls);
+    const r = await reachability(urls, { rules });
     if (flags.has("--json")) console.log(JSON.stringify(r, null, 2));
     else {
       for (const x of r.readable) console.log(`  readable    ${x.url} (${x.proseChars} chars via ${x.rung})`);

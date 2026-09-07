@@ -40,7 +40,10 @@ export async function check(
   claims: readonly string[],
   opts: CheckOptions = {},
 ): Promise<CitationResult> {
-  const fetcher = opts.fetcher ?? defaultFetcher();
+  // The local `rules.hosts` must reach the default fetcher's UA/identity
+  // logic - a local host rule that loads and validates but is never consulted
+  // is the same silent-no-op failure that signatures/paths had (Critical 1).
+  const fetcher = opts.fetcher ?? defaultFetcher(opts.rules ? { hosts: opts.rules.hosts } : {});
   const pdfUrl = isPdf(url);
   const history: Attempt[] = [];
   const attempted: RungId[] = [];

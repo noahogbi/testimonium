@@ -34,12 +34,12 @@ export const HOST_RULES: readonly HostRule[] = [
   },
 ];
 
-export function hostRuleFor(url: string): HostRule | null {
+export function hostRuleFor(url: string, hosts: readonly HostRule[] = HOST_RULES): HostRule | null {
   let host: string;
   try {
     host = new URL(url).hostname.toLowerCase();
   } catch {
     return null;
   }
-  return HOST_RULES.find((r) => host === r.host || host.endsWith(`.${r.host}`)) ?? null;
+  return hosts.find((r) => host === r.host || host.endsWith(`.${r.host}`)) ?? null;
 }

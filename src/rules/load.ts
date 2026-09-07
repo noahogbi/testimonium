@@ -30,6 +30,23 @@ function toRule(raw: LocalRule, where: string): Rule {
   }
 }
 
+/** Local host rules get the same audit discipline as signatures: a rule
+ *  without a date is a rule nobody can review. Absent before, which was moot
+ *  only while host rules were unwired - see `hostRuleFor`/`userAgentFor` -
+ *  and stopped being moot the moment they reached the fetcher. */
+function toHostRule(raw: Record<string, unknown>, where: string): HostRule {
+  if (typeof raw["host"] !== "string" || raw["host"].trim() === "") {
+    throw new Error(`${where}: every host rule needs a host`);
+  }
+  if (typeof raw["lastConfirmed"] !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(raw["lastConfirmed"])) {
+    throw new Error(`${where}: every rule needs a lastConfirmed date (YYYY-MM-DD)`);
+  }
+  if (typeof raw["note"] !== "string" || raw["note"].trim() === "") {
+    throw new Error(`${where}: every rule needs a note saying what it is for`);
+  }
+  return raw as unknown as HostRule;
+}
+
 /**
  * Bundled rules plus any local ones. ADDITIVE ONLY.
  *
@@ -44,11 +61,11 @@ export function loadRules(path?: string): RuleSet {
   const local = JSON.parse(readFileSync(path, "utf8")) as {
     signatures?: LocalRule[];
     paths?: LocalRule[];
-    hosts?: HostRule[];
+    hosts?: Record<string, unknown>[];
   };
   return {
     signatures: [...CHALLENGE_SIGNATURES, ...(local.signatures ?? []).map((r, i) => toRule(r, `signatures[${i}]`))],
     paths: [...CHALLENGE_PATHS, ...(local.paths ?? []).map((r, i) => toRule(r, `paths[${i}]`))],
-    hosts: [...HOST_RULES, ...(local.hosts ?? [])],
+    hosts: [...HOST_RULES, ...(local.hosts ?? []).map((h, i) => toHostRule(h, `hosts[${i}]`))],
   };
 }

@@ -4,6 +4,7 @@ import { defaultFetcher } from "./fetch/default-fetcher.js";
 import { nextAction, type Attempt } from "./fetch/ladder.js";
 import { isPdf } from "./fetch/pdf.js";
 import type { Fetcher, RungId } from "./fetch/types.js";
+import type { RuleSet } from "./rules/load.js";
 
 export interface ReachabilityResult {
   readonly readable: { url: string; proseChars: number; rung: RungId }[];
@@ -13,6 +14,12 @@ export interface ReachabilityResult {
 
 export interface ReachabilityOptions {
   readonly fetcher?: Fetcher;
+  /** Bundled-plus-local rules (Task 15's `loadRules()`). `reachability` walks
+   *  the same ladder `check` does, so it must consult the same rules: a
+   *  preflight that calls a host readable while the gate calls it unreachable
+   *  - because one honored a local rule and the other didn't - is worse than
+   *  no preflight at all. */
+  readonly rules?: RuleSet;
 }
 
 /**
@@ -28,7 +35,7 @@ export async function reachability(
   urls: readonly string[],
   opts: ReachabilityOptions = {},
 ): Promise<ReachabilityResult> {
-  const fetcher = opts.fetcher ?? defaultFetcher();
+  const fetcher = opts.fetcher ?? defaultFetcher(opts.rules ? { hosts: opts.rules.hosts } : {});
   const readable: ReachabilityResult["readable"][number][] = [];
   const unreadable: ReachabilityResult["unreadable"][number][] = [];
 
@@ -50,6 +57,7 @@ export async function reachability(
         finalUrl: response.finalUrl || url,
         status: response.status,
         claims: [],
+        ...(opts.rules ? { rules: opts.rules } : {}),
       });
       const blocked =
         c.signals.challengeHeader || c.signals.challengePath || c.signals.challengeSignature;

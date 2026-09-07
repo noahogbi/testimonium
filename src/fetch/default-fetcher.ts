@@ -1,4 +1,4 @@
-import { hostRuleFor } from "../rules/hosts.js";
+import { hostRuleFor, type HostRule } from "../rules/hosts.js";
 import { curlAvailable, curlFetch } from "./curl.js";
 import { nodeFetch } from "./node.js";
 import { pdfFetch, pdftotextAvailable } from "./pdf.js";
@@ -11,10 +11,16 @@ export interface FetcherOptions {
   /** Declared identity for hosts that require one, e.g. sec.gov's
    *  "<app> <contact email>". testimonium ships no identity of its own. */
   readonly identity?: string;
+  /** Bundled-plus-local host rules (Task 15's `loadRules().hosts`). Omitting
+   *  it falls back to the bundled snapshot only - see `hostRuleFor`'s default
+   *  parameter. Without this, a local host rule loads and validates but is
+   *  never consulted: `hostRuleFor` closed over the module-level `HOST_RULES`
+   *  and this is the one place that call happens. */
+  readonly hosts?: readonly HostRule[];
 }
 
 export function userAgentFor(url: string, opts: FetcherOptions): string {
-  const rule = hostRuleFor(url);
+  const rule = hostRuleFor(url, opts.hosts);
   if (rule?.requiresIdentity) {
     if (!opts.identity) {
       console.warn(

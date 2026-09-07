@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { check } from "../src/check.js";
 import type { Fetcher, RawResponse, RungId } from "../src/fetch/types.js";
+import { CHALLENGE_PATHS, CHALLENGE_SIGNATURES, type Rule } from "../src/rules/challenge.js";
+import { HOST_RULES } from "../src/rules/hosts.js";
+import type { RuleSet } from "../src/rules/load.js";
 
 // Deliberately NO fixture reads here. These tests exercise check() against a
 // stub fetcher and must not depend on Task 3's manually captured corpus - a
@@ -125,5 +128,70 @@ describe("check", () => {
       expect(r.verdict, `status ${status}`).toBe("unreachable");
       expect(r, `status ${status}`).not.toHaveProperty("evidence");
     }
+  });
+});
+
+describe("check with a local RuleSet (Task 15)", () => {
+  // Task 15 fix round 1, Critical 2: loadRules()'s own tests only exercise
+  // its pure merge logic. Nothing asserted that a local rule actually changes
+  // a verdict, or that firedRule reaches a CitationResult - so a regression
+  // turning `rules` back into an unused CheckOptions field would leave the
+  // rest of the suite green. These two close that gap through check(), the
+  // front door, the same way the 404/410 veto test above exercises N4 through
+  // check() rather than only at verdict() directly.
+  const CLAIM = "spending rose sharply";
+  // Short enough that the signature veto's length conjunction applies
+  // (< THRESHOLDS.maxChallengeChars = 800 extracted chars) - and it carries
+  // BOTH the claim, so a full match is possible, and a wall phrase no bundled
+  // CHALLENGE_SIGNATURES entry recognizes.
+  const SHORT_WALL_BODY =
+    `<html><body>The committee report states that ${CLAIM}. ` +
+    `Please solve the puzzle to continue.</body></html>`;
+  const LOCAL_SIGNATURE: Rule = {
+    pattern: /please solve the puzzle/,
+    lastConfirmed: "2026-08-01",
+    note: "local puzzle wall, unknown to the bundled list",
+  };
+  const RULES_WITH_LOCAL_SIGNATURE: RuleSet = {
+    signatures: [...CHALLENGE_SIGNATURES, LOCAL_SIGNATURE],
+    paths: CHALLENGE_PATHS,
+    hosts: HOST_RULES,
+  };
+
+  it("a local signature flips a full claim match from supported to unreachable", async () => {
+    // Without the local rule, this body is an ordinary full match: no bundled
+    // signature/path fires, status 200, matched === total.
+    const withoutRules = await check("https://e.com/a", [CLAIM], {
+      fetcher: stub({ node: { rawBody: SHORT_WALL_BODY, status: 200 } }),
+    });
+    expect(withoutRules.verdict).toBe("supported");
+
+    // With it, the SAME body and SAME full match is vetoed - the challenge
+    // check runs before the full-match check in verdict(), so this proves the
+    // local rule is actually consulted by computeSignals via check(), not
+    // merely loaded and validated.
+    const withRules = await check("https://e.com/a", [CLAIM], {
+      fetcher: stub({ node: { rawBody: SHORT_WALL_BODY, status: 200 } }),
+      rules: RULES_WITH_LOCAL_SIGNATURE,
+    });
+    expect(withRules.verdict).toBe("unreachable");
+  });
+
+  it("carries firedRule as provenance on a non-supported verdict, with no renderable evidence", async () => {
+    const r = await check("https://e.com/a", [CLAIM], {
+      fetcher: stub({ node: { rawBody: SHORT_WALL_BODY, status: 200 } }),
+      rules: RULES_WITH_LOCAL_SIGNATURE,
+    });
+    expect(r.verdict).toBe("unreachable");
+    // Provenance carries the note and date, never the compiled pattern (a
+    // RegExp does not survive JSON.stringify).
+    expect(r.firedRule).toEqual({
+      lastConfirmed: "2026-08-01",
+      note: "local puzzle wall, unknown to the bundled list",
+    });
+    // Still no renderable fields on a non-supported verdict - firedRule is
+    // provenance, not evidence.
+    expect(r).not.toHaveProperty("evidence");
+    expect(r).not.toHaveProperty("retrievedAt");
   });
 });
