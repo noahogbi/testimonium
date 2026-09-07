@@ -51,6 +51,30 @@ describe("parseClaimsFile", () => {
   it("rejects a non-string phrase", () => {
     expect(() => parseClaimsFile('{"https://e.com/a":[3]}')).toThrow(/non-empty/);
   });
+
+  it("rejects a value that is neither a phrase array nor a notApplicable object", () => {
+    // The wrong-shape branch had no coverage; a string, a number, or an object
+    // without the reason field must all be refused rather than coerced.
+    for (const bad of ['"a string"', "42", "null", "{}", '{"notApplicable":7}']) {
+      expect(() => parseClaimsFile(`{"https://e.com/a":${bad}}`), bad).toThrow(/expected a non-empty array/);
+    }
+  });
+
+  it("REFUSES two keys that normalize to the same URL", () => {
+    // Silently, the later would overwrite the earlier and a whole footnote's
+    // claims would vanish with no error - the exact quiet failure URL keying
+    // exists to remove. It is a hard error, and the message names both keys.
+    expect(() => parseClaimsFile('{"https://E.com/a":["first"],"https://e.com/a":["second"]}')).toThrow(
+      /normalizes to the same URL/,
+    );
+  });
+
+  it("accepts keys that merely look similar but normalize apart", () => {
+    // The collision check must not over-fire: /a/ and /a are deliberately
+    // distinct, so both may coexist.
+    const c = parseClaimsFile('{"https://e.com/a":["one"],"https://e.com/a/":["two"]}');
+    expect([...c.keys()].sort()).toEqual(["https://e.com/a", "https://e.com/a/"]);
+  });
 });
 
 describe("joinClaims", () => {

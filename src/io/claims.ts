@@ -32,18 +32,41 @@ export function normalizeUrl(url: string): string {
 export function parseClaimsFile(json: string): ClaimsFile {
   const raw = JSON.parse(json) as Record<string, unknown>;
   const out: ClaimsFile = new Map();
+  /** normalized key -> the authored key it came from, for collision reporting. */
+  const origin = new Map<string, string>();
+
   for (const [key, value] of Object.entries(raw)) {
     // Keys beginning with "_" are notes for a human reader, not citations.
     if (key.startsWith("_")) continue;
+
+    const url = normalizeUrl(key);
+
+    // Two authored keys that normalize alike would collide in the Map and the
+    // later would win - an entire footnote's claims vanishing with no error.
+    // That is the precise quiet-failure class URL keying exists to remove, so
+    // it is a hard error rather than a warning.
+    const prior = origin.get(url);
+    if (prior !== undefined) {
+      throw new Error(`${key}: normalizes to the same URL as ${prior} (${url}) - remove one`);
+    }
+    origin.set(url, key);
+
+    // Credentials in a citation URL would be written into the evidence file,
+    // which is committed beside the prose. Warn rather than strip: stripping
+    // would silently break access to a source that needs them.
+    if (/^[a-z][a-z0-9+.-]*:\/\/[^/?#]*@/i.test(key)) {
+      console.warn(`warn ${key.replace(/\/\/[^@]*@/, "//<credentials>@")}: URL carries embedded credentials, which will be stored in the evidence file`);
+    }
+
     if (Array.isArray(value)) {
       if (value.length === 0 || value.some((p) => typeof p !== "string" || !p.trim())) {
         throw new Error(`${key}: claims must be a non-empty array of non-empty strings`);
       }
-      out.set(normalizeUrl(key), value as string[]);
+      out.set(url, value as string[]);
       continue;
     }
     if (value && typeof value === "object" && typeof (value as { notApplicable?: unknown }).notApplicable === "string") {
-      out.set(normalizeUrl(key), value as { notApplicable: string });
+      out.set(url, value as { notApplicable: string });
       continue;
     }
     throw new Error(`${key}: expected a non-empty array of phrases or {"notApplicable": "<reason>"}`);
