@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { excerptFor, dedupeEvidence } from "../../src/text/excerpt.js";
+import { excerptFor, dedupeEvidence, foldWithMap } from "../../src/text/excerpt.js";
 
 import { phraseFound } from "../../src/text/normalize.js";
 
@@ -176,5 +176,48 @@ describe("dedupeEvidence", () => {
   it("keeps unlocated claims without inventing a passage", () => {
     const merged = dedupeEvidence([{ claims: ["a"], excerpt: null, rung: "node" }]);
     expect(merged[0]!.excerpt).toBeNull();
+  });
+});
+
+describe("foldWithMap", () => {
+  // Three characters whose lowercase has a different UTF-16 length from the
+  // input, built from code points so the source file stays ASCII:
+  //   U+0130 LATIN CAPITAL LETTER I WITH DOT ABOVE -> "i" + U+0307, ONE unit
+  //   in, TWO out. This is the desync.
+  //   U+03A3 GREEK CAPITAL SIGMA -> one unit in, one out (final-sigma
+  //   handling must not change the count).
+  //   U+10400 DESERET CAPITAL LONG I -> an astral character, two units in,
+  //   two out.
+  const cases = [
+    { name: "U+0130 lengthens", ch: String.fromCodePoint(0x130), grows: 1 },
+    { name: "U+03A3 keeps length", ch: String.fromCodePoint(0x3a3), grows: 0 },
+    { name: "U+10400 astral keeps length", ch: String.fromCodePoint(0x10400), grows: 0 },
+  ];
+
+  it("records one map entry per FOLDED code unit, each inside the source", () => {
+    // At 3974d27 the map recorded one entry per INPUT unit, so for U+0130
+    // `folded.length === map.length + 1` and every offset after it was one
+    // late. excerptFor absorbed the shift inside its window; harvest's
+    // slice-and-validate cannot, because the source still contains the
+    // wrong slice.
+    for (const c of cases) {
+      const text = `${c.ch}stanbul hosted the talks. Spending rose sharply that year.`;
+      const { folded, map } = foldWithMap(text);
+      expect(map.length, c.name).toBe(folded.length);
+      expect(c.ch.toLowerCase().length - c.ch.length, `${c.name}: fixture`).toBe(c.grows);
+      for (const offset of map) expect(offset >= 0 && offset < text.length, c.name).toBe(true);
+    }
+  });
+
+  it("maps a match AFTER a lengthening fold to the right source offset", () => {
+    for (const c of cases) {
+      const text = `${c.ch}stanbul hosted the talks. Spending rose sharply that year.`;
+      const { folded, map } = foldWithMap(text);
+      const at = folded.indexOf("spending rose sharply");
+      expect(at, c.name).toBeGreaterThan(0);
+      const start = map[at]!;
+      expect(start, c.name).toBe(text.indexOf("Spending"));
+      expect(text.slice(start, start + "Spending rose sharply".length), c.name).toBe("Spending rose sharply");
+    }
   });
 });

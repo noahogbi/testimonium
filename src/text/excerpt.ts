@@ -65,9 +65,9 @@ const OPEN_PUNCT = new Set(["(", "[", "{"]);
  * drifts about one character per word. On a five-thousand-character document
  * that drift reaches hundreds of characters and returns a passage that does not
  * contain the claim, presented under a citation as the evidence for it. That is
- * worse than showing no evidence at all.
+ * worse than showing no evidence at all. Exported for plan 2's harvest, which slices the SOURCE by these offsets and needs them exact, not merely inside excerptFor's window.
  */
-function foldWithMap(text: string): { folded: string; map: number[] } {
+export function foldWithMap(text: string): { folded: string; map: number[] } {
   const chars: string[] = [];
   const map: number[] = [];
   let lastWasSpace = false;
@@ -92,8 +92,14 @@ function foldWithMap(text: string): { folded: string; map: number[] } {
       continue;
     }
     lastWasSpace = false;
-    chars.push((FOLD[raw] ?? raw).toLowerCase());
-    map.push(i);
+    // One map entry per OUTPUT code unit, not per input unit. toLowerCase()
+    // can lengthen a character (U+0130 becomes "i" plus a combining dot,
+    // two units), and a map that pushed one entry per input unit fell one
+    // behind at every such character, for the rest of the document. Every
+    // output unit points at the source character that produced it.
+    const out = (FOLD[raw] ?? raw).toLowerCase();
+    for (let k = 0; k < out.length; k++) map.push(i);
+    chars.push(out);
   }
   return { folded: chars.join(""), map };
 }
