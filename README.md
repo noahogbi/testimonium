@@ -136,31 +136,35 @@ before you trust a green run to mean more than it does.
   returns extracted text with no headers at all, so the opposite choice would
   veto every PDF the tool can read. What none of the seven involve is a model.
 - **A PDF cited from a URL carrying neither `.pdf` nor a `/pdf/` path
-  segment reads as `unreachable`.** The PDF rung has to be chosen before any
-  fetch happens (see N5, above), and the URL is all that choice has to go
-  on - `isPdf` recognizes a `.pdf` suffix and a `/pdf/` path segment, nothing
-  else. That is a capability traded for a fix, not a free improvement: before
-  N5 existed, a URL like this was fetched as HTML, a binary PDF stream
-  decoded as a "document" of a million characters, and cleared every
+  segment reads as `unreachable`.** It reads that way because every
+  HTML rung returns the raw bytes, N5 vetoes each read in turn, and the
+  ladder runs out of rungs. The PDF rung has to be chosen before any fetch
+  happens (see N5, above), and the URL is all that choice has to go on -
+  `isPdf` recognizes a `.pdf` suffix and a `/pdf/` path segment, nothing
+  else. That is a capability traded for a fix, not a free improvement:
+  before N5 existed, a URL like this was fetched as HTML, a binary PDF
+  stream decoded as a "document" of a million characters, and cleared every
   threshold - turning an accurate citation into a false accusation. Now the
   tool declines to judge a body it cannot first confirm is text at all. This
   does **not** mean PDFs are unsupported: `.pdf` URLs and `/pdf/`-segment
   URLs - including arxiv's content-negotiated `/pdf/<id>` links - are read
   normally. Recognizing more PDF URL shapes without a pre-fetch guess is
   future work, not done here.
-- **A perfectly readable HTML page served under a non-textual `content-type`
-  now reads `unreachable`.** This is the other half of the trade above, and it
-  is the one that will surprise you, because nothing about the page looks
-  wrong. N5's content-type trigger fires on the *header*, not on the body: a
-  misconfigured server, a CDN that mislabels, or an origin that answers
-  `application/octet-stream` for a document your browser renders happily gets
-  declined rather than judged. Measured on the corpus's real Verge capture: at
-  `text/html` it extracts 16,449 characters and reaches a verdict; the
-  identical bytes under `application/octet-stream` read `unreachable`. The
-  tool is refusing to accuse on a body it cannot first confirm is text, and
-  the server told it the body is not text. If you hit this, the header is the
-  thing to check - and `--fail-on-unreachable` is how you stop it passing
-  quietly.
+- **A read whose response carries a non-textual `content-type` is vetoed,
+  however readable the page.** This is the other half of the trade above,
+  and it is the one that will surprise you, because nothing about the page
+  looks wrong. N5's content-type trigger fires on the *header*, not on the
+  body: a misconfigured server, a CDN that mislabels, or an origin that
+  answers `application/octet-stream` for a document your browser renders
+  happily gets declined rather than judged. Measured on the corpus's real
+  Verge capture: at `text/html` it extracts 16,449 characters and reaches
+  a verdict; the identical bytes under `application/octet-stream` read
+  `unreachable`. The tool is refusing to accuse on a body it cannot first
+  confirm is text, and the server told it the body is not text. If you
+  hit this, the header is the thing to check - and `--fail-on-unreachable`
+  is how you stop it passing quietly. The ladder climbs past such a read;
+  if another rung returns the same bytes correctly labelled, the citation
+  is judged from that read.
 - **A claim that appears only inside an HTML comment can return
   `supported`.** `toText` strips tags but not comment bodies, and
   commented-out markup - which always contains a `>` - leaks into the
@@ -225,13 +229,16 @@ will eventually surprise a real user if it isn't said here first.
   floor, no veto, none of the claims, `unsupported`. It is the route above
   reached indirectly, accepted for the same reason, and pinned as an
   ACCEPTED EXPOSURE in `test/check.test.ts`.
-  The route is not specific to error chrome: any readable read reached after a
-  vetoed one is judged on its own, whatever document it is - a soft-404
-  landing page, the target of a redirect after removal, a mirror's home page -
-  because no signal the classifier gates on distinguishes the same page at 200
-  from a different document at 200 (slug overlap is computed and never gates).
-  A wall on the first rung leaves no trace on such a result beyond
-  `rungsAttempted`; `firedRule` is the winning read's.
+  The route is not specific to error chrome: any readable read reached after
+  a vetoed one is judged on its own, whatever document it is - a soft-404
+  landing page, the target of a redirect after removal, a mirror's home
+  page - because no signal the classifier gates on distinguishes the same
+  page at 200 from a different document at 200 (the classifier computes slug
+  overlap and the head markers and gates on neither; it also never compares
+  a read's `finalUrl` with the URL it was asked for, so a redirect away from
+  the citation is observable and, today, unobserved - a gate left unbuilt,
+  not a limit of the signals). A wall on the first rung leaves no trace on
+  such a result beyond `rungsAttempted`; `firedRule` is the winning read's.
 - **The same false accusation is reachable a second way, and that route has
   no fixture at all.** The signature list only vetoes a *short* body: above
   `THRESHOLDS.maxChallengeChars` (800 extracted characters) it stops firing,

@@ -99,10 +99,13 @@ export async function check(
   // outrank a smaller readable document, so the verdict was computed on the
   // wall and a partial miss the document had positively shown became
   // `unreachable`. This is one of the two places plan 1.2 moves a verdict
-  // toward accusation (the other is the ladder's escalation in
-  // read-source.ts, which accuses only when the readable read is also the
-  // largest), and it does so only where a readable read exists to accuse
-  // from; the union below still decides WHICH claims are missed.
+  // toward accusation (the other is the ladder's escalation - the climb
+  // predicate is `nextAction` in fetch/ladder.ts, driven by the readable
+  // bit read-source.ts supplies. The two compose: after an N4/N5-only veto
+  // the readable second read wins here even at equal prose, which is the
+  // ACCEPTED EXPOSURE pinned in test/check.test.ts.), and it does so only
+  // where a readable read exists to accuse from; the union below still
+  // decides WHICH claims are missed.
   // Rule 3: with no readable read either, the largest read carries the
   // verdict to verdict(), which returns `unreachable` for a vetoed or
   // sub-floor body - the 3974d27 route, kept so that no unlicensed verdict

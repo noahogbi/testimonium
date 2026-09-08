@@ -512,13 +512,20 @@ protects the author: no status is ever read as proof the real page was reached, 
 a 200 licenses nothing by itself and a document served under a 400 is judged by
 its body like any other.
 
-The scheme does consult status, in one direction only. N4 (section 6.2) reads 404
-and 410 as evidence the document is gone and forces `unreachable`. A status can
-therefore withhold an accusation; it can never supply one. This paragraph
-previously said the scheme "consults no status" - true when it was written, and
-falsified by N4 when N4 landed during plan 1. It is corrected here rather than
-left standing, because a spec that has gone quietly false is the failure this
-tool exists to catch.
+The scheme does consult status, in one direction only. N4 (section 6.2)
+reads 404 and 410 as evidence the document is gone and vetoes that read;
+since plan 1.2 the ladder climbs past it (6.6, "Escalation") and the citation
+reads `unreachable` only when no rung produced a readable read and none
+matched in full. A status therefore withholds an accusation from the read
+it vetoes - but by sending the ladder to the next rung it can relocate the
+judgement onto a different document, which is the ACCEPTED EXPOSURE 6.6
+rule 2 and the README both carry. This paragraph previously said the scheme
+"consults no status" - true when it was written, and falsified by N4 when
+N4 landed during plan 1. It is corrected here rather than left standing,
+because a spec that has gone quietly false is the failure this tool exists
+to catch. It went false a second time when plan 1.2's escalation made
+"forces `unreachable`" a statement about a read rather than the citation,
+and was corrected again in that plan's final review.
 
 Draft 1 supported that point with two examples and both were wrong, in the exact
 manner section 0 of this document warns against. `www.meta.com`'s 253KB under an
@@ -670,14 +677,15 @@ silent on this before.
    returned. This is the sub-floor-stub exposure `test/check.test.ts` pins and
    section 6.2 accepts: a short real article followed by a fat block page is
    the ordinary case, not an exotic one.
-2. **Otherwise the readable read with the most prose wins.** At 3974d27 the
-   largest read won regardless of readability, so a large vetoed wall on the
-   first rung followed by a smaller readable page on the second, matching in
-   part, returned `unreachable`. It now returns `unsupported`, naming the
-   claims the readable read did not carry: that read is the positive proof the
-   keystone rule demands, exactly as it would be had it been the only read.
-   This is a behaviour change in a case the shipped ladder produces, and plan
-   1.2 pins it.
+2. **Otherwise the readable read with the most prose wins.** At 3974d27
+   the largest read won regardless of readability, so a large vetoed wall
+   on the first rung followed by a smaller readable page on the second,
+   matching in part, returned `unreachable`. It now returns `unsupported`,
+   naming the claims the readable read did not carry (rule 4: located by
+   no non-vetoed read): that read is the positive proof the keystone rule
+   demands, exactly as it would be had it been the only read. This is a
+   behaviour change in a case the shipped ladder produces, and plan 1.2
+   pins it.
 3. **Otherwise `unreachable`.** No read is readable and none matched in full.
    `unclaimed` when there were no claims to match, as before.
    `check` still issues this through `verdict()`, applied to the largest
