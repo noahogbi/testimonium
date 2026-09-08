@@ -680,6 +680,12 @@ silent on this before.
    1.2 pins it.
 3. **Otherwise `unreachable`.** No read is readable and none matched in full.
    `unclaimed` when there were no claims to match, as before.
+   `check` still issues this through `verdict()`, applied to the largest
+   read's signals with the union match count from rule 4; so two unvetoed
+   sub-floor reads that between them locate every claim return `supported` -
+   rule 1's exposure reached from a second direction, pinned in
+   `test/check.test.ts` as accepted. A vetoed largest read is `unreachable`
+   whatever the union says.
 4. **`missed` is the set of claims located by no non-vetoed read.** A match
    inside a vetoed body is the wall's text; it neither proves the claim nor
    clears it. Each claim's evidence is quoted from the read that located it.

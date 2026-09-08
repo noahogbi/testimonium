@@ -24,4 +24,10 @@ describe("package surface", () => {
       expect(api, name).not.toContain(name);
     }
   });
+
+  it("VERSION agrees with package.json - two copies of one number until plan 2 picks a source", async () => {
+    const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+    const { VERSION } = await import("../src/index.js");
+    expect(VERSION).toBe(pkg.version);
+  });
 });
