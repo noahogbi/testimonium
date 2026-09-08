@@ -82,6 +82,17 @@ describe("verdict", () => {
     expect(low).toBe("unsupported");
   });
 
+  it("headMarkers does NOT influence the verdict - it is reported, never licensing", () => {
+    // Head markers survive on paywall stubs (og:type, json-ld), so a gate on
+    // them would accuse stubs; consumed nowhere in src/ (grep it).
+    expect(verdict({ ...base, matched: 0, headMarkers: true })).toBe(
+      verdict({ ...base, matched: 0, headMarkers: false }),
+    );
+    expect(verdict({ ...base, matched: 0, proseChars: 400, headMarkers: true })).toBe(
+      verdict({ ...base, matched: 0, proseChars: 400, headMarkers: false }),
+    );
+  });
+
   it("head markers alone never license an accusation", () => {
     expect(verdict({ ...base, matched: 0, proseChars: 300, slugLabelOverlap: 0, headMarkers: true })).toBe(
       "unreachable",

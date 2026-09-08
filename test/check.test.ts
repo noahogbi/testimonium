@@ -35,6 +35,25 @@ describe("check", () => {
     expect(r.evidence?.length).toBeGreaterThan(0);
   });
 
+  it("a redirect to another host or path is not observed: finalUrl never gates", async () => {
+    // finalUrl is captured on every read (src/fetch/read-source.ts) and used
+    // only for N2's path patterns and the slug anchor; this test fails
+    // loudly if a redirect gate is ever added without a spec amendment
+    // (README "Measured limits" discloses it).
+    const r = await check("https://e.com/committee-report", ["spending rose sharply"], {
+      fetcher: stub({
+        node: {
+          rawBody: LONG_PROSE,
+          status: 200,
+          finalUrl: "https://elsewhere.example.org/archive/2019/annual-review",
+        },
+      }),
+    });
+    expect(r.verdict).toBe("supported");
+    expect(r).not.toHaveProperty("firedRule");
+    expect(r.rungsAttempted).toEqual(["node"]);
+  });
+
   it("returns unsupported when a claim is absent from a document we read", async () => {
     const r = await check("https://e.com/committee-report", ["spending rose sharply", "no such phrase"], {
       fetcher: stub({ node: { rawBody: LONG_PROSE, status: 200 } }),
@@ -501,6 +520,28 @@ describe("check", () => {
     expect(r.evidence?.map((e) => e.rung)).toEqual(["node", "curl"]);
   });
 
+  it("ACCEPTED EXPOSURE: a sub-floor stub on the second rung attests a claim the origin said was gone (rule 1 through the escalation)", async () => {
+    // rule 1 - "a full match proves a read, whatever its prose volume" -
+    // reached through the escalation: at 3974d27 the ladder stopped on
+    // the 404 and answered `unreachable`; now it climbs, and the stub
+    // attests. Licensed by spec 6.6 rule 1, disclosed by README's 404
+    // bullet, and the second-worst outcome class in the keystone rule
+    // (a false attestation), so the shape is pinned as a choice.
+    const CHROME = `<html><title>Page not found</title><body>${"Browse our publications, statistics and press releases. ".repeat(120)}</body></html>`;
+    const r = await check("https://e.com/committee-report", ["spending rose sharply"], {
+      fetcher: stub({
+        node: { rawBody: CHROME, status: 404 },
+        curl: {
+          rawBody: "<html><body><p>The committee report states that spending rose sharply.</p></body></html>",
+          status: 200,
+        },
+      }),
+    });
+    expect(r.rungsAttempted).toEqual(["node", "curl"]);
+    expect(r.verdict).toBe("supported");
+    expect(r.evidence?.[0]?.rung).toBe("curl");
+  });
+
   it("does not consult HTTP status outside the 404/410 veto", async () => {
     // The property the design actually holds. A 400 or a 500 says nothing
     // about whether the bytes are the document - spec 6.3 records a 400
@@ -522,9 +563,10 @@ describe("check", () => {
     // ECB 404 serving 13,216 characters of navigation chrome, and with the
     // veto removed zero thresholds satisfied the acceptance test.
     //
-    // The cost is recorded and accepted: a misconfigured host serving a real
-    // document under a 404 loses its evidence. That degrades to unreachable,
-    // which renders nothing and fails nothing - the safe direction.
+    // The cost is recorded and accepted: a misconfigured host serving a
+    // real document under a 404 on every rung loses its evidence. That
+    // degrades to unreachable, which renders nothing and fails nothing -
+    // the safe direction.
     for (const status of [404, 410]) {
       const r = await check("https://e.com/committee-report", ["spending rose sharply"], {
         fetcher: stub({ node: { rawBody: LONG_PROSE, status } }),

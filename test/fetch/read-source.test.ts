@@ -26,12 +26,25 @@ describe("readSource", () => {
   it("returns every rung's read in the order attempted, vetoed reads included", async () => {
     const r = await readSource(URL, ["spending rose sharply"], {
       fetcher: stub({ node: { rawBody: WALL, status: 202 }, curl: { rawBody: LONG_PROSE, status: 200 } }),
+      sourceLabel: "Quarterly Newsletter Digest",
     });
     expect(r.attempted).toEqual(["node", "curl"]);
     expect(r.reads.map((x) => x.rung)).toEqual(["node", "curl"]);
     expect(r.reads[0]?.computed.signals.challengeSignature).toBe(true);
     expect(r.reads[1]?.computed.matchedClaims).toEqual(["spending rose sharply"]);
     expect(r.pdfUrl).toBe(false);
+    // Pins that sourceLabel crosses check -> readSource -> computeSignals (a
+    // seam no test covered). The label-free overlap for reads[1] is already
+    // 1.0 here (URL path alone matches the body), so this call carries an
+    // unrelated label instead of none, and the matching label below scores
+    // strictly higher.
+    const second = await readSource(URL, ["spending rose sharply"], {
+      fetcher: stub({ node: { rawBody: WALL, status: 202 }, curl: { rawBody: LONG_PROSE, status: 200 } }),
+      sourceLabel: "The Committee Report",
+    });
+    expect(second.reads[1]!.computed.signals.slugLabelOverlap).toBeGreaterThan(
+      r.reads[1]!.computed.signals.slugLabelOverlap,
+    );
   });
 
   it("stops after the first readable read", async () => {
