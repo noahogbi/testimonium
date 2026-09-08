@@ -444,10 +444,25 @@ draft 1:
 
 ### 6.3 What the inversion buys, and what remains to be proved
 
-**The signature list demotes to an optimization.** Its job becomes triggering the
-curl fall-through early, not deciding a verdict. It may rot freely; the cost is
-latency and reach, never truth. This much follows from the structure of the
-verdict table and needs no measurement.
+**The signature list stops being able to mint an accusation.** It can still
+decide a verdict: N3 vetoes when a signature matches AND the body is under the
+length cap, and that veto stands even where the claims would otherwise have
+matched in full. What the list can no longer do is produce `unsupported`. Every
+verdict it decides is a withheld accusation, never a supplied one.
+
+That asymmetry is what the rot argument rests on, and it is narrower than draft 1
+claimed. A missing signature costs reach - the wall falls through to P2 and lands
+on `unreachable` anyway. An over-broad signature costs an attestation - a real
+document that matches it and is short reads `unreachable` instead of `supported`.
+Neither direction can accuse an author who did nothing wrong. This much follows
+from the structure of the verdict table and needs no measurement.
+
+Draft 1 called the list "an optimization" that "may rot freely; the cost is
+latency and reach, never truth". N3 made that false. It is the same false claim
+plan 1.1 found in `src/rules/challenge.ts`'s own comment and corrected there, and
+it is corrected here for the same reason: this document is the authority every
+ruling resolves against, so a sentence in it that has gone quietly false is worse
+than one in the code.
 
 **An accusation stops depending on the completeness of a list that provably
 cannot be completed.** Every wall in the battery - listed or not, English or not,
