@@ -50,7 +50,9 @@ And one thing it must take first, before any harvest code, because plan 1.2's le
 - **Self-validation failures drop the span and are reported as `BUG:`.** 8.2 calls each of the three assertions "a bug if it fails"; F3c says the count is a bug signal, not a filter statistic, and that the exit code stays 0. A span that fails the fold round trip is not provably what the source says, so it must not reach the author - it is dropped *and* reported, and the drop is not counted in any filter's tally.
 - **`SignalResult` gains `finalUrl`.** 8.2 step 2 requires the report to say when a readable read's `finalUrl` differs in path from the URL asked for, and nothing on `Read` carries it today. It is reported, never gated - `check`'s behaviour is byte-identical after this plan.
 - **A missing `<doc>.claims.json` is not an error.** Harvest's whole migration story is a document that has no claims file yet. A file that *exists* and the loader refuses is exit 2 with the loader's own message (8.2 filter 4).
-- **`--json` prints the draft to stdout instead of writing it**, the convention `reachability --json` follows (`bin.ts:128`). Under `--json` no draft file is read or written, so the overwrite rule does not apply.
+- **`--json` prints the draft to stdout instead of writing it**, the convention `reachability --json` follows (`bin.ts:128`). Under `--json` no draft file is read or written, so the overwrite rule does not apply, **and stdout carries the JSON and nothing else** - the per-URL report goes to stderr, so `harvest doc.md --json > draft.json` produces a file `jq` and an editor can read (Fable F6). `reachability --json` already prints pure JSON; `check --json` mixes report and JSON on stdout, and that inconsistency is plan 1's and is not widened here.
+- **A draft entry with no surviving claims is omitted from the file, not written as `[]`.** `harvest()` reports one proposal entry per readable URL whether or not anything survived the filters, and `parseClaimsFile` refuses an empty array - so writing `"url": []` would break the migration story on its ordinary case: the author renames the draft and `check` exits 2 naming a key she never wrote (Fable F1). `buildDraft` is the single place that drops them, and the per-URL report line has already said that URL proposed 0.
+- **The parked astral-fold item is RE-PARKED, with the argument, on 2026-09-08.** Plan 1.2's ledger (Task 5 minor) parked it here: `foldWithMap` iterates per UTF-16 unit, so an astral character is never case-folded, and "harvest is the consumer". This plan does not fix it. Fixing it means making `foldWithMap` iterate by code point rather than by UTF-16 unit - a behaviour change to a primitive plan 1.2 stabilised and pinned, in a task whose own job is to consume it. Its consumer here fails only in the safe direction: a span whose only difference from the source is the case of an astral character never matches, so `commonSpans` misses a proposal it could have made. A false MISS, never a false proposal and never a false accusation - the direction this tool is allowed to fail in. Re-parked for a future plan with that argument on the record rather than dropped, and Task 10's ledger step writes the line.
 - **The `_note` overwrite rule is read as "byte-identical outside the version and date fields".** 8.2 says an existing draft is overwritten "only when its `_note` is byte-identical to the marker harvest would write". Read literally, a draft written yesterday could never be overwritten today, because today's marker carries today's date - which would make `harvest` unusable on its second day. The rule's purpose is to detect an author's edit, and that purpose is served exactly as well by requiring every byte outside the version and the date to match. **This is a deliberate reading of an ambiguous sentence, recorded here and in the ledger.**
 - **Proposals for a URL are the union over *all* its readable reads**, not the best one. 8.2 step 2 says "Only readable reads propose or vote", plural; a node read and a curl read of the same URL can carry different text, and both were read.
 - **`harvest` proposes what the author copied, not what the author claims.** That is the exposure harvest adds on top of the checker's, and the draft's `_note` and the README both say so. Nothing in this plan tries to close it.
@@ -73,7 +75,7 @@ And one thing it must take first, before any harvest code, because plan 1.2's le
 - Tests: `test/harvest/spans.test.ts`, `test/harvest/sources.test.ts`, `test/harvest/filters.test.ts`, `test/harvest.test.ts`, `test/io/draft.test.ts`.
 
 **Modify:**
-- `docs/superpowers/specs/2026-09-06-testimonium-design.md` - 6.3:456-460, the rot paragraph, 7.2's rule contract and the table row at :1298 (Task 1); 7.3's measurement and two sentences of 8.2 (Task 10).
+- `docs/superpowers/specs/2026-09-06-testimonium-design.md` - 6.3:456-460, the rot paragraph, 7.2's rule contract and the table row at :1298 (Task 1); 7.3's measurement, three sentences of 8.2 and 13 Q3's resolution, which carries 7.3's numbers a second time (Task 10).
 - `src/rules/challenge.ts`, `src/rules/load.ts` - comments carrying the same false claim as spec 6.3 (Task 1).
 - `test/check.test.ts` - the N3 twin pin (Task 1); below-floor claim literals (Task 3); `RuleSet.boilerplate` in one literal (Task 7).
 - `test/agreement.test.ts` - below-floor claim literals (Task 3).
@@ -97,7 +99,7 @@ And one thing it must take first, before any harvest code, because plan 1.2's le
 
 **Task order:** 1 (R13, the spec correction plan 1.2 parked) -> 2 (calibration, before any harvest code) -> 3 (the floor at three sites) -> 4 (`Document.prose`) -> 5 (`commonSpans`) -> 6 (reading the sources) -> 7 (the filters) -> 8 (the command and the draft file) -> 9 (the CLI) -> 10 (the ledger).
 
-**Expected test count:** 281 at start; **283, 289, 293, 297, 305, 313, 323, 336, 340, 340** at the end of Tasks 1-10. If your count differs, count the tests you added and reconcile *before* committing - a count that drifted is a test that did not run.
+**Expected test count:** 281 at start; **283, 289, 293, 297, 305, 313, 323, 336, 341, 341** at the end of Tasks 1-10. If your count differs, count the tests you added and reconcile *before* committing - a count that drifted is a test that did not run.
 
 ---
 
@@ -105,7 +107,7 @@ And one thing it must take first, before any harvest code, because plan 1.2's le
 
 **Files:**
 - Modify: `docs/superpowers/specs/2026-09-06-testimonium-design.md` (6.3, the paragraph at 456-460; the rot paragraph at 462-470; 7.2's rule contract at 766-768; the decision-table row at 1298)
-- Modify: `src/rules/challenge.ts` (the header comment's closing paragraph, lines 18-25 - comment only)
+- Modify: `src/rules/challenge.ts` (the header comment's third paragraph, lines 18-24 - comment only; it is NOT the comment's last paragraph, the pattern-guidance one at 26 follows it)
 - Modify: `src/rules/load.ts` (the `loadRules` doc comment, lines 56-62 - comment only)
 - Test: `test/check.test.ts` (one new `describe` with two tests)
 
@@ -285,7 +287,7 @@ rule's contract to all three lists, and was false for two of them.
 
 - [ ] **Step 7: Sweep the two source comments carrying the same claim**
 
-`src/rules/challenge.ts`, in the `CHALLENGE_SIGNATURES` header comment: replace the run of lines that begins ` * It is NOT true that a match never decides a verdict, and this comment said` and ends ` * still change an outcome.` - seven lines, the last paragraph of that comment - with:
+`src/rules/challenge.ts`, in the `CHALLENGE_SIGNATURES` header comment: replace the run of lines that begins ` * It is NOT true that a match never decides a verdict, and this comment said` and ends ` * still change an outcome.` - **lines 18-24, seven lines**. It is the comment's THIRD paragraph, not its last: line 25 is ` *` and the pattern-guidance paragraph begins at line 26 and must survive untouched. Anchor on the two texts, not on the numbers, and check line 26 is still there afterwards. Replace with:
 
 ```
  * It is NOT true that a match never decides a verdict, and this comment said
@@ -295,16 +297,22 @@ rule's contract to all three lists, and was false for two of them.
  * citation reads `unreachable` only when no rung produced a readable read
  * and none matched in full (spec 6.6).
  *
- * The list ROTTING - failing to name a wall - still cannot cost truth:
- * everything it misses has to clear the prose floor. An OVER-BROAD entry
- * can. A signature matching a short REAL read takes that read's matches out
- * of check()'s cross-rung union, so a claim only it carried is named in
- * `missed` when a readable later rung is judged - a false accusation, not a
- * lost attestation (spec 6.3, corrected 2026-09-08; pinned by
- * test/check.test.ts, "N3 through the cross-read union").
+ * The list ROTTING - failing to name a wall - changes no outcome a complete
+ * list would have prevented: above maxChallengeChars N3 cannot fire at all,
+ * and below it everything the list misses still has to clear the prose floor.
+ * (Spec 6.3 scopes the rot argument the same way, and records that draft 1
+ * stated it without the condition. Above the floor neither protection
+ * applies - that is 6.3's known gap, and rot does not widen it.) An
+ * OVER-BROAD entry can cost truth. A signature matching a short REAL read
+ * takes that read's matches out of check()'s cross-rung union, so a claim
+ * only it carried is named in `missed` when a readable later rung is judged -
+ * a false accusation, not a lost attestation (spec 6.3, corrected 2026-09-08;
+ * pinned by test/check.test.ts, "N3 through the cross-read union").
 ```
 
 The first half of that replacement corrects a second, separate drift the sweep turns up: "forces `unreachable` on its own" was true when written and was falsified by plan 1.2's escalation, in exactly the way the spec's N4 paragraph records for N4.
+
+The rot sentence is scoped rather than left unconditional, because the unconditional form is the exact sentence spec 6.3 records draft 1 getting wrong ("The rot argument survives, but only below the prose floor, and draft 1 stated it without that condition"). It survives under a marginal-cost reading - a complete list could not have vetoed an above-the-cap body either, so rot changes no outcome - but a comment that pattern-matches a recorded error should say which reading it means.
 
 `src/rules/load.ts`, in the `loadRules` doc comment, the clause `can turn a real document into a false `unreachable`` (line 59) understates the same cost. Replace `can turn a real document into a false `unreachable`` with:
 
@@ -722,6 +730,29 @@ with:
  * like any hand-written claim. Each entry's own docstring says which it is.
 ```
 
+Then the paragraph immediately below it, which the two new entries also falsify - neither is a read-boundary, and neither is re-derived by `scripts/calibrate.mjs`. Replace
+
+```
+ * These are NOT tunable constants. They are the boundary between "we read a
+ * document" and "we did not". Changing one without rerunning
+ * scripts/calibrate.mjs against the corpus is a keystone violation.
+```
+
+with
+
+```
+ * These are NOT tunable constants. The four VERDICT entries are the boundary
+ * between "we read a document" and "we did not"; `minClaimChars` refuses an
+ * input before any verdict exists and `harvestSeedChars` only changes what
+ * harvest proposes, so neither is that boundary. Changing any entry without
+ * rerunning the script its own docstring names - scripts/calibrate.mjs for
+ * the verdict entries, scripts/calibrate-claim-floor.mjs and
+ * scripts/calibrate-harvest-seed.mjs for the two below them - against the
+ * population that docstring names is a keystone violation.
+```
+
+**This edit is the point of the step as much as the entries are.** A task that adds two entries and leaves the header describing six as read-boundaries re-derived by one script has created doc drift inside the very file it was editing.
+
 Then, in the paragraph beginning `**They are not all licensed the same way, and the difference matters.**`, replace the sentence
 
 ```
@@ -1082,9 +1113,23 @@ an outlet's own recurring furniture would show up, is empty here and both
 numbers are silent about it. That is the gap the author's own `boilerplate`
 rules exist to cover, and it is disclosed rather than closed.
 
+Filter 2's reprint cost was not measured either, and it is a second and
+separate gap from the one above - that one is in filter 3's domain, this one
+in filter 2's. Spec 8.2 filter 2 said "Plan 2's calibration counts how many
+real claims appear in two cited sources of the same draft, so the reprint cost
+is a number, not a guess". No such count was made. It needs readable reads of
+these four drafts' OWN cited sources; `fixtures/` holds no readable read of
+any of them, and only live network reads could supply one - a network
+dependency inside the task whose whole purpose is that its numbers reproduce
+from frozen fixtures. So how many REAL claims the cross-source frequency
+filter would eat is a guess here, disclosed rather than closed, and spec 8.2's
+sentence is amended in Task 10 to say so instead of promising a number.
+
 No claim was dropped, reworded or reclassified to make a number come out. If
 the ceiling had reached the floor, the plan says to stop and report.
 ```
+
+**The second paragraph is an addition, not a replacement.** The host-same paragraph discloses a gap in filter 3's domain and stays exactly as it is; this discloses one in filter 2's. Both are written in the voice `src/classify/thresholds.ts` uses for a value that was never swept: say plainly what was not measured, and say what evidence there is instead.
 
 Count the doc's non-ASCII bytes before and after this edit and record both in the ledger - the classification table may carry a span with non-ASCII characters, and a doc is allowed to (this one already holds 165), but the count must be a number somebody chose, not a surprise:
 
@@ -1371,7 +1416,7 @@ Expected: **293 passed**, typecheck silent. If a test you did not touch fails, i
 ```bash
 cd C:/Users/noaho/testimonium-plan2 && grep -n "belowClaimFloor\|claimFloorMessage" src/ -r
 ```
-Expected: the two definitions in `src/io/claims.ts`, one use of each in `parseClaimsFile`, and one use of each in `src/check.ts` - **six lines**. Harvest's filter joins them in Task 7 and the count becomes eight. Record the count in the ledger; a floor whose third door was never wired is the silent-no-op class this repository keeps finding.
+Expected: **seven lines** - the two definitions in `src/io/claims.ts`, one use of each in `parseClaimsFile`, the `import { belowClaimFloor, claimFloorMessage } from "./io/claims.js";` line Step 6 adds to `src/check.ts` (one line, both names), and one use of each in `src/check.ts`. The import line counts because `grep -n` prints lines, not matches: it is expected, not a stray. Harvest's filter joins them in Task 7 and the count becomes ten. Record the count in the ledger; a floor whose third door was never wired is the silent-no-op class this repository keeps finding.
 
 - [ ] **Step 10: CHANGELOG**
 
@@ -2831,7 +2876,7 @@ Expected: FAIL, `expected { floor: 0, frequency: 1, ... } to deeply equal { floo
 ```bash
 cd C:/Users/noaho/testimonium-plan2 && grep -rn "belowClaimFloor\|claimFloorMessage" src/
 ```
-Expected: **eight lines** - two definitions, and one use of each in `src/io/claims.ts`, `src/check.ts` and `src/harvest/filters.ts`. Task 3 recorded six. Spec 7.3's "three sites" is now literally true; record the count in the ledger.
+Expected: **ten lines** - two definitions, one use of each in `src/io/claims.ts`, `src/check.ts` and `src/harvest/filters.ts`, and the import line in each of the latter two (one line apiece, both names; `grep -n` prints lines, not matches, so they are expected). Task 3 recorded seven. Spec 7.3's "three sites" is now literally true; record the count in the ledger.
 
 - [ ] **Step 9: Suite, byte checks, commit**
 
@@ -2970,15 +3015,25 @@ describe("the harvest draft file", () => {
     expect(draftInTheWay(join(tmpdir(), "tstm-no-such-file.claims.draft.json"))).toBeNull();
   });
 
-  it("is a claims file the loader accepts once the author renames it", () => {
+  it("is a claims file the loader accepts once the author renames it, zero-claim URLs omitted", () => {
     // The draft's whole purpose is to be folded into <doc>.claims.json. If
     // parseClaimsFile refused its shape - the _note, the URL keys, the arrays
     // - the migration path would not exist (Fable F8).
+    //
+    // A readable source that shares nothing with the draft proposes zero, and
+    // harvest() still reports it. Written as `"url": []` it would break the
+    // migration on the ORDINARY case: parseClaimsFile refuses an empty array
+    // ("claims must be a non-empty array"), so the rename would exit 2 naming
+    // a key the author never wrote (Fable F1). buildDraft omits the key.
     const d = buildDraft({
-      entries: [{ url: "https://e.com/a", claims: [CLAIM] }],
+      entries: [
+        { url: "https://e.com/a", claims: [CLAIM] },
+        { url: "https://e.com/empty", claims: [] },
+      ],
       version: "0.1.0",
       date: "2026-09-08",
     });
+    expect(Object.keys(d)).not.toContain("https://e.com/empty");
     const parsed = parseClaimsFile(JSON.stringify(d));
     expect([...parsed.keys()]).toEqual(["https://e.com/a"]);
     expect(parsed.get("https://e.com/a")).toEqual([CLAIM]);
@@ -3032,16 +3087,33 @@ export function isHarvestNote(note: unknown): boolean {
 export interface DraftInput {
   /** One entry per normalized URL, keyed by the FIRST citation spelling -
    *  two keys that normalize alike would be a collision `parseClaimsFile`
-   *  refuses, on the very file the author is about to rename (Fable F8). */
+   *  refuses, on the very file the author is about to rename (Fable F8). An
+   *  entry with no surviving claims is OMITTED rather than written as `[]`;
+   *  see `buildDraft`. */
   readonly entries: readonly { url: string; claims: readonly string[] }[];
   readonly version: string;
   readonly date: string;
 }
 
-/** The draft, in the claims-file shape, with `_note` first. */
+/**
+ * The draft, in the claims-file shape, with `_note` first.
+ *
+ * An entry with no surviving claims is OMITTED. `harvest()` reports one
+ * proposal per readable URL whether or not anything survived the filters -
+ * a readable source that shares nothing with the draft, or whose every span
+ * was filtered, is the ordinary case - and `parseClaimsFile` refuses `[]`
+ * ("claims must be a non-empty array"). Writing one would hand the author a
+ * file the tool's own loader rejects the moment she renames it, naming a key
+ * she never wrote, and `[]` is not a value the claims-file shape admits at
+ * all (7.3: a non-empty array of strings, or `notApplicable`). Nothing is
+ * lost: the per-URL report line has already told her that URL proposed 0.
+ */
 export function buildDraft(input: DraftInput): Record<string, unknown> {
   const draft: Record<string, unknown> = { _note: draftNote(input.version, input.date) };
-  for (const entry of input.entries) draft[entry.url] = [...entry.claims];
+  for (const entry of input.entries) {
+    if (entry.claims.length === 0) continue;
+    draft[entry.url] = [...entry.claims];
+  }
   return draft;
 }
 
@@ -3575,14 +3647,23 @@ Insert this block immediately after the `if (command === "reachability") { ... }
 
     const report = await harvest(document, { rules, ...(claims ? { claims } : {}) });
 
+    // Under --json, stdout carries the draft and NOTHING else, so
+    // `harvest doc.md --json > draft.json` produces a file `jq` and the
+    // author's editor can both read. The per-URL report is still written -
+    // she needs to know what each filter took - on stderr, where it does not
+    // corrupt the document. (`check --json` mixes the two on stdout; that
+    // inconsistency is plan 1's, and it is left where it is rather than
+    // widened to a third command. Fable F6.)
+    const say = asJson ? console.error : console.log;
+
     for (const p of report.proposals) {
-      console.log(
+      say(
         `  ${p.url} - ${p.claims.length} proposed via ${p.rungs.join(", ")} ` +
           `(dropped: ${p.drops.floor} below the floor, ${p.drops.frequency} also in another cited source, ` +
           `${p.drops.rules} by a boilerplate rule, ${p.drops.claimed} already claimed)`,
       );
       if (p.redirectedTo !== null) {
-        console.log(
+        say(
           `        REDIRECTED to ${p.redirectedTo} - a different path from the one you cited. ` +
             "Read these proposals against the page you actually got.",
         );
@@ -3590,21 +3671,26 @@ Insert this block immediately after the `if (command === "reachability") { ... }
       // A self-validation failure is a BUG in this tool, not a filter's work,
       // so it is labelled and it does not change the exit code (spec 8.2
       // step 4).
-      for (const bug of p.bugs) console.log(`        BUG: ${bug}`);
+      for (const bug of p.bugs) say(`        BUG: ${bug}`);
     }
     for (const u of report.unreachable) {
-      console.log(`  ${u.url} - UNREADABLE, nothing proposed (tried: ${u.rungsAttempted.join(", ")})`);
+      say(`  ${u.url} - UNREADABLE, nothing proposed (tried: ${u.rungsAttempted.join(", ")})`);
     }
     for (const s of report.skipped) {
-      console.log(`  ${s.url} - not applicable, skipped: ${s.reason}`);
+      say(`  ${s.url} - not applicable, skipped: ${s.reason}`);
     }
     if (report.frequencyVacuous) {
-      console.log(
+      say(
         "Fewer than two of your sources were readable, so the cross-source boilerplate filter " +
           "had nothing to compare against and dropped nothing.",
       );
     }
 
+    // Every readable URL is handed over, including the ones that proposed
+    // nothing; `buildDraft` is the single place that decides an empty entry
+    // is omitted rather than written as `[]`, which is what keeps the draft a
+    // file `parseClaimsFile` accepts on rename (Fable F1). The report line
+    // above already told the author which URLs proposed 0.
     const draft = buildDraft({
       entries: report.proposals.map((p) => ({ url: p.url, claims: p.claims })),
       version: VERSION,
@@ -3612,8 +3698,10 @@ Insert this block immediately after the `if (command === "reachability") { ... }
     });
 
     // --json prints instead of writing, the convention `reachability --json`
-    // follows. `check --json` prints IN ADDITION, and that inconsistency is
-    // plan 1's, recorded in spec 8.2 rather than resolved here.
+    // follows - and, like it, stdout is pure JSON: the report went to stderr
+    // above. `check --json` prints IN ADDITION on stdout, and that
+    // inconsistency is plan 1's, recorded in spec 8.2 rather than resolved
+    // here.
     if (asJson) {
       console.log(JSON.stringify(draft, null, 2));
     } else {
@@ -3635,16 +3723,23 @@ Insert this block immediately after the `if (command === "reachability") { ... }
 - [ ] **Step 5: Run the tests**
 
 Run: `cd C:/Users/noaho/testimonium-plan2 && npx vitest run test/bin.test.ts test/exports.test.ts`
-Expected: all pass, 4 more than before in `bin.test.ts`.
+Expected: all pass, **5** more than before in `bin.test.ts` - Step 1's three `describe`s hold 2 + 1 + 2 `it`s. Count them; the ladder above says 341 at this task and a ladder that disagrees with the file is a test that did not run.
 
 - [ ] **Step 6: Run the command against the repo's own example, end to end**
 
 A module-load check is not a test (spec 10): run the thing. The example document cites four live URLs, so this touches the network - it is a manual smoke run, not part of the suite.
 
 ```bash
-cd C:/Users/noaho/testimonium-plan2 && npm run build && node dist/bin.js harvest example/sample.md --json | head -40
+cd C:/Users/noaho/testimonium-plan2 && npm run build && node dist/bin.js harvest example/sample.md --json 2>/dev/null | head -40
 ```
-Expected: a JSON object whose first key is `_note` and whose value matches `draftNote(VERSION, today)`; one key per readable cited URL; and, on stdout above it, one report line per URL. `--json` must leave no file behind:
+Expected: a JSON object whose first key is `_note` and whose value matches `draftNote(VERSION, today)`, and one key per readable cited URL **that proposed at least one claim** - a readable URL whose spans were all filtered has no key at all (Fable F1). The per-URL report lines go to stderr, so `2>/dev/null` above removes them and leaves the JSON alone; run it once without the redirect to see them. That stdout is pure JSON is the point, and it is worth proving rather than eyeballing:
+
+```bash
+cd C:/Users/noaho/testimonium-plan2 && node dist/bin.js harvest example/sample.md --json 2>/dev/null | node -e "let s = ''; process.stdin.on('data', (d) => (s += d)).on('end', () => { const o = JSON.parse(s); console.log(Object.keys(o)[0], Object.keys(o).length); });"
+```
+Expected: `_note` and a key count - `JSON.parse` over the whole of stdout, with nothing stripped. If it throws, a report line is still on stdout.
+
+`--json` must leave no file behind:
 
 ```bash
 cd C:/Users/noaho/testimonium-plan2 && git status --short
@@ -3663,7 +3758,7 @@ Expected: `exit 0`, a `sample.claims.draft.json` beside the copy, and a summary 
 ```bash
 cd C:/Users/noaho/testimonium-plan2 && npm test && npx tsc --noEmit && git status --short && printf 'a\0b' | LC_ALL=C tr -cd '\000' | wc -c && for f in src/version.ts src/index.ts src/bin.ts test/bin.test.ts test/exports.test.ts; do printf "%s nonascii=" "$f"; LC_ALL=C tr -d '\000-\177' < "$f" | wc -c; printf "%s nul=" "$f"; LC_ALL=C tr -cd '\000' < "$f" | wc -c; done
 ```
-Expected: **340 passed**, typecheck silent, `git status --short` showing only the five files, self-test `1`, and `0` for all ten counts.
+Expected: **341 passed**, typecheck silent, `git status --short` showing only the five files, self-test `1`, and `0` for all ten counts.
 
 ```bash
 cd C:/Users/noaho/testimonium-plan2 && git add src/version.ts src/index.ts src/bin.ts test/bin.test.ts test/exports.test.ts && git -c core.safecrlf=false commit -m "feat(bin): the harvest command, draftPathFor, and one version string"
@@ -3676,7 +3771,7 @@ cd C:/Users/noaho/testimonium-plan2 && git add src/version.ts src/index.ts src/b
 **Files:**
 - Modify: `README.md` (the Commands block; a new `## Harvest` section; the migration note; the `finalUrl` clause at ~240; `## What's not here`; `## The real cost`)
 - Modify: `CHANGELOG.md` (the plan 2 section, appended to)
-- Modify: `docs/superpowers/specs/2026-09-06-testimonium-design.md` (7.3's measurement sentence; 8.2's "Thresholds" paragraph; 8.2's overwrite sentence)
+- Modify: `docs/superpowers/specs/2026-09-06-testimonium-design.md` (7.3's measurement sentence; 8.2's "Thresholds" paragraph; 8.2's overwrite sentence; 8.2 filter 2's reprint-calibration sentence; 13 Q3's resolution, which carries 7.3's numbers a second time)
 - Modify: `docs/calibration-2026-09.md` if any number moved after Task 2
 
 **Interfaces:**
@@ -3687,7 +3782,7 @@ cd C:/Users/noaho/testimonium-plan2 && git add src/version.ts src/index.ts src/b
 
 - [ ] **Step 1: The drift sweep, run before anything is written**
 
-Read `README.md` end to end and `docs/superpowers/specs/2026-09-06-testimonium-design.md` end to end, looking for sentences that plan 2 has made false. The five below were found on 2026-09-08 and are fixed in Steps 2-6. **Finding a sixth is the expected outcome, not a failure - add it, fix it, and record it in the ledger.**
+Read `README.md` end to end and `docs/superpowers/specs/2026-09-06-testimonium-design.md` end to end, looking for sentences that plan 2 has made false - or, in the last case, has failed to make true. The **nine** below were found on 2026-09-08 and are fixed in Steps 2-6. **Finding a tenth is the expected outcome, not a failure - add it, fix it, and record it in the ledger.** The count in this sentence is part of the instrument: a sweep instruction whose own list is miscounted teaches the executor to stop looking early.
 
 1. `README.md`, `## What's not here`: "This is plan 1 of three. `harvest` (propose candidate claims ...) and `recheck` ... are separate plans, not missing features of this one." Harvest ships in this plan.
 2. `README.md`, `## Commands`: the code block lists `check` and `reachability` only.
@@ -3696,11 +3791,13 @@ Read `README.md` end to end and `docs/superpowers/specs/2026-09-06-testimonium-d
 5. Spec 7.3:858-860: "the 203 distinct real claims in the origin repo's four claims files ... it refuses 18 of the 203 (9 percent)". The frozen population is a different size, and the paragraph's own last sentence says it is amended when the calibration re-derives.
 6. Spec 8.2, "Thresholds": the 24.8 / 5.0 / 0.9 / 0.2 figures and "that script's re-run" - there was no such script.
 7. Spec 8.2, step 6: "byte-identical to the marker harvest would write", read in Task 8 as "byte-identical outside the version and the date".
+8. Spec 13, Q3's resolution (the sentence spans :1262-1264; the numbers are on :1263-1264): "Section 7.3 carries the licence and the measurement: 203 real claims, chance matches at 3 and 12 characters and none above, 18 of 203 refused." **The twin of item 5, in a second place**, and the reason it is enumerated here rather than left to the grep: this repository has shipped the same falsified number in two places three times (R13; the plan-1.2 review's 6.3 finding). Fix the pair together or the spec disagrees with itself about its own calibration population.
+9. Spec 8.2, filter 2 (:1052-1054): "Plan 2's calibration counts how many real claims appear in two cited sources of the same draft, so the reprint cost is a number, not a guess." Plan 2 does **not** perform that count - Task 2 measures the floor against unrelated fixtures and the seed noise across unrelated fixture pairs, and the frozen corpus holds no readable reads of the drafts' own cited sources. This is the one item the sweep finds false because plan 2 failed to make it true, not because plan 2 falsified it, and it is amended rather than left to ship as a promise nobody kept (Step 6(e), and the disclosure Task 2 Step 13 adds).
 
 Run this to be sure nothing else names the old shape:
 
 ```bash
-cd C:/Users/noaho/testimonium-plan2 && grep -n "plan 1 of three\|separate plans\|no shortcut\|never compares\|203\|24.8" README.md docs/superpowers/specs/2026-09-06-testimonium-design.md
+cd C:/Users/noaho/testimonium-plan2 && grep -n "plan 1 of three\|separate plans\|no shortcut\|never compares\|203\|24.8\|reprint" README.md docs/superpowers/specs/2026-09-06-testimonium-design.md
 ```
 
 - [ ] **Step 2: README - the Commands block and the agreement paragraph**
@@ -3720,7 +3817,7 @@ testimonium harvest <doc.md>        propose claims. writes a draft, never the cl
 testimonium reachability <doc.md>   preflight. no claims file needed
 ```
 
-Then, in the paragraph that begins `Both read \`<doc>\` as GitHub-Flavored Markdown footnotes`, change `Both read` to `All three read` and append one sentence after `\`reachability\` needs neither.`:
+Then, in the paragraph that begins `Both read \`<doc>\` as GitHub-Flavored Markdown footnotes`, change **that opening** `Both read` to `All three read` - it is not the paragraph's only `Both`, see below - and append one sentence after `\`reachability\` needs neither.`:
 
 ```
 `harvest` reads `<doc>.claims.json` if it is there - to skip what you have
@@ -3731,7 +3828,20 @@ becomes one without you.
 
 Every clause is pinned: the notApplicable skip and the already-claimed drop by `test/harvest.test.ts` and `test/harvest/filters.test.ts`, the draft path by `test/bin.test.ts`'s `draftPathFor`.
 
-The following paragraph, about `reachability` and `check` agreeing, is about those two commands and stays as it is - do not widen it to three. `harvest` is not in `test/agreement.test.ts` and nothing pins an agreement property for it.
+**The agreement claim is in the SAME paragraph, not the following one** (README 318-325 is one paragraph), and the sentence the insertion lands directly in front of begins `Both read a URL through the same fetch ladder`. That claim is genuinely two-command and must NOT be widened to three - `harvest` is not in `test/agreement.test.ts` and nothing pins an agreement property for it - but after the insertion its `Both` follows a sentence about `harvest`, and reads as though it named `check` and `harvest`. Name the two, in the same edit. Replace
+
+```
+Both read a URL through the same fetch ladder, under the same rules,
+```
+
+with
+
+```
+`check` and `reachability` read a URL through the same fetch ladder, under the
+same rules,
+```
+
+and leave the rest of that sentence exactly as it is. Two `Both`s in one paragraph, one widened to three and one narrowed to two: the diff must show exactly those two changed openings and nothing else in the paragraph.
 
 - [ ] **Step 3: README - the `## Harvest` section**
 
@@ -3896,7 +4006,7 @@ Append to the `### Plan 2 (harvest)` section Task 3 opened, after the claim-floo
 
 - [ ] **Step 6: The spec amendments this plan forces**
 
-Three, each dated and each saying what it replaced - the discipline every earlier amendment in this document follows.
+**Five**, each dated and each saying what it replaced - the discipline every earlier amendment in this document follows. (a) and (d) are one falsified population in two places and are written as a pair: fixing one and not the other leaves the spec disagreeing with itself, which is the defect class this repository has shipped three times.
 
 **(a) 7.3, the measurement sentence** (~858-860). It currently reads `Measured on 2026-09-07 against the 203 distinct real claims in the origin repo's four claims files, chance matches against unrelated fixtures occurred at 3 and 12 normalized characters and never above 12; 16 is that ceiling plus margin, and it refuses 18 of the 203 (9 percent), each a number, a name or a fragment that states no proposition.` Replace with the sentence Task 2's run supports, **using that run's numbers**:
 
@@ -3942,16 +4052,59 @@ because the marker carries the date. The rule exists to detect the author's
 edits, and every byte outside those two fields carries that signal.)
 ```
 
+**(d) 13, Q3's resolution** (the sentence at ~1262-1264) - **(a)'s twin, written in the same sitting and from the same run's numbers.** It reads `Section 7.3 carries the licence and the measurement: 203 real claims, chance matches at 3 and 12 characters and none above, 18 of 203 refused.` Replace with:
+
+```
+Section 7.3 carries the licence and the measurement: <N> real claims, chance
+matches at 3 and 12 normalized characters and none above, <R> of <N> refused,
+re-derived <DATE> against the population frozen in `fixtures/claims/`. This
+line said "203 real claims" and "18 of 203" until then; 7.3 says why the
+population moved.
+```
+
+`<N>`, `<R>` and `<DATE>` are the same three values (a) uses. If the two amendments do not carry identical numbers, one of them is wrong - check both against the run before committing.
+
+**(e) 8.2, filter 2's calibration promise** (~1052-1054). It promises a measurement this plan does not make: `Plan 2's calibration counts how many real claims appear in two cited sources of the same draft, so the reprint cost is a number, not a guess.` The count is **not** performed and the sentence is amended to say so - the ruling, taken before this task and not re-opened in it. Replace with:
+
+```
+Plan 2's calibration did NOT count how many real claims appear in two cited
+sources of the same draft: the reprint cost - how many REAL claims this
+filter would eat - is a disclosed gap, not a number. Recorded <DATE>, where
+this sentence previously said the count would be made. The measurement needs
+readable reads of the frozen drafts' OWN cited sources, which the frozen
+corpus does not hold and which only live network reads could supply - a
+network dependency inside the one task whose purpose is that its numbers
+reproduce from frozen fixtures. What was measured instead is in
+`docs/calibration-2026-09.md`: the floor against unrelated document fixtures,
+and the seed noise across unrelated fixture pairs. That document's "What was
+NOT done" section carries this gap beside the host-same gap.
+```
+
+This is the disclosure voice `src/classify/thresholds.ts` already uses for the entries that were never swept - say plainly that it was not measured, and say what evidence there is instead. **Do not add the count.** A scripted live probe is out of scope for a task whose numbers must reproduce from frozen fixtures, and it would be the first network read in the suite's history. The matching disclosure in the calibration doc is Task 2 Step 13's, and it is a SECOND entry there: the existing one discloses filter 3's domain (no host-same pairs) and must not be overwritten.
+
 - [ ] **Step 7: Name every sentence's pin, then check the whole branch**
 
 For each sentence written in Steps 2-6, write the test that pins it into the ledger. Any sentence you cannot name a test for must be deleted or turned into one you can.
+
+Then write the ledger line plan 1.2 addressed to this plan, so the parked item does not evaporate from the record - the ruling is in "Decisions this plan takes", above, and the ledger is where a parked item is answered:
+
+```
+Plan 1.2 ledger, Task 5 minor (astral fold, "Park for plan 2 - harvest is the
+consumer"): RE-PARKED 2026-09-08, not fixed. Fixing it means making
+foldWithMap iterate by code point rather than by UTF-16 unit - a behaviour
+change to a primitive plan 1.2 stabilised and pinned - and harvest, its
+consumer, fails only in the safe direction: a span differing from the source
+only in the case of an astral character never matches, so the cost is a false
+MISS, never a false proposal and never a false accusation. Carried to a future
+plan with that argument on the record.
+```
 
 Then the whole-branch checks:
 
 ```bash
 cd C:/Users/noaho/testimonium-plan2 && npm test && npx tsc --noEmit && npm run build && git status --short
 ```
-Expected: **340 passed**, typecheck silent, build clean, and `git status --short` showing only `README.md`, `CHANGELOG.md` and the two docs (`dist/` is git-ignored).
+Expected: **341 passed**, typecheck silent, build clean, and `git status --short` showing only `README.md`, `CHANGELOG.md` and the two docs (`dist/` is git-ignored).
 
 ```bash
 cd C:/Users/noaho/testimonium-plan2 && printf 'a\0b' | LC_ALL=C tr -cd '\000' | wc -c && for f in $(git diff --name-only ff71ec8..HEAD; echo README.md CHANGELOG.md) ; do printf "%s nonascii=" "$f"; LC_ALL=C tr -d '\000-\177' < "$f" | wc -c; printf "%s nul=" "$f"; LC_ALL=C tr -cd '\000' < "$f" | wc -c; done
