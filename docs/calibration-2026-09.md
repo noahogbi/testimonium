@@ -1,12 +1,19 @@
 # Calibration of `minProseChars`
 
-**Date:** 2026-09-07 (round 3, after ruling C7) — supersedes the round-1 and round-2 records
-**Corpus:** `fixtures/corpus.json` — 33 calibrated fixtures: 24 `challenge`, 9 `document`.
-A 34th row was added later with `"kind": "known-gap"`; it is **not** a population member and
-no number on this page counts it. See "Known gap" below.
+**Date:** 2026-09-07 (round 3, after ruling C7) — supersedes the round-1 and round-2 records.
+Round 3's own baseline numbers were then overtaken twice more, same day: the entity-decoding
+fix (`6932e5e`, `4e47996`) changed several fixtures' extracted length before Task 3 added two
+more fixtures on top. **Every number on this page has been re-verified against both changes**
+by Task 4 (plan 1.1) - re-run the reproduce line below rather than trust a number here that
+looks stale.
+**Corpus:** `fixtures/corpus.json` — round 3 calibrated against 33 fixtures: 24 `challenge`,
+9 `document`. Task 3 added 2 more (see "Two new body shapes" below), and a known-gap row
+(below that) is filed separately; the corpus is now 36 rows: 25 `challenge`, 10 `document`,
+1 `known-gap`. The known-gap row is **not** a population member and no number on this page
+counts it.
 **Instrument:** `toText` (Task 3) then `proseVolume` (`src/classify/thresholds.ts`), with
-N4 (HTTP 404/410 veto) applied first
-**Reproduce:** `npm run build && node scripts/calibrate.mjs && npx vitest run`
+N4 (HTTP 404/410 veto) and N5 (non-text veto, Task 2) applied first
+**Reproduce:** `npm run build && node scripts/calibrate.mjs && node scripts/sweep-floor.mjs && npx vitest run`
 
 ## Outcome: the gate closes
 
@@ -24,49 +31,83 @@ otherwise try to add it back.
 
 ## What licenses the floor
 
+**Re-verified for Task 4 (plan 1.1)** against the current 36-row corpus. Two of round 3's
+own numbers below moved since they were first recorded - the smallest real document dropped
+from 6,858 to 6,394 (the entity-heavy fixture Task 3 added is smaller than round 3's
+smallest), and the ECB fixture's extracted length dropped from 13,221 to 13,216 once the
+entity-decoding fix landed (`6932e5e`, `4e47996`) - and every downstream figure that depends
+on them (gap, clear air, the sweep) is recomputed from the corrected numbers, not carried
+forward by arithmetic on the old ones.
+
 | quantity | value |
 |---|---:|
-| largest challenge fixture **not** vetoed by N4 | 1,180 |
-| smallest real document | 6,858 |
-| gap | 5,678 |
+| largest challenge fixture that no veto rejects | 1,180 |
+| smallest real document | 6,394 ‡ |
+| gap | 5,214 |
 | **chosen floor** | **4,500** |
 | clear air below the floor | 3,320 |
-| clear air above the floor | 2,358 |
+| clear air above the floor | 1,894 |
 
-Both margins are more than ten times the 200-character margin the acceptance test
-requires. A sweep of every integer floor from 1 to 120,000 finds **5,279 values** that
-satisfy all four assertions, a contiguous range of `[1,380, 6,658]`; 4,500 sits 3,120
-above its lower bound and 2,158 below its upper. The choice is not delicate.
+**‡ The smallest real document is a CONSTRUCTED fixture, and it sets the sweep's upper
+bound.** `documents/entity-heavy-article.html` was authored for Task 3 (plan 1.1) to
+exercise the entity table; it is real-*shaped*, not a real capture, and the rest of this
+page marks non-measured properties with a dagger for exactly this reason. At 6,394 it is
+now the corpus's smallest document, below the smallest real capture
+(`blog-mozilla-org-en-.html`, 6,858), so it - not a measured page - is what caps the floor
+sweep, moving that cap from 6,658 to 6,194. Two consequences worth being explicit about:
+the upper end of the licensed range is now set by a file this project wrote, and shortening
+that fixture would narrow the range further. Neither affects the chosen floor of 4,500,
+which sits far from both ends, but neither should be discovered later either.
 
-The two challenge fixtures that extract far past this floor — the Cloudflare blog 404 at
-2,154 and the ECB 404 at 13,221 — are both served **404** and are rejected by N4 before
-prose volume is consulted. That is the whole reason the floor gets to be this comfortable.
-**N4 is load-bearing**: without it, the ECB page alone makes these assertions
-unsatisfiable, which is exactly what round 1 measured.
+Both margins are more than nine times the 200-character margin the acceptance test
+requires. `scripts/sweep-floor.mjs` (added for this re-verification, so the figure can be
+re-run rather than trusted) sweeps every integer floor from 1 to 120,000 and checks all four
+acceptance assertions at each one; it finds **4,815 values** that satisfy every assertion, a
+contiguous range of `[1,380, 6,194]`. 4,500 sits 3,120 above its lower bound and 1,694 below
+its upper. The choice is not delicate. (Both figures re-run 2026-09-07 after plan 1.1's
+final fix round, against a fresh `npm run build`: unchanged.)
+
+The three challenge fixtures that extract far past this floor — the Cloudflare blog 404 at
+2,154, the PDF-binary fixture (Task 3) at 6,221, and the ECB 404 at 13,216 — never reach
+prose volume: the two 404s are rejected by **N4** and the PDF binary, served at 200, is
+rejected by **N5** (it is not text at all). That is the whole reason the floor gets to be
+this comfortable. **N4 and N5 are both load-bearing now**: without N4, the ECB page alone
+makes these assertions unsatisfiable (round 1's finding); without N5, the PDF-binary
+fixture's 6,221 extracted characters would sit inside the gap between 1,180 and 6,394 and
+collapse most of it.
 
 ## The two populations
 
-### `challenge` (n = 24)
+**Re-verified for Task 4 (plan 1.1)** to include Task 3's two additions and the
+entity-decoding drift; both population counts and the challenge maximum changed from
+round 3's original record.
 
-Prose volume: min 43, max 13,221. **Excluding the two N4-vetoed fixtures: 43 to 1,180.**
-Status: 22 at 200, 2 at 404.
+### `challenge` (n = 25)
 
-### `document` (n = 9)
+Prose volume: min 43, max 13,216. **Excluding the three vetoed fixtures (two by N4, one by
+N5): 43 to 1,180.** Status: 23 at 200, 2 at 404.
 
-Prose volume: min 6,858, max 108,257. Status: all 200.
+### `document` (n = 10)
+
+Prose volume: min 6,394, max 108,248. Status: all 200.
 
 ### Read together
 
-The 22 challenge fixtures that reach the body-derived gate span 43–1,180. The nine
-documents span 6,858–108,257. Nothing lies between 1,180 and 6,858. The separation is not
-marginal, and no fixture sits near the boundary from either side.
+The 22 challenge fixtures that reach the body-derived gate span 43–1,180. The ten
+documents span 6,394–108,248. Nothing lies between 1,180 and 6,394 **among fixtures that
+reach the gate** - but the PDF-binary fixture's own raw prose volume, 6,221, sits inside
+that numeric gap. It never reaches prose volume at all: N5 vetoes it first, on body shape
+rather than length, which is exactly why N5 has to run before the floor is consulted rather
+than being another number to tune. The separation among fixtures the floor actually judges
+is not marginal, and no such fixture sits near the boundary from either side.
 
 ## Which mechanism does the separating, for which fixtures
 
 | mechanism | fixtures decided | notes |
 |---|---:|---|
 | **N4 (HTTP 404/410 veto)** | 2 challenge (#23, #24) | The Cloudflare blog 404 and the ECB 404. Both statuses measured twice. Neither is separable by body shape — the ECB page out-extracts two real documents. |
-| **Prose volume >= 4,500** | 22 challenge (#1–#22), 9 document (#25–#33) | Every one clears by margin. Largest challenge in this group is 1,180 against a 4,500 floor; smallest document is 6,858. |
+| **N5 (non-text veto, Task 2)** | 1 challenge (`pdf-binary-served-at-200.bin`, Task 3 - not one of the 33 numbered rows below; see "Two new body shapes") | Extracts to 6,221 characters, past the 4,500 floor on length alone, and served at 200 so N4 does not see it either. Only a check on the raw body's own bytes catches it. |
+| **Prose volume >= 4,500** | 22 challenge (#1–#22), 10 document (#25–#33 plus `entity-heavy-article.html`, Task 3 - not row-numbered below) | Every one clears by margin. Largest challenge in this group is 1,180 against a 4,500 floor; smallest document is 6,394 (`entity-heavy-article.html`), not 6,858 as recorded when this table was first written - see "Two new body shapes". |
 | **Slug/label overlap** | **0** | Withdrawn from the verdict. Still computed and printed. See below. |
 
 ## Why C1 was withdrawn — the finding worth keeping
@@ -150,7 +191,10 @@ prose volume instead.
 
 ## Per-fixture data (all 33)
 
-A dagger marks a stipulated status. Overlap is reported but does not gate.
+A dagger marks a stipulated status. Overlap is reported but does not gate. This table is
+round 3's original 33 rows only; Task 3's two additions (`pdf-binary-served-at-200.bin` and
+`entity-heavy-article.html`) are not numbered here - see "Two new body shapes" below for
+those.
 
 | # | fixture | kind | status | prose | overlap | outcome | decided by |
 |---:|---|---|---:|---:|---:|---|---|
@@ -177,16 +221,21 @@ A dagger marks a stipulated status. Overlap is reported but does not gate.
 | 21 | `challenge/cloudflare-turnstile-cookie-privacy-boilerplate-800-chars.html` | challenge | 200 † | 982 | 0.00 | rejected | prose (3,518 clear) |
 | 22 | `challenge/www-federalregister-gov-documents-2024-01-29-2024-01580-.html` | challenge | 200 | 1,180 | 0.00 * | rejected | prose (3,320 clear) |
 | 23 | `challenge/blog-cloudflare-com-cloudflare-incident-on-november-18-2025-.html` | challenge | 404 | 2,154 | 0.33 | rejected | **N4 veto** |
-| 24 | `challenge/www-ecb-europa-eu-press-pr-date-2024-html-index-en-html.html` | challenge | 404 | 13,221 | 1.00 | rejected | **N4 veto** |
+| 24 | `challenge/www-ecb-europa-eu-press-pr-date-2024-html-index-en-html.html` | challenge | 404 | 13,216 | 1.00 | rejected | **N4 veto** |
 | 25 | `documents/blog-mozilla-org-en-.html` | document | 200 | 6,858 | 0.00 | reaches accusation | prose (2,358 clear) |
 | 26 | `documents/www-theverge-com-tech.html` | document | 200 | 16,449 | 1.00 | reaches accusation | prose (11,949 clear) |
-| 27 | `documents/developer-mozilla-org-en-US-docs-Web-HTTP-Status.html` | document | 200 | 23,601 | 0.50 * | reaches accusation | prose (19,101 clear) |
-| 28 | `documents/www-bls-gov-news-release-cpi-nr0-htm.html` | document | 200 | 24,254 | 1.00 | reaches accusation | prose (19,754 clear) |
-| 29 | `documents/docs-python-org-3-library-json-html.html` | document | 200 | 26,592 | 1.00 | reaches accusation | prose (22,092 clear) |
-| 30 | `documents/www-gov-uk-government-news.html` | document | 200 | 33,076 | 1.00 | reaches accusation | prose (28,576 clear) |
+| 27 | `documents/developer-mozilla-org-en-US-docs-Web-HTTP-Status.html` | document | 200 | 23,595 | 0.50 * | reaches accusation | prose (19,095 clear) |
+| 28 | `documents/www-bls-gov-news-release-cpi-nr0-htm.html` | document | 200 | 24,248 | 1.00 | reaches accusation | prose (19,748 clear) |
+| 29 | `documents/docs-python-org-3-library-json-html.html` | document | 200 | 26,208 | 1.00 | reaches accusation | prose (21,708 clear) |
+| 30 | `documents/www-gov-uk-government-news.html` | document | 200 | 33,070 | 1.00 | reaches accusation | prose (28,570 clear) |
 | 31 | `documents/apnews-com-hub-technology.html` | document | 200 | 45,390 | 1.00 | reaches accusation | prose (40,890 clear) |
-| 32 | `documents/openai-com-index-gpt-4o-system-card-.html` | document | 200 | 76,936 | 1.00 | reaches accusation | prose (72,436 clear) |
-| 33 | `documents/en-wikipedia-org-wiki-Textual-criticism.html` | document | 200 | 108,257 | 1.00 | reaches accusation | prose (103,757 clear) |
+| 32 | `documents/openai-com-index-gpt-4o-system-card-.html` | document | 200 | 76,930 | 1.00 | reaches accusation | prose (72,430 clear) |
+| 33 | `documents/en-wikipedia-org-wiki-Textual-criticism.html` | document | 200 | 108,248 | 1.00 | reaches accusation | prose (103,748 clear) |
+
+*(Rows 24, 27–30, 32, and 33 were corrected for Task 4, plan 1.1: their extracted lengths
+shifted by a few characters each after the entity-decoding fix (`6932e5e`, `4e47996`) landed,
+after round 3's numbers above were first recorded. Confirmed directly against `toText`'s
+current output, not carried forward from the old table by arithmetic.)*
 
 The overlap column is what `scripts/calibrate.mjs` prints today: the current
 `slugLabelOverlap`, URL path only, with no label supplied by the corpus. `*` marks the two
@@ -213,11 +262,11 @@ What it exposes, measured through the shipped pipeline:
 
 | body | status | prose | bundled signature? | verdict |
 |---|---:|---:|---|---|
-| ECB error page, real capture | 404 | 13,221 | none matches | `unreachable` (N4) |
-| the identical bytes | 200 | 13,221 | none matches | **`unsupported`** |
+| ECB error page, real capture | 404 | 13,216 | none matches | `unreachable` (N4) |
+| the identical bytes | 200 | 13,216 | none matches | **`unsupported`** |
 
 So on this page **N4 is the only thing standing between an author and a false
-accusation.** Nothing about the body rejects it: 13,221 characters of intact navigation
+accusation.** Nothing about the body rejects it: 13,216 characters of intact navigation
 chrome out-extracts two real documents in the corpus, and it carries no wording the
 challenge-signature list recognizes.
 
@@ -236,12 +285,214 @@ cost on both sides (raising the floor loses genuine short documents; extending t
 signature veto to long bodies loses articles that discuss bot walls). Moving a calibrated
 number is not a bug fix, and it would invalidate this page's measurements.
 
+## Five more known gaps, disclosed but not fixed (Task 4, plan 1.1)
+
+**Added 2026-09-07; two more appended during the final fix round the same day.** Found
+during Task 2's and Task 3's reviews and then the whole-branch review, none pinned by a
+fixture - three are code-shape gaps a corpus fixture cannot cleanly isolate without also
+demonstrating the fix, and two are fixed nowhere in this plan on purpose. Recorded the same
+way the ECB known-gap above is: named plainly rather than left to be found in production.
+
+Figures marked *[re-measured 2026-09-07]* were run again against the built `dist/` of the
+branch as it now stands, during the final fix round. The one figure on this page that
+cannot be reproduced from anything in this repository is the arxiv density below: it came
+from a live fetch, and it is left as originally recorded rather than restated as if it had
+been checked again.
+
+### All-ASCII non-prose evades N5
+
+N5's `looksBinary` (`src/classify/signals.ts`) counts replacement characters and control
+bytes. Text encoded as base64, ASCII85, or PostScript's own text operators is neither of
+those - it is printable ASCII, just not prose - so under a textual (or absent) `content-type`
+it passes both of N5's checks. Measured directly *[re-measured 2026-09-07]*: a
+26,668-character body of pure base64 (`Buffer.from(...).toString("base64")`, headers `{}`,
+status 200) computes `notText: false` and reaches `verdict: "unsupported"` against a claim
+it plainly does not contain - a live route to a false accusation, not a theoretical one.
+Closing it needs a design for what "not prose" means beyond byte-level noise, which this
+plan has not done.
+
+### A binary tail past 64KB evades `looksBinary`
+
+`looksBinary` samples only the first `THRESHOLDS.binarySampleCodePoints` (65,536) code
+points of the raw body. Measured directly *[re-measured 2026-09-07]*: a 72,000-character
+clean ASCII prose head followed by a control-byte tail (16,000 more characters) computes
+`notText: false`, because the sample never reaches the tail - the body is 18% binary
+overall and measures exactly 0 inside the window. Narrow -
+the real arxiv PDF fixture behind Step 1's recovery is already about 59% binary within its
+own first 64KB when decoded as UTF-8 (measured directly against the live paper at
+`https://arxiv.org/pdf/1706.03762v7`, 38,579 of 65,517 sampled code points), so a real PDF is
+unlikely to trigger this - but nothing stops a body deliberately shaped to keep its binary
+content past the sample boundary. Widening or removing the sample is an unreviewed change to
+a shipped veto's behavior, not a documentation fix, so it is disclosed here instead. The gap
+is now pinned by a characterization test in `test/classify/signals-nottext.test.ts` that
+says in its title that it documents a known gap, so the gap cannot change size silently.
+
+### An uncompressed PDF inside the window evades `looksBinary` too
+
+**Added 2026-09-07, final fix round.** The third N5 evasion, and the one neither disclosed
+gap above covers: the body is entirely INSIDE the sample window and it does carry real
+control bytes. There are simply not enough of them.
+
+Measured directly *[re-measured 2026-09-07]*: an uncompressed PDF - text operators plus a
+single 500-character embedded-font binary object - of 55,668 characters computes
+
+| quantity | value |
+|---|---:|
+| body length (characters, and code points) | 55,668 |
+| entirely inside the sample window | yes |
+| binary characters | 500 |
+| measured density | 0.00898 |
+| `notText` | **false** |
+| `check()` verdict | **`unsupported`**, with the claim named in `missed` |
+
+against a threshold of 0.01. The precondition is the same as the base64 gap's - an absent or
+lying `content-type`, since a truthful `application/pdf` trips N5's other trigger first -
+but uncompressed content streams are an ordinary PDF shape, not a constructed oddity.
+
+**Not closed by moving the threshold.** 0.00898 sits close enough to 0.01 that tightening
+the number would appear to fix it, and that is exactly why it was left alone:
+`maxBinaryDensity` has never been swept against real pages with genuinely low but non-zero
+binary density (see "The two N5 constants" below), so lowering it would trade a disclosed
+evasion for an undisclosed false-accusation risk on legitimate documents. That is a
+calibration decision and it needs the sweep first.
+
+### A claim inside an HTML comment can attest `supported`
+
+Verified live on current `main`: `toText` strips HTML tags but not comment bodies, and a
+commented-out block of markup always contains a `>`, which is enough to leak into the
+extracted prose. A claims-file phrase present only inside `<!-- ... -->` - never in anything
+a reader would see rendered - can therefore verify as `supported`: a false attestation from
+text no reader sees. It is disclosed rather than fixed here because fixing it can only move a
+verdict *toward* `unsupported`, which this plan's constraints forbid; it is plan 2 work. See
+the README's "What this does not do" for the same disclosure aimed at a user rather than a
+maintainer.
+
+### The soft hyphen decodes but `norm()` does not strip it - a false MISS
+
+**Added 2026-09-07, final fix round.** The one gap on this page that runs in the ACCUSATION
+direction, and until now it was disclosed nowhere at all - not here, not in the README.
+
+`&shy;` (U+00AD SOFT HYPHEN) is a rendering hint: a browser shows `co&shy;operation` as
+*cooperation* and breaks the word there only if the line runs out. Task 1 added `shy` to the
+entity table, so `toText` now decodes it into a literal U+00AD in the extracted text.
+`norm()` does not remove it - U+00AD is outside both of `norm()`'s stripping ranges, which
+cover U+200B..U+200F plus U+2060 and U+FEFF for zero-widths, and U+2010..U+2015 plus U+2212
+for dashes. (Written as code points deliberately: every character in those two ranges is
+either invisible or indistinguishable from an ASCII hyphen in an editor, and this
+repository has twice been corrupted by pasting such characters literally.)
+
+Measured directly *[re-measured 2026-09-07]* on a paragraph reading
+`closer co&shy;operation on enforcement`:
+
+| claim | `phraseFound` |
+|---|---|
+| `cooperation` | **false** |
+| `co-operation` | **false** |
+
+Both spellings a reader might reasonably copy out miss. On a body above the 4,500-character
+prose floor that is an `unsupported` verdict against an accurate citation.
+
+**Not a regression** - it missed before this branch too, because before Task 1 the entity
+did not decode at all and the raw `&shy;` sat in the text instead. Adding `shy` to the table
+changed which character breaks the match, not whether it breaks. The fix belongs with
+`norm()`'s folding table and is parked for plan 2; it is recorded here because it was the
+only one of these gaps written down nowhere.
+
+## The two N5 constants, and what does and does not license them
+
+**Added 2026-09-07, final fix round.** `THRESHOLDS.maxBinaryDensity` (0.01) and
+`THRESHOLDS.binarySampleCodePoints` (65,536) moved out of `src/classify/signals.ts`, where
+they were bare literals, into `src/classify/thresholds.ts` alongside `minProseChars` and
+`maxChallengeChars`. **Neither value was changed.**
+
+**They are not licensed the way `minProseChars` is, and this page should not be read as if
+they were.** There is no sweep behind either one. `scripts/sweep-floor.mjs` varies the prose
+floor and nothing else; the acceptance test in `test/classify/acceptance.test.ts` licenses
+the floor and nothing else. What exists instead is a gap between two measured populations
+that sit nowhere near each other:
+
+| population | measured binary density | when |
+|---|---:|---|
+| all 34 pre-Task-3 corpus fixture rows | **0.0000** (maximum over all 34, not a mean) | re-measured 2026-09-07 |
+| `fixtures/challenge/pdf-binary-served-at-200.bin` | **0.5315** | re-measured 2026-09-07 |
+| real arxiv PDF bytes | 0.5888 | plan 1.1 reviewer, live fetch (38,579 binary of 65,517 sampled code points); not reproducible from this repo |
+| constructed binary wrapped in tag-shaped spans | 0.316 | plan 1.1 reviewer; not reproducible from this repo |
+
+The arxiv row was reported as 0.5887 when it was taken, computed against the 65,536-**unit**
+sample window that shipped at the time. The same raw counts over **code points** - the unit
+the scan uses now - give 0.5888. That difference is exactly the unit mismatch this round
+closed, and it is worth leaving visible: the old denominator understated every density it
+measured, always in the direction that withholds a veto.
+
+So every measurement to date is either exactly zero or above 0.3, and 0.01 is an arbitrary
+point inside a 0.3-wide empty band. **The measurement that would matter has not been made:
+a sweep over legitimate pages with genuinely low but non-zero binary density, which is what
+would say how much room the threshold has on the tolerant side.** That sweep is deferred.
+Until it exists, moving the number in either direction is guesswork - which is why the
+uncompressed-PDF evasion above, at 0.00898, is disclosed rather than closed.
+
+The sample window is a cost bound rather than a measurement: 65,536 code points covers every
+corpus fixture whole and avoids scanning multi-megabyte bodies to answer a yes/no question.
+No page was ever measured to choose it.
+
+Both constants are now bracketed by characterization tests in
+`test/classify/signals-nottext.test.ts` - a body at density 0.02 is vetoed, one at 0.005 is
+not, and binary beginning 2,000 characters in is detected. Before those tests, mutating
+0.01 to 0.5 and 65,536 to 1,024 each killed **zero** tests; each mutant is now killed by the
+test that names it.
+
+## Two new body shapes (Task 3, plan 1.1)
+
+**Added 2026-09-07.** Every fixture calibrated above — all 33 rows, and the known-gap
+duplicate — is a friendly HTML page. Nothing in the corpus was ever a binary body or a body
+dense with HTML entities, which is precisely why the two defects this plan fixes (the
+un-vetoed content-negotiated PDF, and gaps in the entity table) survived sixteen reviews of
+the original work. Two fixtures close that hole. The corpus is now 36 entries: 25
+`challenge`, 10 `document`, 1 `known-gap`.
+
+### `challenge/pdf-binary-served-at-200.bin`
+
+A synthetic but structurally faithful PDF — `%PDF-1.7` header, object dictionaries, a
+16,384-byte binary `stream`/`endstream` block, an `xref` table — filed `kind: "challenge"`,
+`status: 200`, at `https://arxiv.org/abs/2401.01234v2` (no `.pdf`, no `/pdf/` segment: the
+content-negotiated shape N4/N3 cannot see and N5 exists for).
+
+This pins N5 (`notText`, the "body is not text at all" veto added in `78881e3`). Decoded as
+UTF-8 and run through `toText`, the binary stream extracts to 6,221 characters —
+**above** the 4,500-char floor by 1,721, with plenty of margin. That is the load-bearing
+property: an earlier size (8KB of stream) was rejected in review because it measured a
+median of 4,087 extracted characters across 200 random draws and fell below the floor
+75.5% of the time — meaning the fixture would have pinned nothing, and pass or fail purely
+on the floor rather than on N5. `test/classify/corpus-verdict.test.ts` asserts
+`proseVolume(toText(...)) >= THRESHOLDS.minProseChars` directly on this fixture so that
+claim cannot silently stop being true; without that assertion the fixture would fail
+*silently*, because N5 vetoes either way in this file's `headers: {}` context and every
+test would stay green regardless of which gate actually did the rejecting.
+
+### `documents/entity-heavy-article.html`
+
+A **constructed** (authored here, not captured) real-shaped news article using six
+spellings of non-ASCII prose across its body:
+`&mdash;`, `&#8212;`, and `&#x2014;` (three encodings of the same em dash), `&eacute;` /
+`&Eacute;`, `&hellip;`, `&nbsp;`, `&amp;`, and `&lt;`. `kind: "document"`, `status: 200`.
+Extracts to 6,394 characters, clear of the floor (and the 200-char margin) by 1,894.
+
+This is the only end-to-end pin of Task 1's entity-table work. The corresponding test does
+**not** call `run(f, [])` — `verdict()` returns `"unclaimed"` on `total === 0` before any
+veto runs, so an empty-claims call would pass for any fixture, challenge shells included,
+and assert nothing. Instead the test supplies a claim written the way a reader would type
+it after reading the rendered page — `RENDERED_CLAIM`, built with `String.fromCodePoint`
+so the test file itself stays ASCII — while the fixture spells the identical sentence with
+entities. The pipeline is required to decode the entities and report `"supported"`.
+
 ## What was NOT done
 
 No fixture was dropped, omitted, or reclassified across any of the three rounds. The
 200-character margin is untouched. No assertion was weakened or deleted — the two margin
 assertions still demand 200 characters of clear air, and every fixture now provides at
-least 2,358. `proseVolume` and `slugLabelOverlap` are byte-for-byte as specified in the
+least 1,894 (`entity-heavy-article.html`, the new smallest document - see above; unchanged
+on the challenge side, where the tightest margin is still 3,320). `proseVolume` and
+`slugLabelOverlap` are byte-for-byte as specified in the
 brief. No status was guessed, and none was set to 404 or 410 for convenience.
 
 The gate closes because a signal that could not do its job was removed after being

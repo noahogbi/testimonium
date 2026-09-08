@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { check } from "../src/check.js";
+import { THRESHOLDS, proseVolume } from "../src/classify/thresholds.js";
+import { toText } from "../src/text/extract.js";
 import type { Fetcher, RawResponse, RungId } from "../src/fetch/types.js";
 import { CHALLENGE_PATHS, CHALLENGE_SIGNATURES, type Rule } from "../src/rules/challenge.js";
 import { HOST_RULES } from "../src/rules/hosts.js";
@@ -64,6 +66,37 @@ describe("check", () => {
       fetcher: stub({
         node: { rawBody: LONG_PROSE, status: 200, headers: { "cf-mitigated": "challenge" } },
         curl: { rawBody: LONG_PROSE, status: 200, headers: { "cf-mitigated": "challenge" } },
+      }),
+    });
+    expect(r.verdict).toBe("unreachable");
+  });
+
+  it("honors N1 from a caller's fetcher that returns WIRE-CASED header keys", async () => {
+    // A demonstrated false accusation. Header field names are case-insensitive
+    // on the wire, and `Record<string, string>` is not. Both bundled fetchers
+    // lowercase their keys as an implementation detail; nothing in the
+    // RawResponse contract ever required it, so a caller-supplied
+    // CheckOptions.fetcher - the documented bring-your-own-reader escape hatch
+    // - that passes headers through as the server cased them used to lose N1
+    // silently, and this exact input returned `unsupported` with the claim
+    // named in `missed`. The body is padded past the prose floor so nothing
+    // else can be doing the rejecting.
+    const r = await check("https://e.com/a", ["a claim this wall does not carry"], {
+      fetcher: stub({
+        node: { rawBody: LONG_PROSE, status: 200, headers: { "CF-Mitigated": "challenge" } },
+        curl: { rawBody: LONG_PROSE, status: 200, headers: { "CF-Mitigated": "challenge" } },
+      }),
+    });
+    expect(r.verdict).toBe("unreachable");
+  });
+
+  it("honors N5's content-type trigger from a WIRE-CASED header key and value", async () => {
+    // The same defect on N5's independent trigger, and cased both ways at
+    // once: `Content-Type` as a key, `APPLICATION/PDF` as a value.
+    const r = await check("https://e.com/a", ["a claim these bytes do not carry"], {
+      fetcher: stub({
+        node: { rawBody: LONG_PROSE, status: 200, headers: { "Content-Type": "APPLICATION/PDF" } },
+        curl: { rawBody: LONG_PROSE, status: 200, headers: { "Content-Type": "APPLICATION/PDF" } },
       }),
     });
     expect(r.verdict).toBe("unreachable");
@@ -148,8 +181,23 @@ describe("check", () => {
     // proved, because `proven` is found by scanning `reads` for the first one
     // whose OWN verdict is `supported` - a rung that comes later and is itself
     // gone does not get consulted at all once that happens.
+    //
+    // THE 404 BODY HAS TO BE THE LARGER READ, and that is the whole reason it
+    // is shaped this way. Every cross-rung test on this branch once used a
+    // vetoed body SMALLER than the stub, so the fallback reducer - largest
+    // prose volume wins - picked the same read `proven` picks and `proven`
+    // discriminated nothing: deleting it left the entire suite green. The body
+    // below is the shape the corpus's real ECB capture has, heavy navigation
+    // chrome served at 404 (13,216 extracted characters there), reproduced
+    // inline rather than read from fixtures/corpus.json because this file
+    // deliberately holds no fixture reads - and because a test whose
+    // discriminating power depends on a captured file's SIZE would degrade
+    // silently the day that file was re-captured. The two assertions below
+    // pin the property instead of trusting it.
     const shortStub = `<html><body><p>The committee report states that spending rose sharply.</p></body></html>`;
-    const gone = `<html><body>Not Found</body></html>`;
+    const gone = `<html><body><nav>${"Home Publications Statistics Press Media Careers Legal notice Privacy statement Accessibility Sitemap Contact. ".repeat(130)}</nav><p>The page you requested could not be found.</p></body></html>`;
+    expect(proseVolume(toText(gone))).toBeGreaterThan(proseVolume(toText(shortStub)));
+    expect(proseVolume(toText(gone))).toBeGreaterThanOrEqual(THRESHOLDS.minProseChars);
     const r = await check("https://e.com/committee-report", ["spending rose sharply"], {
       fetcher: stub({ node: { rawBody: shortStub, status: 200 }, curl: { rawBody: gone, status: 404 } }),
     });
@@ -333,7 +381,7 @@ describe("check", () => {
     // A server is not authoritative about PRESENCE, which is why 2xx is never
     // proof of a read - but it IS authoritative when it says a resource does
     // not exist. Calibration forced this: no prose floor could reject a real
-    // ECB 404 serving 13,221 characters of navigation chrome, and with the
+    // ECB 404 serving 13,216 characters of navigation chrome, and with the
     // veto removed zero thresholds satisfied the acceptance test.
     //
     // The cost is recorded and accepted: a misconfigured host serving a real

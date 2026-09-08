@@ -111,13 +111,62 @@ before you trust a green run to mean more than it does.
   contain is the honest half of that sentence; the rest of it used to read
   "every verdict is a string search over fetched text, nothing more", and
   that was false. `supported` and the `missed` list are string searches.
-  `unreachable` is decided from **five** inputs: the HTTP status (404/410),
+  `unreachable` is decided from **seven** inputs: the HTTP status (404/410),
   a vendor challenge response header, the post-redirect URL, a length
-  threshold on the extracted text, and a match against the bundled
-  challenge-signature list. That fifth input *is* a search of the prose -
-  twelve regexes over the normalized extracted text
+  threshold on the extracted text, a match against the bundled
+  challenge-signature list, the response's **`content-type`**, and whether
+  the raw body looks like binary. The fifth of those *is* a search of the
+  prose - twelve regexes over the normalized extracted text
   (`src/rules/challenge.ts`), and a hit feeds the blocked decision directly.
-  What none of the five involve is a model.
+  The last two are **N5**, and they are independent of each other: either one
+  alone forces `unreachable`. A `content-type` outside the accepted set - any
+  `text/*`, plus `application/xml`, `application/xhtml+xml`,
+  `application/json`, and anything ending `+xml` or `+json` - is enough on its
+  own, whatever the body turns out to contain; separately, a raw body dense
+  with replacement characters and
+  control codes - measured before any tag-stripping - is not prose in any
+  script, since CJK, emoji and mathematical notation all sit above U+0020.
+  Between them they are what stops a content-negotiated PDF from reading as a
+  giant wall of "text" and turning an accurate citation into an accusation. A
+  **missing** `content-type` counts as textual, and has to: the PDF rung
+  returns extracted text with no headers at all, so the opposite choice would
+  veto every PDF the tool can read. What none of the seven involve is a model.
+- **A PDF cited from a URL carrying neither `.pdf` nor a `/pdf/` path
+  segment reads as `unreachable`.** The PDF rung has to be chosen before any
+  fetch happens (see N5, above), and the URL is all that choice has to go
+  on - `isPdf` recognizes a `.pdf` suffix and a `/pdf/` path segment, nothing
+  else. That is a capability traded for a fix, not a free improvement: before
+  N5 existed, a URL like this was fetched as HTML, a binary PDF stream
+  decoded as a "document" of a million characters, and cleared every
+  threshold - turning an accurate citation into a false accusation. Now the
+  tool declines to judge a body it cannot first confirm is text at all. This
+  does **not** mean PDFs are unsupported: `.pdf` URLs and `/pdf/`-segment
+  URLs - including arxiv's content-negotiated `/pdf/<id>` links - are read
+  normally. Recognizing more PDF URL shapes without a pre-fetch guess is
+  future work, not done here.
+- **A perfectly readable HTML page served under a non-textual `content-type`
+  now reads `unreachable`.** This is the other half of the trade above, and it
+  is the one that will surprise you, because nothing about the page looks
+  wrong. N5's content-type trigger fires on the *header*, not on the body: a
+  misconfigured server, a CDN that mislabels, or an origin that answers
+  `application/octet-stream` for a document your browser renders happily gets
+  declined rather than judged. Measured on the corpus's real Verge capture: at
+  `text/html` it extracts 16,449 characters and reaches a verdict; the
+  identical bytes under `application/octet-stream` read `unreachable`. The
+  tool is refusing to accuse on a body it cannot first confirm is text, and
+  the server told it the body is not text. If you hit this, the header is the
+  thing to check - and `--fail-on-unreachable` is how you stop it passing
+  quietly.
+- **A claim that appears only inside an HTML comment can return
+  `supported`.** `toText` strips tags but not comment bodies, and
+  commented-out markup - which always contains a `>` - leaks into the
+  extracted prose as a result. A claims-file phrase present only inside
+  `<!-- ... -->`, never in anything a reader would see rendered, can
+  therefore verify as `supported`: a false attestation from text no reader
+  sees. Verified live on current `main`. It is disclosed rather than fixed
+  here because closing it can only move a verdict *toward* `unsupported`,
+  which this plan's constraints forbid - it is plan 2 work. See
+  `docs/calibration-2026-09.md` for how this was checked.
 - **The audience is small**, and that is a limit, not a roadmap item - the
   way `urtext` says three of seven analyzers find nothing in a Python repo.
   Direct fit is people who already keep verbatim source quotes and are
@@ -156,7 +205,7 @@ will eventually surprise a real user if it isn't said here first.
 - **A heavy-chrome error page served at HTTP 200 can evade both the status
   veto and the prose floor.** This route *is* pinned by a fixture:
   `fixtures/corpus.json` files the real ECB error capture a second time at
-  status 200 (`"kind": "known-gap"`), where its 13,221 characters of intact
+  status 200 (`"kind": "known-gap"`), where its 13,216 characters of intact
   navigation chrome clear the prose floor and reach an accusation. That page
   matches **none** of the twelve bundled challenge signatures - verified, 0
   of 12 - so at its real 404 the status veto is the *only* thing rejecting
@@ -171,6 +220,44 @@ will eventually surprise a real user if it isn't said here first.
   fixture for this route** - the largest non-vetoed challenge in it is 1,180
   characters, comfortably under the floor - so unlike the one above it is
   disclosed here and in `docs/calibration-2026-09.md`, not pinned by a test.
+- **N5's binary check has three known evasions, and every one of them is a
+  route to a false accusation.** All three need the same precondition: an
+  absent or lying `content-type`. A server that truthfully declares a
+  non-textual type is caught by N5's other trigger before the body is looked
+  at, so these are the cases where the header does not help.
+  1. **Printable non-prose.** The check counts replacement characters and C0
+     control bytes. Base64, ASCII85 and PostScript's own text operators are
+     neither - they are printable ASCII that simply is not prose. Measured
+     2026-09-07: a 26,668-character body of pure base64, no headers, status
+     200, is not vetoed and reaches `unsupported` against a claim it plainly
+     does not contain.
+  2. **Binary past the sample window.** Only the first 65,536 code points are
+     scanned. Measured 2026-09-07: a 72,000-character clean prose head
+     followed by a 16,000-character control-byte tail is 18% binary overall
+     and measures 0 in the window, so it is not vetoed.
+  3. **An uncompressed PDF that fits entirely inside the window.** Neither gap
+     above covers this one - the whole body is inside the window and it does
+     carry real control bytes; there are just not enough of them. Measured
+     2026-09-07: 55,668 characters of PDF text operators plus one 500-character
+     embedded-font binary object is density 0.00898 against a 0.01 threshold,
+     so `check()` returns `unsupported` with the claim named in `missed`.
+     Uncompressed content streams are an ordinary PDF shape, not an exotic one.
+
+  None of the three is closed here, and specifically **not** by lowering the
+  density threshold. That number has never been swept against real pages with
+  genuinely low but non-zero binary density, so moving it would be trading a
+  disclosed evasion for an undisclosed one. See `docs/calibration-2026-09.md`.
+- **A soft hyphen inside a word makes that word's claim miss.** `&shy;`
+  (U+00AD) is a rendering hint: a browser shows "co&shy;operation" as
+  *cooperation* and breaks it only at a line end. `toText` decodes the entity
+  and `norm()` does not strip the character, so the claim `cooperation`
+  reports as missing on a page that visibly says it - and `co-operation` does
+  not match either, because the soft hyphen is not one of the dashes `norm()`
+  folds. Verified 2026-09-07. That is a false **miss**, which above the prose
+  floor means an accusation, so it is the direction that matters most. It is
+  not a regression - it missed before this branch too - and the fix belongs
+  with `norm()`'s folding table in plan 2. If a claim you can see on the page
+  reports missing, check the source for `&shy;`.
 - **If a site is redesigned and now serves different prose-rich content at a
   cited URL, `testimonium` can report `unsupported`.** It verifies that the
   page *carries the phrases*, not that it is *the same page* it was when you
@@ -189,10 +276,12 @@ will eventually surprise a real user if it isn't said here first.
   tell you, honestly, that it could not look.
 - **A `supported` verdict from a truncated ladder does not mean the same
   thing as one from a full ladder.** The ladder shells out: `curl` for the
-  second HTML rung, `pdftotext` for PDFs. On a slim container or a
-  serverless runtime that has neither, `check` still runs and still exits 0 -
-  but every PDF citation attempts *nothing at all*, reports `unreachable`,
-  and passes. `rungsAvailable` and `ladderTruncated` are on every result for
+  second HTML rung, and **both** `curl` and `pdftotext` for the PDF rung -
+  `pdfFetch` downloads with curl before it converts, so pdftotext alone is
+  not enough. On a slim container or a serverless runtime missing either
+  one, `check` still runs and still exits 0 - but every PDF citation
+  attempts *nothing at all*, reports `unreachable`, and passes.
+  `rungsAvailable` and `ladderTruncated` are on every result for
   exactly this reason, and the CLI prints "ladder truncated" beside each
   affected *unreachable* citation - a `supported` verdict reached from a
   truncated ladder prints no such note, even though the same caveat applies

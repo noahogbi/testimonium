@@ -20,6 +20,14 @@ export type RungId = BuiltinRung | (string & {});
 export interface RawResponse {
   readonly rawBody: string;
   readonly status: number;
+  /** Response headers as the server sent them. **Key casing does not matter**:
+   *  `computeSignals` lowercases every field name before N1 or N5 reads one,
+   *  so a fetcher may pass a server's own casing straight through and need not
+   *  lowercase anything. Values are consumed case-insensitively too. The two
+   *  bundled fetchers still lowercase their keys, but that is now their own
+   *  convenience rather than something the vetoes depend on - when it WAS a
+   *  dependency, a plugin fetcher returning `CF-Mitigated: challenge` lost N1
+   *  silently and the page came back as an accusation. */
   readonly headers: Readonly<Record<string, string>>;
   /** After redirects. The hop chain is itself a challenge signal (N2). */
   readonly finalUrl: string;

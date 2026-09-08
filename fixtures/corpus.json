@@ -119,6 +119,14 @@
     "status": 200
   },
   {
+    "path": "fixtures/challenge/pdf-binary-served-at-200.bin",
+    "kind": "challenge",
+    "url": "https://arxiv.org/abs/2401.01234v2",
+    "title": "",
+    "status": 200,
+    "note": "THE ARXIV SHAPE. A synthetic but structurally faithful PDF (%PDF-1.7 header, object dictionaries, a 16KB binary stream/endstream block, an xref table) served at 200 with no `.pdf` and no `/pdf/` segment in the URL - the content-negotiated case N5 exists for. Before N5, raw PDF bytes decoded as UTF-8 and run through toText cleared the prose floor by a wide margin (a real paper measured 1,037,512 extracted characters) and reached an accusation. The stream is 16KB, not 8KB, because an 8KB stream falls below the 4,500-char floor on the large majority of random draws - see docs/calibration-2026-09.md."
+  },
+  {
     "path": "fixtures/challenge/perimeterx-block-page.html",
     "kind": "challenge",
     "url": "",
@@ -201,6 +209,14 @@
     "url": "https://en.wikipedia.org/wiki/Textual_criticism",
     "title": "Textual criticism - Wikipedia",
     "status": 200
+  },
+  {
+    "path": "fixtures/documents/entity-heavy-article.html",
+    "kind": "document",
+    "url": "https://example.com/news/river-commission-report",
+    "title": "Panel Concludes Review of River Commission &mdash; The Riverside Record",
+    "status": 200,
+    "note": "The corpus previously held no entity-dense body: every prior fixture was a friendly HTML page using at most a handful of common entities. This one spells the same sentence's non-ASCII characters six different ways across the article - &mdash;, &#8212;, &#x2014; (all em dash), &eacute;/&Eacute;, &hellip;, &nbsp;, &amp;, &lt; - to calibrate Task 1's entity table against a body that actually stresses it. See test/classify/corpus-verdict.test.ts for the end-to-end pin: a claim written in its RENDERED form is required to match this fixture's entity-spelled prose."
   },
   {
     "path": "fixtures/documents/openai-com-index-gpt-4o-system-card-.html",

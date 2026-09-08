@@ -23,11 +23,20 @@ export interface Signals {
    *  serving 253KB, a 404 serving 112KB), which is why 2xx is never proof of
    *  a read. But 404/410 IS the origin stating the resource does not exist,
    *  and that it is authoritative about. Calibration forced this: a real ECB
-   *  404 serving 13,221 characters of nav chrome cleared every body-derived
+   *  404 serving 13,216 characters of nav chrome cleared every body-derived
    *  test - prose above two of nine real documents, overlap 1.00 - and no
    *  threshold pair could reject it. Body shape cannot see what the status
    *  line says plainly. */
   readonly documentGone: boolean;
+  /** N5: the body is not text at all.
+   *
+   *  The other four vetoes ask whether a server or a wall stopped us. This one
+   *  asks whether what came back is prose in the first place. Without it a
+   *  content-negotiated PDF - an arxiv or DOI link with no ".pdf" in the path -
+   *  decodes to a megabyte of "prose", clears every threshold, and turns a
+   *  claim the document genuinely contains into an accusation. Measured on a
+   *  real paper: 1,037,512 extracted characters, 230x the floor, no veto. */
+  readonly notText: boolean;
 }
 
 /**
@@ -46,17 +55,27 @@ export interface Signals {
  * here without a fixture.
  */
 /**
- * The four vetoes, in ONE place, because two callers ask this question.
+ * The five vetoes, in ONE place, because THREE call sites ask this question:
  *
- * `reachability` (the preflight) asked it separately and its copy omitted N4,
- * so a 404 serving intact navigation chrome read `readable` in the preflight
- * and `unreachable` in the gate - a preflight that contradicts the gate is
- * worse than no preflight. Exported so the two cannot drift again.
+ *   1. `verdict()`, below - the gate's own `unreachable` branch.
+ *   2. `reachability()` in src/reachability.ts - the preflight.
+ *   3. `check()` in src/check.ts - which uses it to keep a vetoed read's
+ *      matches out of the cross-rung union, since a match inside a body the
+ *      classifier called not-the-document is the WALL'S text, not the
+ *      author's evidence.
+ *
+ * The preflight asked it separately once and its copy omitted N4, so a 404
+ * serving intact navigation chrome read `readable` in the preflight and
+ * `unreachable` in the gate - a preflight that contradicts the gate is worse
+ * than no preflight. Exported so no copy of the veto set can drift from this
+ * one. (This comment said "two callers" while there were three; the count is
+ * load-bearing, because a fourth site added without importing from here is the
+ * exact failure the export exists to prevent.)
  */
 export function isBlocked(
-  s: Pick<Signals, "challengeHeader" | "challengePath" | "challengeSignature" | "documentGone">,
+  s: Pick<Signals, "challengeHeader" | "challengePath" | "challengeSignature" | "documentGone" | "notText">,
 ): boolean {
-  return s.challengeHeader || s.challengePath || s.challengeSignature || s.documentGone;
+  return s.challengeHeader || s.challengePath || s.challengeSignature || s.documentGone || s.notText;
 }
 
 export function verdict(s: Signals): Verdict {
@@ -64,8 +83,9 @@ export function verdict(s: Signals): Verdict {
   if (isBlocked(s)) return "unreachable";
   if (s.matched === s.total) return "supported";
   // C1 (slugLabelOverlap) is reported on Signals but deliberately NOT consulted
-  // here - see thresholds.ts. Prose volume plus the four vetoes carry the whole
+  // here - see thresholds.ts. Prose volume plus the five vetoes carry the whole
   // separation: largest non-vetoed challenge 1,180 chars, smallest real
-  // document 6,858, floor licensed at 4,500.
+  // document 6,394, floor licensed at 4,500. (Re-run scripts/calibrate.mjs to
+  // reproduce; see docs/calibration-2026-09.md.)
   return s.proseChars >= THRESHOLDS.minProseChars ? "unsupported" : "unreachable";
 }

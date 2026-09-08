@@ -10,10 +10,18 @@ export interface Rule {
  * Bot-challenge wording. THIS LIST ROTS, AND THAT IS TOLERATED BY DESIGN.
  *
  * A measured battery found 11 of 17 realistic walls evading a list of this
- * shape. It is an OPTIMIZATION: a match triggers an early fall-through to the
- * next rung. It never decides a verdict. The prose floor in
- * src/classify/verdict.ts is what actually protects a citation from a false
- * accusation, and it holds for walls nobody has written down.
+ * shape. Its COMPLETENESS is not what protects a citation: the prose floor in
+ * src/classify/verdict.ts does that, and it holds for walls nobody has written
+ * down. A match's main job is triggering an early fall-through to the next
+ * rung.
+ *
+ * It is NOT true that a match never decides a verdict, and this comment said
+ * so until 2026-09-07. A match on a body under THRESHOLDS.maxChallengeChars is
+ * N3, which `isBlocked` ORs into the veto set and which forces `unreachable`
+ * on its own. The safe reading is the one above: the list rotting costs reach
+ * and latency, never a false accusation - because everything it misses still
+ * has to clear the floor. The list rotting cannot cost truth; a match can
+ * still change an outcome.
  *
  * Patterns are tested against normalized text, so case, smart quotes and
  * zero-width characters cannot dodge them. Prefer a loose pattern over an

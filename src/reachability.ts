@@ -47,6 +47,7 @@ export async function reachability(
     let bestRung: RungId = "node";
     let challenged = false;
     let gone = false;
+    let notText = false;
 
     for (;;) {
       const action = nextAction(history, fetcher.rungs, isPdf(url));
@@ -83,6 +84,7 @@ export async function reachability(
       }
       challenged = challenged || blocked;
       gone = gone || c.signals.documentGone;
+      notText = notText || c.signals.notText;
       history.push({ rung: action.rung, proseChars: c.signals.proseChars, challenged: blocked });
     }
 
@@ -93,11 +95,18 @@ export async function reachability(
         url,
         // A 404 is not an interstitial, and saying so would be a new
         // inaccuracy introduced by folding N4 into `blocked`.
+        // N5 implies `blocked` (isBlocked ORs in notText), so a body that is
+        // not text at all would otherwise fall into the `challenged` branch
+        // below and report as a "challenge interstitial" - a false diagnosis
+        // of exactly the class the N4 carve-out two lines above exists to
+        // prevent. This branch MUST precede `challenged`, or it is dead code.
         reason: gone
           ? "the origin says the document is gone (404/410)"
-          : challenged
-            ? "challenge interstitial"
-            : `only ${bestProse} characters extracted`,
+          : notText
+            ? "the body is not text (binary or a non-textual content-type)"
+            : challenged
+              ? "challenge interstitial"
+              : `only ${bestProse} characters extracted`,
         rungsAttempted: attempted,
       });
     }

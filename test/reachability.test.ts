@@ -21,6 +21,11 @@ function stub(bodies: Record<string, string>, status = 200): Fetcher {
   };
 }
 
+const REPL = String.fromCodePoint(0xfffd);
+// A binary body decoded as UTF-8, long enough to clear the prose floor so the
+// only thing that can veto it is N5, not the floor.
+const BINARY = "%PDF-1.7 " + (" " + REPL + REPL).repeat(2500);
+
 describe("reachability", () => {
   it("reports readable and unreadable without needing any claims", async () => {
     const r = await reachability(["https://e.com/a", "https://e.com/b"], {
@@ -44,7 +49,7 @@ describe("reachability", () => {
   it("agrees with the gate on a 404 that still serves a full page of chrome", async () => {
     // The preflight computed `blocked` from the three challenge signals and
     // omitted N4, so a 404 serving intact navigation - the real ECB capture
-    // extracts 13,221 characters of it - read `readable` here and
+    // extracts 13,216 characters of it - read `readable` here and
     // `unreachable` at the gate. A preflight that contradicts the gate is
     // worse than no preflight; both now call the SAME predicate.
     const r = await reachability(["https://e.com/gone"], {
@@ -52,6 +57,19 @@ describe("reachability", () => {
     });
     expect(r.readable).toEqual([]);
     expect(r.unreadable[0]?.reason).toMatch(/gone/);
+  });
+
+  it("reports a non-text body distinctly from a challenge interstitial (N5)", async () => {
+    // Without the carve-out placed BEFORE the `challenged` branch, N5 implies
+    // `isBlocked` and every preflighted binary body would fall through to
+    // "challenge interstitial" - a false diagnosis of exactly the class the
+    // N4 carve-out two lines above exists to prevent.
+    const r = await reachability(["https://e.com/paper"], {
+      fetcher: stub({ "https://e.com/paper": BINARY }, 200),
+    });
+    expect(r.readable).toEqual([]);
+    expect(r.unreadable[0]?.reason).toMatch(/not text/);
+    expect(r.unreadable[0]?.reason).not.toMatch(/challenge interstitial/);
   });
 
   it("degrades a throwing fetcher to an unread rung rather than aborting the preflight", async () => {

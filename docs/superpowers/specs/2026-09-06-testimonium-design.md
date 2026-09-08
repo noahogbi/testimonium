@@ -3,6 +3,9 @@
 **Date:** 2026-09-06
 **Status:** Draft 2 - Fable review returned REVISE with five blockers; all five are
 addressed below. Awaiting editor review, then `writing-plans`.
+**Amended:** 2026-09-07, section 6.2 only, adding a fifth veto (N5, "the body is not
+text at all"). Authorised by `docs/superpowers/plans/2026-09-07-plan-1-1-extraction.md`,
+which declares the amendment in its own header.
 **Language:** TypeScript, Node >= 20, npm.
 **Sibling to:** `urtext`. Not a subcommand of it. See section 3.
 
@@ -369,19 +372,58 @@ VETO - overrides everything, including P1
       pairs returned zero solutions with that fixture and 249 without it.
       Body shape cannot see what the status line says plainly.
 
+  N5  The body is not text at all. Two independent triggers, either one
+      sufficient:
+        (a) the response `content-type` falls outside the accepted set: any
+            `text/*`, plus `application/xml`, `application/xhtml+xml`,
+            `application/json`, and any type ending `+xml` or `+json`. The
+            type is compared case-insensitively with parameters (`charset`)
+            dropped. An ABSENT content-type is
+            treated as textual, which is forced rather than merely
+            defensible: the pdftotext rung returns no headers at all
+            alongside real extracted text, so the opposite choice would
+            veto every PDF the tool CAN read;
+        (b) the raw body, before any tag-stripping, is dense with U+FFFD
+            replacement characters and C0 control bytes. Prose is not, and
+            no script is - CJK, emoji and mathematical notation all sit
+            above U+0020.
+
+      **AMENDMENT, 2026-09-07, from plan 1.1
+      (`docs/superpowers/plans/2026-09-07-plan-1-1-extraction.md`).** N1-N4
+      all ask whether a server or a wall stopped us. N5 asks whether what
+      came back is prose in the first place, and nothing in draft 2 asked
+      that. Without it a content-negotiated PDF - an arxiv or DOI link with
+      no `.pdf` in the path - decodes to a megabyte of "prose", clears
+      every threshold, and turns a claim the document genuinely contains
+      into an accusation. [measured: a real paper extracted 1,037,512
+      characters, 230x the floor, with no veto firing]
+
+      The two constants behind (b) - the density and the sample window -
+      are NOT calibrated against the corpus the way 6.3's prose floor is.
+      See `src/classify/thresholds.ts`, which says so, and
+      `docs/calibration-2026-09.md` for the gaps this veto is known to
+      leave open.
+
 VERDICT
   claims.length == 0                          -> unclaimed   (never supported)
-  N1 | N2 | N3 | N4                           -> unreachable
+  N1 | N2 | N3 | N4 | N5                      -> unreachable
   matched == claims.length                    -> supported
   P2                                          -> unsupported
   otherwise                                   -> unreachable
 ```
 
-Accusation rests on P2 and the four vetoes. Measured separation on the
+Accusation rests on P2 and the five vetoes. Measured separation on the
 fixture corpus: largest non-vetoed challenge 1,180 characters, smallest
-real document 6,858 - a gap of 5,678, with the floor licensed at 4,500.
-N4 removes the padded error shells that prose volume cannot see; nothing
-else needs removing.
+real document 6,394 - a gap of 5,214, with the floor licensed at 4,500.
+N4 removes the padded error shells that prose volume cannot see, and N5
+the bodies that are not prose at all; nothing else needs removing.
+
+*(Amended 2026-09-07 with N5, per plan 1.1. The document figure was 6,858
+when this paragraph was written; it is 6,394 as of the current corpus -
+re-measured 2026-09-07 with `node scripts/calibrate.mjs`, and the reason
+for the change is recorded in `docs/calibration-2026-09.md`. Both N4 and N5
+are load-bearing on this corpus: without N5 a fixture extracting 6,221
+characters sits inside the 1,180-to-6,394 gap and collapses most of it.)*
 
 **Read the table's shape, because it is the whole correction.** Attestation and
 accusation have different burdens. A full match is its own proof of a read and
@@ -402,10 +444,37 @@ draft 1:
 
 ### 6.3 What the inversion buys, and what remains to be proved
 
-**The signature list demotes to an optimization.** Its job becomes triggering the
-curl fall-through early, not deciding a verdict. It may rot freely; the cost is
-latency and reach, never truth. This much follows from the structure of the
-verdict table and needs no measurement.
+**The signature list stops being able to mint an accusation.** It can still
+decide a verdict: N3 vetoes when a signature matches AND the body is under the
+length cap, and that veto stands even where the claims would otherwise have
+matched in full. What the list can no longer do is produce `unsupported`. Every
+verdict it decides is a withheld accusation, never a supplied one.
+
+The rot argument survives, but only below the prose floor, and draft 1 stated it
+without that condition. N3 fires only where `proseVolume` is under
+`maxChallengeChars` (800), which sits far below `minProseChars` (4,500) on the
+same measured quantity. So beneath the floor the list is genuinely rot-tolerant:
+a wall it fails to name falls through to P2 and lands on `unreachable` anyway,
+and an over-broad entry costs an attestation rather than truth - a real document
+that matches it and is short reads `unreachable` where it would have read
+`supported`.
+
+Above the floor neither protection applies. A wall padded past ~4,500 extracted
+characters is vetoed by neither the signature, which only applies below 800, nor
+the floor, which only blocks an accusation on a short body. There the list's
+completeness does bear on truth, and a wall can mint an accusation against an
+author who did nothing wrong. That is the known gap carried as a fixture in
+`fixtures/corpus.json` and measured in `docs/calibration-2026-09.md`, and it is
+why draft 1's "never truth" was wrong rather than merely imprecise. The
+structural half of this needs no measurement; the exposure above the floor has
+been measured, and the thresholds were left alone deliberately.
+
+Draft 1 called the list "an optimization" that "may rot freely; the cost is
+latency and reach, never truth". N3 made that false. It is the same false claim
+plan 1.1 found in `src/rules/challenge.ts`'s own comment and corrected there, and
+it is corrected here for the same reason: this document is the authority every
+ruling resolves against, so a sentence in it that has gone quietly false is worse
+than one in the code.
 
 **An accusation stops depending on the completeness of a list that provably
 cannot be completed.** Every wall in the battery - listed or not, English or not,
@@ -428,9 +497,18 @@ property depends entirely on thresholds nobody has calibrated.
 > safely" is a design intention, not a property.
 
 **On HTTP status.** The origin spec's section 2 concluded that a status code is
-unreliable in both directions, and that conclusion stands on its own: this scheme
-consults no status, so a document served under a 400 or a 404 is judged by its
-body like any other.
+unreliable in both directions. That conclusion still holds in the direction that
+protects the author: no status is ever read as proof the real page was reached, so
+a 200 licenses nothing by itself and a document served under a 400 is judged by
+its body like any other.
+
+The scheme does consult status, in one direction only. N4 (section 6.2) reads 404
+and 410 as evidence the document is gone and forces `unreachable`. A status can
+therefore withhold an accusation; it can never supply one. This paragraph
+previously said the scheme "consults no status" - true when it was written, and
+falsified by N4 when N4 landed during plan 1. It is corrected here rather than
+left standing, because a spec that has gone quietly false is the failure this
+tool exists to catch.
 
 Draft 1 supported that point with two examples and both were wrong, in the exact
 manner section 0 of this document warns against. `www.meta.com`'s 253KB under an
@@ -439,7 +517,9 @@ Meta"; `news.skhynix.com`'s 112KB 404 extracts to 522 characters of "404, Page
 Not Found." They are large *error shells*, not readable documents. The origin
 spec said "rendered HTML under a 400" and was accurate; draft 1 escalated that to
 "readable document" and made it false. Neither page is rescued by this scheme -
-both fail P2 and stay `unreachable`, exactly as before.
+both stay `unreachable`, exactly as before - the
+404 now by N4, before prose volume is consulted at all, and the 400 by P2 on its
+12 characters of text.
 `[verified: both URLs re-fetched and extracted, 2026-09-06]`
 
 The honest form of the claim is therefore a-priori rather than empirical: status

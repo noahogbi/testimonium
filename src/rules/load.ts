@@ -51,9 +51,15 @@ function toHostRule(raw: Record<string, unknown>, where: string): HostRule {
  * Bundled rules plus any local ones. ADDITIVE ONLY.
  *
  * A local file cannot delete a bundled rule. Deletion would let a user's config
- * silently switch off a protection, and a rule can only ever ADD a fetch
- * attempt anyway - so the worst a stale bundled rule costs is one wasted
- * request, never a wrong verdict.
+ * silently switch off a protection. That reasoning is complete for HOST rules:
+ * a host rule can only ever ADD a fetch attempt (a user agent, a required
+ * identity), so the worst a stale one costs is one wasted request, never a
+ * wrong verdict. It is NOT complete for signature and path rules - those feed
+ * N2 and N3 directly, so a local rule that mismatches (a regex too broad, a
+ * path too generic) can turn a real document into a false `unreachable`. That
+ * risk is accepted deliberately: the whole point of `--rules` is to let an
+ * operator add their own challenge patterns, and additive-only is what stops
+ * the file from also being able to delete a bundled protection.
  */
 export function loadRules(path?: string): RuleSet {
   if (!path) return { signatures: CHALLENGE_SIGNATURES, paths: CHALLENGE_PATHS, hosts: HOST_RULES };
