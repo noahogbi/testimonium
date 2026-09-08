@@ -3,9 +3,15 @@
 **Date:** 2026-09-06
 **Status:** Draft 2 - Fable review returned REVISE with five blockers; all five are
 addressed below. Awaiting editor review, then `writing-plans`.
-**Amended:** 2026-09-07, section 6.2 only, adding a fifth veto (N5, "the body is not
-text at all"). Authorised by `docs/superpowers/plans/2026-09-07-plan-1-1-extraction.md`,
-which declares the amendment in its own header.
+**Amended:** 2026-09-07, twice. First, section 6.2 only, adding a fifth veto (N5,
+"the body is not text at all"), authorised by
+`docs/superpowers/plans/2026-09-07-plan-1-1-extraction.md`. Second, after Fable's
+REWORK of the plan 2 (`harvest`) design: new sections 6.6 (reads, readability and
+aggregation across rungs) and 8.2 (harvest); a claim-length floor and the soft
+hyphen in 7.3; corrections to 5.3, 8, 8.1 and 14, which had gone false; Q3 and Q5
+resolved. Authorised by `docs/superpowers/plans/2026-09-07-plan-1-2-reader.md`,
+which declares the amendment in its own header. Plan 1.2 implements 6.6 and the
+corrections; plan 2 implements 7.3's floor and 8.2.
 **Language:** TypeScript, Node >= 20, npm.
 **Sibling to:** `urtext`. Not a subcommand of it. See section 3.
 
@@ -237,8 +243,11 @@ history, which rule fired, matched and missed per claim - that no caller has a
 Node's `package.json` `exports` map makes a deep import of an internal module
 throw `ERR_PACKAGE_PATH_NOT_EXPORTED`. The primitives (`norm`, `toText`,
 `isPdf`, per-host helpers) are genuinely unavailable to consumers, not merely
-advised against. They are exported to the test suite through a separate internal
-entry point.
+advised against. The test suite imports source modules by path (`../src/...`);
+there is no internal entry point, and `test/exports.test.ts` pins the exports map
+to `.` and `./package.json` alone. (This paragraph said "exported to the test
+suite through a separate internal entry point" from draft 2 until 2026-09-07;
+no such entry point ever existed.)
 
 The residual leak is vendoring or forking, which no packaging prevents. The
 defence is to make the blessed path cheapest and to say plainly in the docs that
@@ -366,9 +375,10 @@ VETO - overrides everything, including P1
       document is gone' from 'this document was read', which is
       information recheck will want even though check does not act on
       it." Calibration proved check must act on it: a real ECB 404 serving
-      13,221 characters of navigation chrome cleared every body-derived
-      test - prose volume above two of nine real documents, overlap 1.00 -
-      and no threshold pair could reject it. Exhaustive search over 24,915
+      13,221 characters of navigation chrome (13,216 since plan 1.1's entity
+      decoding) cleared every body-derived test - prose volume above two of
+      nine real documents, overlap 1.00 - and no threshold pair could reject
+      it. Exhaustive search over 24,915
       pairs returned zero solutions with that fixture and 249 without it.
       Body shape cannot see what the status line says plainly.
 
@@ -502,13 +512,20 @@ protects the author: no status is ever read as proof the real page was reached, 
 a 200 licenses nothing by itself and a document served under a 400 is judged by
 its body like any other.
 
-The scheme does consult status, in one direction only. N4 (section 6.2) reads 404
-and 410 as evidence the document is gone and forces `unreachable`. A status can
-therefore withhold an accusation; it can never supply one. This paragraph
-previously said the scheme "consults no status" - true when it was written, and
-falsified by N4 when N4 landed during plan 1. It is corrected here rather than
-left standing, because a spec that has gone quietly false is the failure this
-tool exists to catch.
+The scheme does consult status, in one direction only. N4 (section 6.2)
+reads 404 and 410 as evidence the document is gone and vetoes that read;
+since plan 1.2 the ladder climbs past it (6.6, "Escalation") and the citation
+reads `unreachable` only when no rung produced a readable read and none
+matched in full. A status therefore withholds an accusation from the read
+it vetoes - but by sending the ladder to the next rung it can relocate the
+judgement onto a different document, which is the ACCEPTED EXPOSURE 6.6
+rule 2 and the README both carry. This paragraph previously said the scheme
+"consults no status" - true when it was written, and falsified by N4 when
+N4 landed during plan 1. It is corrected here rather than left standing,
+because a spec that has gone quietly false is the failure this tool exists
+to catch. It went false a second time when plan 1.2's escalation made
+"forces `unreachable`" a statement about a read rather than the citation,
+and was corrected again in that plan's final review.
 
 Draft 1 supported that point with two examples and both were wrong, in the exact
 manner section 0 of this document warns against. `www.meta.com`'s 253KB under an
@@ -592,6 +609,107 @@ What separated the sample cleanly was **absolute extracted-prose volume** -
 shells 12 to 600 characters, real articles 7,000 to 33,000. That is the
 instrument, and it is not a new idea: it is the origin's `CHALLENGE_MAX_CHARS`
 promoted from a signature-gated special case to the primary test.
+
+### 6.6 Reads, readability, and aggregation across rungs
+
+Added 2026-09-07, after Fable's review of the plan 2 (`harvest`) design found
+that the code at 3974d27 answered "did we read this document?" three different
+ways. Plan 1.2 implements this section. Nothing in it is an optimization.
+
+**A read** is one rung's fetch of one URL, classified: `{ rung, computed }`,
+where `computed` is `computeSignals`'s output for that response. `check` keeps
+every read of a URL, not the longest, and must: the rung that read the document
+is often not the last one attempted.
+
+**Readability has one definition.** A read is *readable* when no veto fires and
+its prose volume clears the floor:
+
+```
+isReadable(s) = !isBlocked(s) && s.proseChars >= THRESHOLDS.minProseChars
+```
+
+`isBlocked` is a statement about the wall: some N-signal says this body is not
+the document. `isReadable` is a statement about the document: nothing says it
+is not, and there is enough of it to have been read. The two are not
+interchangeable, and treating them as if they were was the plan 2 design's
+first blocking defect: 22 of the 25 challenge fixtures pass every veto and fail
+only the floor (`docs/calibration-2026-09.md`, "Read together"), and so does
+every paywall stub. "Not vetoed" is not "read". `isReadable` lives in
+`src/classify/verdict.ts` beside `isBlocked`; `verdict()`'s final branch uses
+it; every other site that needs the notion imports it. A private restatement
+of the predicate anywhere else is the defect the export exists to prevent.
+
+**One reader, three callers.** The fetch-classify-escalate loop lives once, in
+`src/fetch/read-source.ts`:
+
+```
+readSource(url, claims, { fetcher, sourceLabel?, rules? })
+  -> { reads: Read[], attempted: RungId[], pdfUrl: boolean }
+```
+
+`check`, `reachability` and, in plan 2, `harvest` call it. It is
+module-internal: not re-exported from `src/index.ts`, because a consumer
+holding raw reads can assemble a verdict `verdict()` never issued (section
+5.1). At 3974d27 `check.ts` and `reachability.ts` each carried a copy of this
+loop, the copies disagreed (next paragraph), and no test pinned either. The
+plan 1.1 ledger parked the duplication for plan 2; the plan 2 design was
+drafted without reading that item and claimed "zero behaviour change" for a
+merge of two loops that do not behave the same.
+
+**Escalation: climb unless the last read is readable.** The ladder stops when
+the most recent read is readable, and otherwise tries the next rung until none
+remain. At 3974d27 `check` climbed on N1, N2, N3 or a sub-floor body, while
+`reachability` climbed on any of the five vetoes or a sub-floor body; so a URL
+whose first rung returned a 404 carrying 13,216 characters of navigation
+chrome (N4), or a PDF served as bytes (N5), stopped climbing in `check` and
+kept climbing in `reachability`. The unified rule is the wider of the two. It
+reaches strictly further than either and never less, and its cost is extra
+fetches against documents that are genuinely gone. Pinning tests assert
+`rungsAttempted` for a first read vetoed only by N4, and for one vetoed only by
+N5, each with a body over the floor, in both callers. Written first, against
+the inline `check` loop, they fail; that failure is the proof the suite was
+silent on this before.
+
+**Aggregation, in order.** Given a URL's reads:
+
+1. **A full match proves a read.** The first read whose signals alone yield
+   `supported` wins, whatever its prose volume and whatever a later rung
+   returned. This is the sub-floor-stub exposure `test/check.test.ts` pins and
+   section 6.2 accepts: a short real article followed by a fat block page is
+   the ordinary case, not an exotic one.
+2. **Otherwise the readable read with the most prose wins.** At 3974d27
+   the largest read won regardless of readability, so a large vetoed wall
+   on the first rung followed by a smaller readable page on the second,
+   matching in part, returned `unreachable`. It now returns `unsupported`,
+   naming the claims the readable read did not carry (rule 4: located by
+   no non-vetoed read): that read is the positive proof the keystone rule
+   demands, exactly as it would be had it been the only read. This is a
+   behaviour change in a case the shipped ladder produces, and plan 1.2
+   pins it.
+3. **Otherwise `unreachable`.** No read is readable and none matched in full.
+   `unclaimed` when there were no claims to match, as before.
+   `check` still issues this through `verdict()`, applied to the largest
+   read's signals with the union match count from rule 4; so two unvetoed
+   sub-floor reads that between them locate every claim return `supported` -
+   rule 1's exposure reached from a second direction, pinned in
+   `test/check.test.ts` as accepted. A vetoed largest read is `unreachable`
+   whatever the union says.
+4. **`missed` is the set of claims located by no non-vetoed read.** A match
+   inside a vetoed body is the wall's text; it neither proves the claim nor
+   clears it. Each claim's evidence is quoted from the read that located it.
+   Unchanged from 3974d27.
+5. **`reachability` calls a URL readable iff some read of it is readable**, so
+   that it agrees with `check`: a preflight that calls a host readable while
+   the gate calls it unreachable, or the reverse, teaches the author the wrong
+   thing about their corpus. At 3974d27 it called a URL readable iff its
+   largest read cleared the floor *and no read at all was vetoed*, so a site
+   that walled the node rung and served curl the document was readable to
+   `check` and unreadable to `reachability`.
+
+**Harvest reads only what is readable.** Plan 2's `harvest` proposes spans
+only from readable reads and lets only readable reads vote in its frequency
+filter (section 8.2). A wall's text, a paywall stub's text and a 404's
+navigation chrome propose nothing.
 
 ---
 
@@ -719,6 +837,33 @@ Phrases must come from what the **source** says, not from what the article says
 about it. Matching normalizes typography and the billion/bn and million/mn
 renderings; paraphrase does not match and is not meant to.
 
+Invisible formatting characters - the zero-width spaces and joiners, the
+directional marks, the word joiner, the byte-order mark and, from plan 1.2, the
+soft hyphen U+00AD - are deleted before matching. A source that breaks a word for
+layout has not changed what it says; at 3974d27 the soft hyphen survived `norm`
+and defeated `phraseFound`, a false-miss route.
+
+**Claims have a length floor.** `THRESHOLDS.minClaimChars` is 16, the fifth
+entry in `THRESHOLDS`, applied to `norm(claim).length`. A shorter claim is
+refused - by the claims-file loader, by `check()`'s front door, and by harvest's
+first filter - with a message that names the claim, its length, the floor, and
+the remedy: extend it to take in the surrounding words. The licence is a priori
+before it is measured: a bare number, a year, a token like "the report" attests
+nothing about a source, and a match on one is a coincidence the checker cannot
+tell from evidence. Measured on 2026-09-07 against the 203 distinct real claims
+in the origin repo's four claims files, chance matches against unrelated
+fixtures occurred at 3 and 12 normalized characters and never above 12; 16 is
+that ceiling plus margin, and it refuses 18 of the 203 (9 percent), each a
+number, a name or a fragment that states no proposition. This resolves Q3 in
+section 13: a **refusal, uniform across the three sites, calibrated** - not a
+warning, because a warning that a claim proves nothing leaves it proving nothing
+while the run still passes. It is a breaking change for `check` against an
+existing claims file that carries such a claim, and it is meant to be: the file
+asserted something the tool could never have verified. Plan 2 implements it,
+after its calibration task has re-derived the number from a committed script; if
+the re-run moves the ceiling, the number moves with it and this paragraph is
+amended to match.
+
 ### 7.4 The output schema cannot express an accusation
 
 **Non-`supported` results carry no renderable fields at all** - no excerpt, no
@@ -766,9 +911,13 @@ fetches each cited source and proposes, as candidate claims, spans that appear
 **verbatim in both the draft and the source**, normalized, above a minimum
 length, excluding boilerplate. It proposes; the author confirms. **No model.**
 
-This is safe by construction: everything harvest emits goes through the same
-checker, so a bad harvest produces visible misses, never a false `supported`.
-Phrase matching remains the sole arbiter.
+Everything harvest emits goes through the same checker, so a proposal the source
+does not carry produces a visible miss. *Corrected 2026-09-07:* this paragraph
+used to say harvest is "safe by construction" because a bad harvest produces
+"never a false `supported`". That was false. A span common to draft and source
+is, by construction, one `check` will find in that source, so harvest inherits
+every exposure the checker has and adds one of its own; section 8.2 is the
+authority for harvest and names them. Phrase matching remains the sole arbiter.
 
 **`recheck`** is the instrument, not a policy. It re-runs each claim against the
 live source and against the archived copy, and reports what changed. It ships
@@ -803,22 +952,157 @@ them.
 | Plan | Contents | Blocked on |
 |---|---|---|
 | 1. Core | TS port of the fetch ladder, header/finalUrl capture, pure classifier, verdict reducer, claims and evidence files, one adapter, `check`, `reachability` | Q1, Q2 - both resolved below |
-| 2. Harvest | `harvest` and its boilerplate exclusion | Q3, Q5 |
+| 1.2 Reader | `isReadable`; one `readSource` loop under `check` and `reachability`, with section 6.6's escalation and aggregation rules and the tests that pin them; the `foldWithMap` offset-map repair; U+00AD deleted by `norm`; the corrections the header lists | Nothing. Lands before plan 2 |
+| 2. Harvest | `harvest` per section 8.2: calibration of `minClaimChars` and `harvestSeedChars` first, then `Document.prose`, `commonSpans`, the four filters, the draft file | Plan 1.2. Q3, Q5 - both resolved below |
 | 3. Drift | `recheck`, archive-on-success, archive-as-control-arm | Q4 |
 
 `reachability` rides nearly free on plan 1's fetch layer, which is why it stays
 there rather than waiting: it is the command that stops a new user misreading
 their own corpus, and it costs almost nothing once the ladder exists.
 
+Plan 1.1 (extraction fidelity, N5) and plan 1.2 (the reader) were inserted after
+plan 1 shipped. Each corrects plan 1 in a way the next plan would otherwise
+build on; neither is a fourth command.
+
 **Files, versioned beside the prose:**
 
 ```
-<doc>.claims.json      authored, reviewed with the piece
-<doc>.evidence.json    written by check and recheck
+<doc>.claims.json        authored, reviewed with the piece
+<doc>.claims.draft.json  written by harvest; the author folds it into the claims file
+<doc>.evidence.json      written by check and recheck
 ```
 
-Both are committed. A re-check's output is then a **diff** - which `urtext` can
-review, closing the family loop.
+The first and last are committed. The draft is transient: the author edits its
+proposals into the claims file and deletes it. A re-check's
+output is then a **diff** - which `urtext` can review, closing the family loop.
+
+### 8.2 Harvest
+
+Added 2026-09-07. This section, not the paragraph in section 8, is the
+authority for plan 2. Fable's review of the first design (findings F1 to F18,
+kept in the git-ignored SDD workspace for plan 2) is where each choice below
+was forced. Plan 2 is blocked on plan 1.2 (section 6.6), which supplies the
+reader, the readability predicate and the offset-map repair harvest depends
+on.
+
+**What it is.** `harvest <doc.md>` fetches every URL the document cites and,
+for each, proposes as candidate claims the spans that appear verbatim in both
+the document's prose and the source, normalized. It writes them to a draft
+file the author edits into `<doc>.claims.json`. It never writes the claims
+file itself. No model. Phrase matching remains the sole arbiter, and every
+proposal is afterwards judged by `check` exactly as a hand-written claim is.
+
+**What it is not.** Harvest is not safe by construction. A span common to the
+draft and a source is, by definition, a span `check` will find in that source,
+so harvest carries the checker's exposures unreduced: an above-floor,
+un-vetoed wall (the ECB known-gap fixture, served at 200), and a redirect to a
+homepage that shares a sentence with the draft. It adds one of its own: it
+proposes what the author *copied*, which is not always what the author
+*claims*. A harvested span is evidence that a sentence was lifted from this
+source; it is not evidence that the sentence is the point of the citation.
+The draft's `_note` says so, and the author's confirmation is the step that
+makes a proposal a claim.
+
+**Pipeline, per document.**
+
+1. **Document prose.** The adapter's `Document` gains `prose`: the markdown
+   with footnote definitions removed by the same `DEFINITION` regex the parser
+   uses (definitions are multi-line; a second regex would drift) and fenced
+   code blanked by the same `blankFencedCode`, so a URL or a code sample is
+   never proposed as a claim. Citations are grouped by `normalizeUrl`; a URL
+   cited under two spellings is read once and keyed by the first spelling
+   seen. A URL whose existing claims entry is `notApplicable` is skipped and
+   listed in the report.
+2. **Read.** Each URL goes through `readSource` (section 6.6). Only readable
+   reads propose or vote. A URL with no readable read is reported as
+   unreachable with its `rungsAttempted`, and nothing is proposed for it.
+   Where a readable read's `finalUrl` differs in path from the URL asked for,
+   the report says so beside the proposals: a redirect to the homepage is the
+   exposure the author has to look at.
+3. **Common spans**, `commonSpans(docProse, sourceText)`. Both texts are
+   folded with `foldWithMap`, which returns the folded text and one source
+   offset per folded code unit. Seeds are the L-grams of the folded source that
+   occur in the folded document, L = `harvestSeedChars`; each seed is extended
+   left and right while the two texts agree, snapped to word boundaries, its
+   whitespace runs collapsed; spans contained in a span already emitted are
+   dropped, and the scan skips past the span just emitted, so the pass is
+   linear in the source. Proposals are cut from the **source's** typography
+   through the offset map, because a claim must be what the source says
+   (section 7.3). `norm(text)` is computed once per read and reused by every
+   filter; it is not recomputed per span.
+4. **Self-validation, per proposal.** Three assertions, each a bug if it
+   fails: `phraseFound(sourceText, span)`, so the checker will find it;
+   `phraseFound(docProse, span)`, so it is in the author's own draft; and
+   `foldWithMap(span).folded === matchedFoldedSpan`, so the offset map did not
+   shift. The third is the one `phraseFound` cannot stand in for: a map that
+   is off by one yields a slice the source still contains, one character
+   over, and `phraseFound` says yes to it. `foldWithMap` at 3974d27 pushed one
+   map entry per *input* unit while a code unit whose lowercase is two units
+   (U+0130) added two to the folded text, shifting every offset after it; plan
+   1.2 repairs it to one entry per *output* unit and pins `folded.length ===
+   map.length` on U+0130, final sigma and an astral letter.
+5. **Filters**, in order, each reporting per URL how many spans it dropped:
+   1. *Floor.* `norm(span).length >= THRESHOLDS.minClaimChars` (section 7.3).
+   2. *Frequency.* For any *other* normalized URL V in the document with at
+      least one readable read, if `phraseFound(norm(text_R), span)` for any
+      readable read R of V, the span is boilerplate - the outlet's name, a
+      cookie notice, a shared byline, or a wire story reprinted by two cited
+      outlets - and is dropped. A URL's own reads never vote against its own
+      spans. With fewer than two URLs holding a readable read the filter is
+      vacuous, and the report says so in words. Plan 2's calibration counts
+      how many real claims appear in two cited sources of the same draft, so
+      the reprint cost is a number, not a guess.
+   3. *Boilerplate rules.* `RuleSet` gains `boilerplate: Rule[]`, the same
+      dated `LocalRule` shape as signatures (`pattern`, `lastConfirmed`,
+      `note`), each tested as a regex against `norm(span)`. Ships empty. The
+      author's own rules are the only cure for a phrase that recurs across
+      one outlet's pages when the draft cites that outlet once.
+   4. *Already claimed.* A span contained in, or containing, an existing claim
+      for that URL in `<doc>.claims.json` is dropped. The existing file is
+      read by `parseClaimsFile`, with no lenient variant: a file the loader
+      refuses is exit 2 with the loader's own message. The README's migration
+      note therefore reads: fix the claims `check` names first, then run
+      `harvest` for more.
+6. **Output.** `<doc>.claims.draft.json` in the claims-file shape, keyed by
+   the first citation spelling of each normalized URL, each entry's claims in
+   source typography, plus `_note`: the tool's version, the date, and the
+   sentence "every claim below is unconfirmed; harvest proposes what was
+   copied, not what was meant". An existing draft is overwritten only when
+   its `_note` is byte-identical to the marker harvest would write; a missing
+   or edited `_note` means the author has touched the file, and harvest exits
+   2 naming the path and asking for a rename or delete. `--json` prints the
+   draft to stdout instead of writing it, the convention `reachability
+   --json` already follows (and `check --json` does not: that inconsistency
+   is plan 1's, recorded here rather than resolved).
+
+**Exit codes.** 0 when the draft was written or printed, including a draft that
+proposes nothing; 2 for a refused input, a refused existing claims file, or an
+edited draft in the way. There is no exit 1: harvest has no verdict to fail on.
+
+**Thresholds.** `harvestSeedChars` is the seed length for step 3, distinct from
+`minClaimChars`: the seed sets what extension can find, the floor sets what may
+be proposed, and `harvestSeedChars >= minClaimChars` is asserted by a test. A
+seed below the floor finds the same maximal spans plus shorter ones the floor
+then refuses, so it buys nothing and costs noise; a seed above the floor is the
+precision knob. Measured across unrelated fixture pairs, the mean count of
+chance L-gram matches per pair was 24.8 at L = 13, 5.0 at 16, 0.9 at 20 and 0.2
+at 25; the value is chosen in plan 2's calibration task from that script's
+re-run, in 20 to 25, and recorded in `docs/calibration-2026-09.md` with the
+command that produced it.
+
+**Plan 2's first task is calibration**, before any harvest code: commit the
+probe as `scripts/calibrate-claim-floor.mjs` (its walker skips `notApplicable`
+objects, which the probe's did not); freeze the claims it measures under
+`fixtures/claims/` so the numbers reproduce without the origin repo;
+hand-classify every cross-fixture common span as chance or boilerplate; and
+bind the result with an acceptance test at `test/classify/claim-floor.test.ts`,
+the discipline section 6.3 imposed on the prose floor. The floor's licence is a
+priori; the measurement is its sanity check, not its derivation, and a re-run
+that moves the observed ceiling above the floor is a finding to act on, not a
+number to explain away.
+
+**CLI.** `bin.ts` gains `draftPathFor` beside `claimsPathFor` and
+`evidencePathFor`, and the usage string names the third command.
 
 ---
 
@@ -972,19 +1256,27 @@ with their resolutions rather than deleted, so the reasoning survives.**
    verdict table: every N-signal vetoes, including over P1.
    `[verified: developers.cloudflare.com/cloudflare-challenges/ detect-response,
    updated 2026-05-05, read as the raw page rather than as a fetch summary]`
-3. **Minimum claim length.** A short generic phrase is both more likely to match
-   spuriously and less useful as evidence. Is there a floor, and is it a warning
-   or a refusal?
+3. ~~**Minimum claim length.**~~ **RESOLVED 2026-09-07: refuse, uniform,
+   calibrated.** `THRESHOLDS.minClaimChars` = 16 on `norm(claim).length`,
+   refused by the claims-file loader, by `check()`'s front door and by harvest's
+   first filter, with the same message at each. Section 7.3 carries the licence
+   and the measurement: 203 real claims, chance matches at 3 and 12 characters
+   and none above, 18 of 203 refused. Implemented in plan 2, whose calibration
+   task re-derives the number before any code depends on it.
 4. **Archive failures.** web.archive.org's save-page-now is authenticated,
    rate-limited well below one call per source per run, and asynchronous - a job
    to poll rather than a request to make. Confirmed: it must never fail a run.
    Open, and larger than draft 1 assumed: API key configuration, job polling,
    queueing and backoff. Belongs to plan 3, which is why archive moved out of
    `check`.
-5. **Harvest boilerplate exclusion.** Common substrings between a draft and a
-   source will include navigation text, cookie notices, and the outlet's own
-   name. What excludes them - a length floor, a stopword ratio, position in the
-   document, or a fixture-calibrated heuristic? Blocks plan 2.
+5. ~~**Harvest boilerplate exclusion.**~~ **RESOLVED 2026-09-07: cross-source
+   frequency, primary.** A span found in a readable read of any *other* cited
+   source (other by `normalizeUrl`) is boilerplate; a URL's own reads never vote
+   against it; with fewer than two readable sources the filter is vacuous and
+   the report says so. The length floor runs before it and author-maintained
+   `boilerplate` rules after it. Position in the document and stopword ratio
+   were considered and dropped: each needs a threshold nobody has measured, and
+   frequency needs none. Section 8.2, filters 1 to 3.
 6. ~~**GitHub Action in v1?**~~ **RESOLVED: cut.** It is a second distribution
    surface with its own versioning and release discipline, and nothing in plan 1
    depends on it. `npx testimonium check` in a workflow step is the on-ramp until
@@ -1003,12 +1295,17 @@ Recorded so they are not relitigated without new information.
 | README leads with the argument; AI-drafted prose is a named section, not the headline | 4 |
 | `check()` owns the verdict; primitives sealed behind `exports` | 5.1, 5.3 |
 | Three layers: fetcher, pure classifier, pure ladder reducer | 5 |
-| Burden-of-proof inversion; signature list demoted to an optimization | 6 |
+| Burden-of-proof inversion; the signature list can withhold an accusation, never supply one | 6, 6.3 |
 | Accusation requires body-derived proof; head markers never license one | 6.2 |
 | Every N-signal vetoes, including over P1 | 6.2, 13 Q2 |
 | Prose volume, not text-to-markup ratio | 6.5 |
 | Calibration precedes the verdict reducer, bound by an acceptance test | 6.3 |
 | `unreachable` is silent to the reader, never to the author | 6.4 |
+| One readability predicate (`isReadable`), one reader (`readSource`), one aggregation; the ladder climbs unless the last read is readable | 6.6 |
+| Harvest proposes only from readable reads, and only readable reads vote | 6.6, 8.2 |
+| Claims below `minClaimChars` are refused, uniformly, at every entry | 7.3, 13 Q3 |
+| Harvest filters: floor, cross-source frequency, author rules, already-claimed, in that order | 8.2, 13 Q5 |
+| Harvest inherits the checker's exposures; "never a false `supported`" withdrawn | 8, 8.2 |
 | Fetcher output type has no `ok` or `http2xx` field | 7.1 |
 | Host rules are dated, additive-only, locally overridable data | 7.2 |
 | Claims key by URL, with declared join semantics | 7.3 |

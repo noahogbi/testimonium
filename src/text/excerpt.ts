@@ -33,7 +33,8 @@ const FOLD: Record<string, string> = {
 /** Characters norm() deletes outright. Dropping is safe for the index map:
  *  the map records the source offset of each character that SURVIVES.
  *
- *  The zero-width set mirrors norm()'s /[\u200B-\u200F\u2060\uFEFF]/g exactly.
+ *  The set mirrors norm()'s /[\u00AD\u200B-\u200F\u2060\uFEFF]/g exactly - the
+ *  zero-widths and, since plan 1.2, the soft hyphen.
  *  Reproducing only the comma was the same defect the Unicode dash range had:
  *  a character the matcher deletes but the fold keeps is pushed into the folded
  *  string, the index map diverges, and a claim spanning one reports phraseFound
@@ -42,6 +43,7 @@ const FOLD: Record<string, string> = {
  *  one. */
 const DROP = new Set([
   ",",
+  "\u00AD",
   "\u200B", "\u200C", "\u200D", "\u200E", "\u200F", "\u2060", "\uFEFF",
 ]);
 
@@ -65,9 +67,9 @@ const OPEN_PUNCT = new Set(["(", "[", "{"]);
  * drifts about one character per word. On a five-thousand-character document
  * that drift reaches hundreds of characters and returns a passage that does not
  * contain the claim, presented under a citation as the evidence for it. That is
- * worse than showing no evidence at all.
+ * worse than showing no evidence at all. Exported for plan 2's harvest, which slices the SOURCE by these offsets and needs them exact, not merely inside excerptFor's window.
  */
-function foldWithMap(text: string): { folded: string; map: number[] } {
+export function foldWithMap(text: string): { folded: string; map: number[] } {
   const chars: string[] = [];
   const map: number[] = [];
   let lastWasSpace = false;
@@ -92,8 +94,14 @@ function foldWithMap(text: string): { folded: string; map: number[] } {
       continue;
     }
     lastWasSpace = false;
-    chars.push((FOLD[raw] ?? raw).toLowerCase());
-    map.push(i);
+    // One map entry per OUTPUT code unit, not per input unit. toLowerCase()
+    // can lengthen a character (U+0130 becomes "i" plus a combining dot,
+    // two units), and a map that pushed one entry per input unit fell one
+    // behind at every such character, for the rest of the document. Every
+    // output unit points at the source character that produced it.
+    const out = (FOLD[raw] ?? raw).toLowerCase();
+    for (let k = 0; k < out.length; k++) map.push(i);
+    chars.push(out);
   }
   return { folded: chars.join(""), map };
 }

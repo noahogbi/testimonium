@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { reachability } from "../src/reachability.js";
 import type { Fetcher, RawResponse, RungId } from "../src/fetch/types.js";
+import { proseVolume } from "../src/classify/thresholds.js";
+import { toText } from "../src/text/extract.js";
 
 // NOTE: repeat(120) of this 35-char unit (plus the extracted <title>) totals
 // ~4,208 chars - BELOW THRESHOLDS.minProseChars (4,500, calibrated in an
@@ -17,6 +19,19 @@ function stub(bodies: Record<string, string>, status = 200): Fetcher {
     async fetch(url): Promise<RawResponse> {
       const rawBody = bodies[url] ?? "";
       return { rawBody, status, headers: {}, finalUrl: url, bytes: rawBody.length };
+    },
+  };
+}
+
+/** Per-RUNG bodies for one URL, recording the rungs fetched: the ladder's
+ *  climb is observable even when the result carries no rungsAttempted (a
+ *  readable entry does not). */
+function perRung(per: Partial<Record<RungId, Partial<RawResponse>>>, calls: RungId[] = []): Fetcher {
+  return {
+    rungs: ["node", "curl"] as RungId[],
+    async fetch(url, rung) {
+      calls.push(rung);
+      return { rawBody: "", status: 0, headers: {}, finalUrl: url, bytes: 0, ...(per[rung] ?? {}) } as RawResponse;
     },
   };
 }
@@ -83,6 +98,46 @@ describe("reachability", () => {
     };
     const r = await reachability(["https://e.com/a"], { fetcher: throwing });
     expect(r.unreadable.map((x) => x.url)).toEqual(["https://e.com/a"]);
+    expect(r.unreadable[0]?.rungsAttempted).toEqual(["node", "curl"]);
+  });
+
+  it("climbs past a first rung vetoed only by N4, and only by N5, over the floor", async () => {
+    // Spec 6.6, "Escalation". The preflight's own copy of the loop already
+    // climbed on all five vetoes at 3974d27, and check()'s did not; this pins
+    // the behaviour so moving onto the shared reader cannot lose it. The
+    // matching test in check.test.ts is the one that failed first.
+    for (const [name, per] of [
+      ["N4", { node: { rawBody: LONG, status: 404 }, curl: { rawBody: LONG, status: 200 } }],
+      ["N5", { node: { rawBody: LONG, status: 200, headers: { "content-type": "application/pdf" } }, curl: { rawBody: LONG, status: 200 } }],
+    ] as const) {
+      const calls: RungId[] = [];
+      await reachability(["https://e.com/a"], { fetcher: perRung(per, calls) });
+      expect(calls, name).toEqual(["node", "curl"]);
+    }
+  });
+
+  it("calls a URL readable when a later rung read it, though an earlier rung was walled (rule 5)", async () => {
+    // At 3974d27 the preflight ORed the vetoes across every rung, so a host
+    // that walled node and served curl the document was readable to check()
+    // and unreadable here - the README carried it as a known disagreement.
+    // Spec 6.6 rule 5: readable iff SOME read is readable, judged from the
+    // same reads the gate judges from. Written first, this failed with
+    // `expected [] to deeply equal [ { url: ..., proseChars: ..., rung: 'curl' } ]`.
+    const r = await reachability(["https://e.com/a"], {
+      fetcher: perRung({ node: { rawBody: WALL, status: 202 }, curl: { rawBody: LONG, status: 200 } }),
+    });
+    expect(r.readable).toEqual([{ url: "https://e.com/a", proseChars: proseVolume(toText(LONG)), rung: "curl" }]);
+    expect(r.unreadable).toEqual([]);
+    expect(r.rate).toBe(1);
+  });
+
+  it("still diagnoses an unreadable URL from every read: gone outranks the wall", async () => {
+    // Rule 5 changes who is readable, not how an unreadable URL is described.
+    const r = await reachability(["https://e.com/a"], {
+      fetcher: perRung({ node: { rawBody: WALL, status: 202 }, curl: { rawBody: LONG, status: 404 } }),
+    });
+    expect(r.readable).toEqual([]);
+    expect(r.unreadable[0]?.reason).toBe("the origin says the document is gone (404/410)");
     expect(r.unreadable[0]?.rungsAttempted).toEqual(["node", "curl"]);
   });
 });

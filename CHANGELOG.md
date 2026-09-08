@@ -6,6 +6,54 @@ Initial implementation of plan 1 (`check`, `reachability`). See
 `docs/superpowers/plans/2026-09-06-plan-1-core.md` and
 `docs/superpowers/specs/2026-09-06-testimonium-design.md` for the design.
 
+### Plan 1.2 (reader) - changes since the plan-1.1 merge
+
+Three verdict-moving changes, each confined to the case spec section 6.6
+names for it, plus two repairs and one non-change. All landed after `3974d27`
+and before this version was released, so they carry no deprecation path.
+
+- **`check` climbs the fetch ladder past a first read vetoed only by N4
+  (404/410) or only by N5 (not text).** It used to stop there and report
+  `unreachable` while `reachability` climbed on. Both now escalate on one
+  rule - climb unless the last read is readable, meaning no veto fired and
+  its prose clears the floor - implemented once in `src/fetch/read-source.ts`
+  and shared by both commands. The cost is extra fetches against documents
+  that are genuinely gone. A URL whose node fetch returned a 404 wrapped in
+  page chrome and whose curl fetch returned the document is now judged from
+  the curl read: `supported` if it carries every claim, `unsupported`,
+  naming the rest, if it carries only some - where it was `unreachable`
+  either way. That second case is a verdict moved toward an accusation; it
+  is made only from a readable read, which is the positive proof the
+  keystone rule requires. It also opens one route to accusing on a gone
+  document - the same error chrome served 404 to node and 200 to curl -
+  which the README discloses beside the chrome-at-200 route it belongs to.
+- **A readable read outranks a larger vetoed one (spec 6.6 rule 2).** A large
+  wall on the first rung followed by a smaller readable page matching only
+  some of the claims used to return `unreachable`; it returns `unsupported`,
+  naming the claims the readable page did not carry. An equal-prose tie,
+  which used to go to the first read whatever its veto, now goes to the
+  readable one. This is the second of the two changes in this release that
+  can move a verdict toward an accusation, and like the first it does so
+  only where a readable read exists. `firedRule` on such a result now
+  reports the readable read's rule (none), not the wall's.
+- **`reachability` calls a URL readable iff some read of it is readable (spec
+  6.6 rule 5).** It used to require that no attempted rung was vetoed, so a
+  host that walled the node rung and served curl the document was readable to
+  `check` and unreadable to `reachability`. The README bullet that disclosed
+  the disagreement is gone, because the disagreement is.
+- **The soft hyphen (U+00AD, `&shy;`) is deleted before matching.** The claim
+  `cooperation` now matches a page whose HTML says `co&shy;operation`;
+  `co-operation` still does not, and should not. Closes the false-miss route
+  the plan 1.1 docs disclosed.
+- **Excerpt offsets after a lengthening case-fold are right.** `foldWithMap`
+  recorded one source offset per input character, but U+0130 lowercases to
+  two code units, so the source offset of any match after such a character
+  was late by one per occurrence. The function is exported for plan 2's
+  harvest.
+- **Nothing new is public.** `readSource`, `bestReadable`, `isReadable`,
+  `isBlocked`, `computeSignals` and `nextAction` stay module-internal; a test
+  pins the package surface, and another pins `VERSION` to `package.json`.
+
 ### Plan 1.1 (extraction fidelity) - changes since the plan-1 merge
 
 Five behaviour changes visible to anyone integrating against `check`, the CLI,

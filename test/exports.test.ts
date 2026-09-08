@@ -17,4 +17,17 @@ describe("package surface", () => {
     const pkg = JSON.parse(readFileSync("package.json", "utf8"));
     expect(pkg.dependencies ?? {}).toEqual({});
   });
+
+  it("does not export the reader - raw reads are not a public surface (spec 5.3)", async () => {
+    const api = Object.keys(await import("../src/index.js"));
+    for (const name of ["readSource", "bestReadable", "isReadable", "isBlocked", "computeSignals", "nextAction"]) {
+      expect(api, name).not.toContain(name);
+    }
+  });
+
+  it("VERSION agrees with package.json - two copies of one number until plan 2 picks a source", async () => {
+    const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+    const { VERSION } = await import("../src/index.js");
+    expect(VERSION).toBe(pkg.version);
+  });
 });

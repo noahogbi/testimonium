@@ -1,16 +1,27 @@
-import { THRESHOLDS } from "../classify/thresholds.js";
 import type { RungId } from "./types.js";
 
+/** What the ladder is allowed to know about an attempt: the rung, and whether
+ *  it read the document (isReadable in classify/verdict.ts - no veto fired AND
+ *  the prose cleared the floor). Deliberately not the signals: a prose count
+ *  plus a caller-supplied "challenged" bit is how check() and reachability()
+ *  came to escalate on different rules at 3974d27 (spec 6.6, "Escalation"). */
 export interface Attempt {
   readonly rung: RungId;
-  readonly proseChars: number;
-  readonly challenged: boolean;
+  readonly readable: boolean;
 }
 
 export type Action = { kind: "try"; rung: RungId } | { kind: "stop" };
 
 /** HTML rungs in escalation order. pdftotext is not here: it is selected by
- *  URL shape before any fetch, never as a fallback. */
+ *  URL shape before any fetch, never as a fallback.
+ *
+ *  TWO rungs, and the count is load-bearing beyond escalation cost:
+ *  check()'s rule 2 (src/check.ts) lets a readable read outrank a larger
+ *  vetoed one, and with a THIRD HTML rung the trio [vetoed largest wall,
+ *  unvetoed sub-floor read, readable read] would assemble a cross-read
+ *  union into `supported` where 3974d27 answered `unreachable` - a verdict
+ *  move no spec section licenses. Adding a rung requires spec 6.6 to say
+ *  what rule 2 does at three reads. */
 const HTML_ORDER: readonly RungId[] = ["node", "curl"];
 
 /**
@@ -31,8 +42,11 @@ export function nextAction(
     return available.includes("pdftotext") ? { kind: "try", rung: "pdftotext" } : { kind: "stop" };
   }
 
+  // Climb unless the last read was readable. A read vetoed by N4 or N5 alone -
+  // a 404 over a full page of chrome, a PDF served as bytes - keeps climbing:
+  // the next rung may hold the document, and the cost of asking is one fetch.
   const last = history[history.length - 1];
-  if (last && last.proseChars >= THRESHOLDS.minProseChars && !last.challenged) return { kind: "stop" };
+  if (last?.readable) return { kind: "stop" };
 
   const tried = new Set(history.map((a) => a.rung));
   const next = HTML_ORDER.find((r) => available.includes(r) && !tried.has(r));

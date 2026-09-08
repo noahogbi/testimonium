@@ -111,15 +111,19 @@ before you trust a green run to mean more than it does.
   contain is the honest half of that sentence; the rest of it used to read
   "every verdict is a string search over fetched text, nothing more", and
   that was false. `supported` and the `missed` list are string searches.
-  `unreachable` is decided from **seven** inputs: the HTTP status (404/410),
-  a vendor challenge response header, the post-redirect URL, a length
-  threshold on the extracted text, a match against the bundled
+  Whether a read is vetoed is decided from **seven** inputs: the HTTP status
+  (404/410), a vendor challenge response header, the post-redirect URL, a
+  length threshold on the extracted text, a match against the bundled
   challenge-signature list, the response's **`content-type`**, and whether
   the raw body looks like binary. The fifth of those *is* a search of the
   prose - twelve regexes over the normalized extracted text
   (`src/rules/challenge.ts`), and a hit feeds the blocked decision directly.
   The last two are **N5**, and they are independent of each other: either one
-  alone forces `unreachable`. A `content-type` outside the accepted set - any
+  alone vetoes the read. A vetoed read is never judged on its own; the
+  ladder climbs past it, and the citation reads `unreachable` only when no
+  rung produced a readable read and none matched in full (spec 6.6 rule 3;
+  the ladder is under Measured limits below). A `content-type` outside the
+  accepted set - any
   `text/*`, plus `application/xml`, `application/xhtml+xml`,
   `application/json`, and anything ending `+xml` or `+json` - is enough on its
   own, whatever the body turns out to contain; separately, a raw body dense
@@ -132,31 +136,37 @@ before you trust a green run to mean more than it does.
   returns extracted text with no headers at all, so the opposite choice would
   veto every PDF the tool can read. What none of the seven involve is a model.
 - **A PDF cited from a URL carrying neither `.pdf` nor a `/pdf/` path
-  segment reads as `unreachable`.** The PDF rung has to be chosen before any
-  fetch happens (see N5, above), and the URL is all that choice has to go
-  on - `isPdf` recognizes a `.pdf` suffix and a `/pdf/` path segment, nothing
-  else. That is a capability traded for a fix, not a free improvement: before
-  N5 existed, a URL like this was fetched as HTML, a binary PDF stream
-  decoded as a "document" of a million characters, and cleared every
+  segment reads as `unreachable`.** It reads that way because every
+  HTML rung returns the raw bytes, N5 vetoes each read in turn, and the
+  ladder runs out of rungs - where N5 fires at all: the third of N5's
+  evasions, below, is an uncompressed PDF it does not catch, and that body
+  is judged as text. The PDF rung has to be chosen before any fetch
+  happens (see N5, above), and the URL is all that choice has to go on -
+  `isPdf` recognizes a `.pdf` suffix and a `/pdf/` path segment, nothing
+  else. That is a capability traded for a fix, not a free improvement:
+  before N5 existed, a URL like this was fetched as HTML, a binary PDF
+  stream decoded as a "document" of a million characters, and cleared every
   threshold - turning an accurate citation into a false accusation. Now the
   tool declines to judge a body it cannot first confirm is text at all. This
   does **not** mean PDFs are unsupported: `.pdf` URLs and `/pdf/`-segment
   URLs - including arxiv's content-negotiated `/pdf/<id>` links - are read
   normally. Recognizing more PDF URL shapes without a pre-fetch guess is
   future work, not done here.
-- **A perfectly readable HTML page served under a non-textual `content-type`
-  now reads `unreachable`.** This is the other half of the trade above, and it
-  is the one that will surprise you, because nothing about the page looks
-  wrong. N5's content-type trigger fires on the *header*, not on the body: a
-  misconfigured server, a CDN that mislabels, or an origin that answers
-  `application/octet-stream` for a document your browser renders happily gets
-  declined rather than judged. Measured on the corpus's real Verge capture: at
-  `text/html` it extracts 16,449 characters and reaches a verdict; the
-  identical bytes under `application/octet-stream` read `unreachable`. The
-  tool is refusing to accuse on a body it cannot first confirm is text, and
-  the server told it the body is not text. If you hit this, the header is the
-  thing to check - and `--fail-on-unreachable` is how you stop it passing
-  quietly.
+- **A read whose response carries a non-textual `content-type` is vetoed,
+  however readable the page.** This is the other half of the trade above,
+  and it is the one that will surprise you, because nothing about the page
+  looks wrong. N5's content-type trigger fires on the *header*, not on the
+  body: a misconfigured server, a CDN that mislabels, or an origin that
+  answers `application/octet-stream` for a document your browser renders
+  happily gets declined rather than judged. Measured on the corpus's real
+  Verge capture: at `text/html` it extracts 16,449 characters and reaches
+  a verdict; the identical bytes under `application/octet-stream` read
+  `unreachable`. The tool is refusing to accuse on a body it cannot first
+  confirm is text, and the server told it the body is not text. If you
+  hit this, the header is the thing to check - and `--fail-on-unreachable`
+  is how you stop it passing quietly. The ladder climbs past such a read;
+  if another rung returns the same bytes correctly labelled, the citation
+  is judged from that read.
 - **A claim that appears only inside an HTML comment can return
   `supported`.** `toText` strips tags but not comment bodies, and
   commented-out markup - which always contains a `>` - leaks into the
@@ -196,12 +206,15 @@ will eventually surprise a real user if it isn't said here first.
   syndication teaser that happens to carry the quoted paragraph yields
   `supported` on a couple of hundred characters, and the excerpt is the only
   thing that says how much was actually there.
-- **A source served at HTTP 404 or 410 reads as `unreachable`, even if its
-  body still visibly carries the claim phrases.** A server is not
+- **A read served at HTTP 404 or 410 is vetoed, even if its body still
+  visibly carries the claim phrases.** A server is not
   authoritative about *presence* - error pages routinely serve tens of
   kilobytes of intact navigation chrome - but 404/410 is the one place a
   server *is* authoritative: it is the origin stating the resource is gone,
   and that statement is trusted over the body.
+  The ladder climbs past such a read to the next rung, and that rung's read
+  is judged on its own: a document gone to node and present to curl is
+  judged from curl's read, and can be `supported` or `unsupported` from it.
 - **A heavy-chrome error page served at HTTP 200 can evade both the status
   veto and the prose floor.** This route *is* pinned by a fixture:
   `fixtures/corpus.json` files the real ECB error capture a second time at
@@ -210,6 +223,24 @@ will eventually surprise a real user if it isn't said here first.
   matches **none** of the twelve bundled challenge signatures - verified, 0
   of 12 - so at its real 404 the status veto is the *only* thing rejecting
   it, and nothing about the body would.
+- **A gone document whose error chrome is served at 200 to a later rung
+  reaches the same accusation through the ladder.** If the node rung is
+  answered 404 and the curl rung is answered 200 with the same heavy chrome -
+  a mirror or CDN that lost the status but kept the page - the 404 read is
+  vetoed, the ladder climbs, and the 200 read is judged on its own: over the
+  floor, no veto, none of the claims, `unsupported`. It is the route above
+  reached indirectly, accepted for the same reason, and pinned as an
+  ACCEPTED EXPOSURE in `test/check.test.ts`.
+  The route is not specific to error chrome: any readable read reached after
+  a vetoed one is judged on its own, whatever document it is - a soft-404
+  landing page, the target of a redirect after removal, a mirror's home
+  page - because no signal the classifier gates on distinguishes the same
+  page at 200 from a different document at 200 (the classifier computes slug
+  overlap and the head markers and gates on neither; it also never compares
+  a read's `finalUrl` with the URL it was asked for, so a redirect away from
+  the citation is observable and, today, unobserved - a gate left unbuilt,
+  not a limit of the signals). A wall on the first rung leaves no trace on
+  such a result beyond `rungsAttempted`; `firedRule` is the winning read's.
 - **The same false accusation is reachable a second way, and that route has
   no fixture at all.** The signature list only vetoes a *short* body: above
   `THRESHOLDS.maxChallengeChars` (800 extracted characters) it stops firing,
@@ -247,17 +278,6 @@ will eventually surprise a real user if it isn't said here first.
   density threshold. That number has never been swept against real pages with
   genuinely low but non-zero binary density, so moving it would be trading a
   disclosed evasion for an undisclosed one. See `docs/calibration-2026-09.md`.
-- **A soft hyphen inside a word makes that word's claim miss.** `&shy;`
-  (U+00AD) is a rendering hint: a browser shows "co&shy;operation" as
-  *cooperation* and breaks it only at a line end. `toText` decodes the entity
-  and `norm()` does not strip the character, so the claim `cooperation`
-  reports as missing on a page that visibly says it - and `co-operation` does
-  not match either, because the soft hyphen is not one of the dashes `norm()`
-  folds. Verified 2026-09-07. That is a false **miss**, which above the prose
-  floor means an accusation, so it is the direction that matters most. It is
-  not a regression - it missed before this branch too - and the fix belongs
-  with `norm()`'s folding table in plan 2. If a claim you can see on the page
-  reports missing, check the source for `&shy;`.
 - **If a site is redesigned and now serves different prose-rich content at a
   cited URL, `testimonium` can report `unsupported`.** It verifies that the
   page *carries the phrases*, not that it is *the same page* it was when you
@@ -287,15 +307,6 @@ will eventually surprise a real user if it isn't said here first.
   truncated ladder prints no such note, even though the same caveat applies
   to it. If your CI image is minimal, read those fields before reading the
   exit code.
-- **`reachability`'s preflight and `check`'s gate can disagree on a URL that is
-  challenged on one fetch rung and clean on another.** The preflight ORs the
-  challenge vetoes across every rung it attempts, so a single blocked rung
-  marks the URL unreadable even if a later rung read the real document
-  cleanly; the gate evaluates only the winning read. This has been verified
-  one-directional - a URL the preflight calls readable always gets read by the
-  gate - so the preflight only ever errs pessimistic and no wrong verdict
-  flows from it. Treat `reachability` as conservative and possibly
-  under-reporting; trust `check`'s verdict.
 
 ## Commands
 
@@ -307,6 +318,12 @@ testimonium reachability <doc.md>   preflight. no claims file needed
 Both read `<doc>` as GitHub-Flavored Markdown footnotes. `check` reads
 `<doc>.claims.json` beside it and writes `<doc>.evidence.json` - commit both;
 a later re-check's output is then a diff. `reachability` needs neither.
+Both read a URL through the same fetch ladder, under the same rules, and
+judge each read by the same definition of a read document, so on the same
+responses a URL `reachability` calls readable is one `check` never calls
+`unreachable`, and one it calls unreadable is one `check` never calls
+`unsupported` - it can still be `supported`, by a full match on a body under
+the prose floor.
 
 ## What's not here
 

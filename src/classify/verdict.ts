@@ -55,11 +55,13 @@ export interface Signals {
  * here without a fixture.
  */
 /**
- * The five vetoes, in ONE place, because THREE call sites ask this question:
+ * The five vetoes, in ONE place, because FOUR call sites ask this question:
  *
  *   1. `verdict()`, below - the gate's own `unreachable` branch.
- *   2. `reachability()` in src/reachability.ts - the preflight.
- *   3. `check()` in src/check.ts - which uses it to keep a vetoed read's
+ *   2. `isReadable()`, below - the reader's stop condition (spec 6.6).
+ *   3. `reachability()` in src/reachability.ts - the preflight's reason
+ *      ladder ("challenge interstitial").
+ *   4. `check()` in src/check.ts - which uses it to keep a vetoed read's
  *      matches out of the cross-rung union, since a match inside a body the
  *      classifier called not-the-document is the WALL'S text, not the
  *      author's evidence.
@@ -68,7 +70,7 @@ export interface Signals {
  * serving intact navigation chrome read `readable` in the preflight and
  * `unreachable` in the gate - a preflight that contradicts the gate is worse
  * than no preflight. Exported so no copy of the veto set can drift from this
- * one. (This comment said "two callers" while there were three; the count is
+ * one. (This comment said "two callers" while there were three, then "three" while plan 1.2 made four; the count is
  * load-bearing, because a fourth site added without importing from here is the
  * exact failure the export exists to prevent.)
  */
@@ -76,6 +78,22 @@ export function isBlocked(
   s: Pick<Signals, "challengeHeader" | "challengePath" | "challengeSignature" | "documentGone" | "notText">,
 ): boolean {
   return s.challengeHeader || s.challengePath || s.challengeSignature || s.documentGone || s.notText;
+}
+
+/**
+ * Readable: no veto fires AND the prose clears the floor (spec 6.6). THE ONE
+ * definition of "we read this document". readSource escalates until a read is
+ * readable, reachability() reports a URL readable iff some read is, and
+ * check() prefers a readable read over a larger vetoed one. It is NOT
+ * `!isBlocked`: 22 of the 25 challenge fixtures and every paywall stub pass
+ * all five vetoes and fail only the floor (docs/calibration-2026-09.md, "Read
+ * together"). A caller that asks `!isBlocked` when it means "readable" will
+ * treat a wall as a document.
+ */
+export function isReadable(
+  s: Pick<Signals, "challengeHeader" | "challengePath" | "challengeSignature" | "documentGone" | "notText" | "proseChars">,
+): boolean {
+  return !isBlocked(s) && s.proseChars >= THRESHOLDS.minProseChars;
 }
 
 export function verdict(s: Signals): Verdict {
@@ -87,5 +105,8 @@ export function verdict(s: Signals): Verdict {
   // separation: largest non-vetoed challenge 1,180 chars, smallest real
   // document 6,394, floor licensed at 4,500. (Re-run scripts/calibrate.mjs to
   // reproduce; see docs/calibration-2026-09.md.)
-  return s.proseChars >= THRESHOLDS.minProseChars ? "unsupported" : "unreachable";
+  // `isBlocked` already returned above, so this is the floor alone - but it
+  // is asked through isReadable so the gate's "unsupported" and the reader's
+  // "readable" cannot drift apart.
+  return isReadable(s) ? "unsupported" : "unreachable";
 }

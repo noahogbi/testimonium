@@ -35,6 +35,25 @@ describe("check", () => {
     expect(r.evidence?.length).toBeGreaterThan(0);
   });
 
+  it("a redirect to another host or path is not observed: finalUrl never gates", async () => {
+    // finalUrl is captured on every read (src/fetch/read-source.ts) and used
+    // only for N2's path patterns and the slug anchor; this test fails
+    // loudly if a redirect gate is ever added without a spec amendment
+    // (README "Measured limits" discloses it).
+    const r = await check("https://e.com/committee-report", ["spending rose sharply"], {
+      fetcher: stub({
+        node: {
+          rawBody: LONG_PROSE,
+          status: 200,
+          finalUrl: "https://elsewhere.example.org/archive/2019/annual-review",
+        },
+      }),
+    });
+    expect(r.verdict).toBe("supported");
+    expect(r).not.toHaveProperty("firedRule");
+    expect(r.rungsAttempted).toEqual(["node"]);
+  });
+
   it("returns unsupported when a claim is absent from a document we read", async () => {
     const r = await check("https://e.com/committee-report", ["spending rose sharply", "no such phrase"], {
       fetcher: stub({ node: { rawBody: LONG_PROSE, status: 200 } }),
@@ -363,6 +382,164 @@ describe("check", () => {
     }
   });
 
+  it("climbs past a first rung vetoed only by N4 - a 404 carrying a full page of chrome", async () => {
+    // Spec 6.6, "Escalation": climb unless the last read is readable. At
+    // 3974d27 this file's copy of the ladder climbed on N1, N2 and N3 only, so
+    // a first rung answering 404 with a body over the floor ENDED the ladder -
+    // while reachability's copy climbed on all five vetoes. Written before the
+    // reader was unified, this failed with rungsAttempted ["node"] and the
+    // verdict "unreachable": the proof that no test covered the seam.
+    const r = await check("https://e.com/committee-report", ["spending rose sharply"], {
+      fetcher: stub({ node: { rawBody: LONG_PROSE, status: 404 }, curl: { rawBody: LONG_PROSE, status: 200 } }),
+    });
+    expect(r.rungsAttempted).toEqual(["node", "curl"]);
+    expect(r.verdict).toBe("supported");
+    expect(r.evidence?.[0]?.rung).toBe("curl");
+  });
+
+  it("climbs past a first rung vetoed only by N5 - a non-text content-type over the floor", async () => {
+    const r = await check("https://e.com/committee-report", ["spending rose sharply"], {
+      fetcher: stub({
+        node: { rawBody: LONG_PROSE, status: 200, headers: { "content-type": "application/pdf" } },
+        curl: { rawBody: LONG_PROSE, status: 200 },
+      }),
+    });
+    expect(r.rungsAttempted).toEqual(["node", "curl"]);
+    expect(r.verdict).toBe("supported");
+    expect(r.evidence?.[0]?.rung).toBe("curl");
+  });
+
+  it("climbs past a first rung vetoed only by N4 and ACCUSES from the readable second read", async () => {
+    // The same escalation, where the readable second read carries only some
+    // of the claims. This is the one place Task 2 moves a verdict toward an
+    // accusation: at 3974d27 the ladder stopped at the 404 and answered
+    // `unreachable`; now it climbs, and the curl read - the largest read, no
+    // veto, over the floor - is judged on its own and names what it lacks.
+    // That is within the keystone rule (a readable read is positive proof of
+    // a read) and it is disclosed in the CHANGELOG (Task 7).
+    //
+    // The curl body is asserted LARGER than the node body. Until Task 4 lands
+    // rule 2, `check` still hands a prose tie to the first read, which here
+    // is the vetoed 404: with equal bodies this pin would answer
+    // `unreachable` after this task and only turn `unsupported` after
+    // Task 4. The ordering keeps this a pin on escalation alone.
+    const largerReport = `<html><title>The Committee Report</title><body>${"The committee report states that spending rose sharply. ".repeat(150)}</body></html>`;
+    expect(proseVolume(toText(largerReport))).toBeGreaterThan(proseVolume(toText(LONG_PROSE)));
+    const r = await check("https://e.com/committee-report", ["spending rose sharply", "revenue fell"], {
+      fetcher: stub({ node: { rawBody: LONG_PROSE, status: 404 }, curl: { rawBody: largerReport, status: 200 } }),
+    });
+    expect(r.rungsAttempted).toEqual(["node", "curl"]);
+    expect(r.verdict).toBe("unsupported");
+    expect(r.missed).toEqual(["revenue fell"]);
+    expect(r).not.toHaveProperty("evidence");
+  });
+
+  it("a readable read outranks a LARGER vetoed one, and names what it did not carry (rule 2)", async () => {
+    // Spec 6.6 rule 2 - the one aggregation change plan 1.2 makes, and one of
+    // the two changes in the plan that can move a verdict toward accusation
+    // (the other is Task 2's escalation, which accuses only when the readable
+    // read is also the largest; this rule drops that condition, equal-prose
+    // ties included). It does so only where a READABLE read exists to accuse
+    // from. `node` is a fat challenge page over the floor - vetoed by N2, a
+    // challenge PATH, rather than N1, so the wall carries a firedRule whose
+    // absence from the result is asserted below; `curl` is the document,
+    // smaller but readable, carrying one of the two claims. At 3974d27 the
+    // largest read won regardless of readability, the verdict was computed on
+    // the wall, and the answer was `unreachable` - hiding a partial miss that
+    // a readable read had positively shown. Written first, this failed with
+    // `expected 'unreachable' to be 'unsupported'`.
+    //
+    // The size ordering is asserted, not assumed: the test discriminates only
+    // while the vetoed read is the larger one.
+    const smallerReadable = `<html><title>The Committee Report</title><body>${"The committee report states that spending rose sharply. ".repeat(90)}</body></html>`;
+    expect(proseVolume(toText(smallerReadable))).toBeGreaterThanOrEqual(THRESHOLDS.minProseChars);
+    expect(proseVolume(toText(smallerReadable))).toBeLessThan(proseVolume(toText(LONG_PROSE)));
+    const r = await check("https://e.com/committee-report", ["spending rose sharply", "no such phrase"], {
+      fetcher: stub({
+        node: { rawBody: LONG_PROSE, status: 200, finalUrl: "https://e.com/cdn-cgi/challenge-platform/h/b" },
+        curl: { rawBody: smallerReadable, status: 200 },
+      }),
+    });
+    expect(r.rungsAttempted).toEqual(["node", "curl"]);
+    expect(r.verdict).toBe("unsupported");
+    expect(r.missed).toEqual(["no such phrase"]);
+    // An unsupported result carries no evidence (io/evidence.ts): the miss
+    // list is the whole report.
+    expect(r).not.toHaveProperty("evidence");
+    // At 3974d27 the wall won and its Cloudflare path rule rode along as
+    // provenance; the readable read fired no rule, so none is reported.
+    expect(r).not.toHaveProperty("firedRule");
+  });
+
+  it("ACCEPTED EXPOSURE: a gone document whose chrome is served at 200 to a later rung is accused from that read", async () => {
+    // Fable F1 on this plan. The node rung answers 404 with a full page of
+    // navigation chrome (N4, over the floor); the curl rung answers the SAME
+    // chrome at 200 - the shape of a CDN or mirror that has lost the status
+    // but kept the error page. Escalation (Task 2) brings the ladder to the
+    // curl read; rule 2 makes that read win although it is no larger than
+    // the vetoed one; and the read is judged on its own: no veto, over the
+    // floor, none of the claims - `unsupported`, on a document the origin
+    // said was gone. This is the README's chrome-at-200 route reached
+    // through the ladder instead of directly. It is accepted for the same
+    // reason that route is: the 200 read is, by every signal the classifier
+    // has, a readable document, and refusing it would refuse every readable
+    // second read that follows a 404. Disclosed in the README (Task 7).
+    //
+    // Written first, this failed with `expected 'unreachable' to be
+    // 'unsupported'`: after Task 2 the ladder climbs, but the tie between two
+    // equal-prose reads still went to the first, vetoed one.
+    const CHROME = `<html><title>Page not found</title><body>${"Browse our publications, statistics and press releases. ".repeat(120)}</body></html>`;
+    expect(proseVolume(toText(CHROME))).toBeGreaterThanOrEqual(THRESHOLDS.minProseChars);
+    const r = await check("https://e.com/committee-report", ["spending rose sharply"], {
+      fetcher: stub({ node: { rawBody: CHROME, status: 404 }, curl: { rawBody: CHROME, status: 200 } }),
+    });
+    expect(r.rungsAttempted).toEqual(["node", "curl"]);
+    expect(r.verdict).toBe("unsupported");
+    expect(r.missed).toEqual(["spending rose sharply"]);
+  });
+
+  it("ACCEPTED EXPOSURE: a full match assembled across two sub-floor reads is supported (rule 3's inherited shape)", async () => {
+    // No read is readable and neither matches in full on its own, yet between
+    // them the two non-vetoed stubs carry every claim. Rule 3 reaches
+    // `unreachable` through verdict() on the largest read, exactly as 3974d27
+    // did, and verdict() answers `supported` for an unvetoed read whose union
+    // match count is complete. This is the sub-floor-stub exposure the two
+    // ACCEPTED EXPOSURE tests above accept, in its union form, pinned so the
+    // shape is a choice and not an accident. It fails if rule 3 is ever
+    // rewritten to refuse every sub-floor read - which would be a licensed
+    // change only with a spec amendment.
+    const c1 = "spending rose sharply";
+    const c2 = "the review is ongoing";
+    const stub1 = `<html><body><p>The committee report states that ${c1}.</p></body></html>`;
+    const stub2 = `<html><body><p>Separately, ${c2}, the committee said.</p></body></html>`;
+    const r = await check("https://e.com/committee-report", [c1, c2], {
+      fetcher: stub({ node: { rawBody: stub1, status: 200 }, curl: { rawBody: stub2, status: 200 } }),
+    });
+    expect(r.rungsAttempted).toEqual(["node", "curl"]);
+    expect(r.verdict).toBe("supported");
+    expect(r.evidence?.map((e) => e.rung)).toEqual(["node", "curl"]);
+  });
+
+  it("ACCEPTED EXPOSURE: a sub-floor stub on the second rung attests a claim the origin said was gone (rule 1 through the escalation)", async () => {
+    // rule 1 - "a full match proves a read, whatever its prose volume" -
+    // reached through the escalation: at 3974d27 the ladder stopped on
+    // the 404 and answered `unreachable`; now it climbs, and the stub
+    // attests. Licensed by spec 6.6 rule 1, disclosed by README's 404
+    // bullet, and the second-worst outcome class in the keystone rule
+    // (a false attestation), so the shape is pinned as a choice.
+    const CHROME = `<html><title>Page not found</title><body>${"Browse our publications, statistics and press releases. ".repeat(120)}</body></html>`;
+    const STUB = "<html><body><p>The committee report states that spending rose sharply.</p></body></html>";
+    // The shape is the point: the 404 body is over the floor, the stub under it.
+    expect(proseVolume(toText(CHROME))).toBeGreaterThanOrEqual(THRESHOLDS.minProseChars);
+    expect(proseVolume(toText(STUB))).toBeLessThan(THRESHOLDS.minProseChars);
+    const r = await check("https://e.com/committee-report", ["spending rose sharply"], {
+      fetcher: stub({ node: { rawBody: CHROME, status: 404 }, curl: { rawBody: STUB, status: 200 } }),
+    });
+    expect(r.rungsAttempted).toEqual(["node", "curl"]);
+    expect(r.verdict).toBe("supported");
+    expect(r.evidence?.[0]?.rung).toBe("curl");
+  });
+
   it("does not consult HTTP status outside the 404/410 veto", async () => {
     // The property the design actually holds. A 400 or a 500 says nothing
     // about whether the bytes are the document - spec 6.3 records a 400
@@ -384,9 +561,11 @@ describe("check", () => {
     // ECB 404 serving 13,216 characters of navigation chrome, and with the
     // veto removed zero thresholds satisfied the acceptance test.
     //
-    // The cost is recorded and accepted: a misconfigured host serving a real
-    // document under a 404 loses its evidence. That degrades to unreachable,
-    // which renders nothing and fails nothing - the safe direction.
+    // The cost is recorded and accepted: a misconfigured host serving a
+    // real document under a 404 - with nothing readable from a later rung,
+    // as here, where curl answers the stub's empty default - loses its
+    // evidence. That degrades to unreachable, which renders nothing and
+    // fails nothing - the safe direction.
     for (const status of [404, 410]) {
       const r = await check("https://e.com/committee-report", ["spending rose sharply"], {
         fetcher: stub({ node: { rawBody: LONG_PROSE, status } }),

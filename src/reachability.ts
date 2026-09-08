@@ -1,10 +1,7 @@
-import { computeSignals } from "./classify/signals.js";
-import { THRESHOLDS } from "./classify/thresholds.js";
 import { isBlocked } from "./classify/verdict.js";
 import { defaultFetcher } from "./fetch/default-fetcher.js";
-import { nextAction, type Attempt } from "./fetch/ladder.js";
-import { isPdf } from "./fetch/pdf.js";
-import { EMPTY_RESPONSE, type Fetcher, type RawResponse, type RungId } from "./fetch/types.js";
+import { bestReadable, readSource } from "./fetch/read-source.js";
+import type { Fetcher, RungId } from "./fetch/types.js";
 import type { RuleSet } from "./rules/load.js";
 
 export interface ReachabilityResult {
@@ -41,75 +38,47 @@ export async function reachability(
   const unreadable: ReachabilityResult["unreadable"][number][] = [];
 
   for (const url of urls) {
-    const history: Attempt[] = [];
-    const attempted: RungId[] = [];
-    let bestProse = 0;
-    let bestRung: RungId = "node";
-    let challenged = false;
-    let gone = false;
-    let notText = false;
+    // THE SAME READS THE GATE JUDGES FROM (spec 6.6). Until plan 1.2 this
+    // function carried its own copy of the ladder loop, and its readable test
+    // ORed the vetoes across every rung - so a host that walled node and
+    // handed curl the document was readable to check() and unreadable here.
+    const { reads, attempted } = await readSource(url, [], {
+      fetcher,
+      ...(opts.rules ? { rules: opts.rules } : {}),
+    });
 
-    for (;;) {
-      const action = nextAction(history, fetcher.rungs, isPdf(url));
-      if (action.kind === "stop") break;
-      // Same contract, same treatment as check(): a Fetcher must not throw,
-      // and a third-party one that does degrades to an unread rung rather than
-      // aborting a preflight over an entire corpus (ruling C12, second call
-      // site). Warned about, never swallowed.
-      let response: RawResponse;
-      try {
-        response = await fetcher.fetch(url, action.rung);
-      } catch (e) {
-        console.warn(
-          `warn fetcher rung "${action.rung}" threw for ${url}: ${e instanceof Error ? e.message : String(e)}`,
-        );
-        response = EMPTY_RESPONSE;
-      }
-      attempted.push(action.rung);
-      const c = computeSignals({
-        rawBody: response.rawBody,
-        headers: response.headers,
-        finalUrl: response.finalUrl || url,
-        status: response.status,
-        claims: [],
-        ...(opts.rules ? { rules: opts.rules } : {}),
-      });
-      // THE SHARED PREDICATE, not a second copy. This one used to omit N4
-      // (documentGone), so a 404 serving nav chrome read `readable` here and
-      // `unreachable` at the gate.
-      const blocked = isBlocked(c.signals);
-      if (c.signals.proseChars > bestProse) {
-        bestProse = c.signals.proseChars;
-        bestRung = action.rung;
-      }
-      challenged = challenged || blocked;
-      gone = gone || c.signals.documentGone;
-      notText = notText || c.signals.notText;
-      history.push({ rung: action.rung, proseChars: c.signals.proseChars, challenged: blocked });
+    // Rule 5: readable iff SOME read is readable. bestReadable() is the read
+    // check() would aggregate from under rule 2, so the two cannot disagree
+    // about which read counts.
+    const best = bestReadable(reads);
+    if (best) {
+      readable.push({ url, proseChars: best.computed.signals.proseChars, rung: best.rung });
+      continue;
     }
 
-    if (bestProse >= THRESHOLDS.minProseChars && !challenged) {
-      readable.push({ url, proseChars: bestProse, rung: bestRung });
-    } else {
-      unreadable.push({
-        url,
-        // A 404 is not an interstitial, and saying so would be a new
-        // inaccuracy introduced by folding N4 into `blocked`.
-        // N5 implies `blocked` (isBlocked ORs in notText), so a body that is
-        // not text at all would otherwise fall into the `challenged` branch
-        // below and report as a "challenge interstitial" - a false diagnosis
-        // of exactly the class the N4 carve-out two lines above exists to
-        // prevent. This branch MUST precede `challenged`, or it is dead code.
-        reason: gone
-          ? "the origin says the document is gone (404/410)"
-          : notText
-            ? "the body is not text (binary or a non-textual content-type)"
-            : challenged
-              ? "challenge interstitial"
-              : `only ${bestProse} characters extracted`,
-        rungsAttempted: attempted,
-      });
-    }
+    // No read was readable: diagnose from all of them. The ladder of reasons is
+    // unchanged from 3974d27. A 404 is not an interstitial, and saying so would
+    // be a new inaccuracy introduced by folding N4 into `blocked`. N5 implies
+    // blocked (isBlocked ORs in notText), so a body that is not text at all
+    // would otherwise fall into the `challenged` branch below and report as a
+    // "challenge interstitial" - a false diagnosis of exactly the class the N4
+    // carve-out exists to prevent. This branch MUST precede `challenged`, or it
+    // is dead code.
+    const gone = reads.some((r) => r.computed.signals.documentGone);
+    const notText = reads.some((r) => r.computed.signals.notText);
+    const challenged = reads.some((r) => isBlocked(r.computed.signals));
+    const bestProse = reads.reduce((n, r) => Math.max(n, r.computed.signals.proseChars), 0);
+    unreadable.push({
+      url,
+      reason: gone
+        ? "the origin says the document is gone (404/410)"
+        : notText
+          ? "the body is not text (binary or a non-textual content-type)"
+          : challenged
+            ? "challenge interstitial"
+            : `only ${bestProse} characters extracted`,
+      rungsAttempted: attempted,
+    });
   }
 
   return { readable, unreadable, rate: urls.length === 0 ? 1 : readable.length / urls.length };

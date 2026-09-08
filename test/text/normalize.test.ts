@@ -47,6 +47,16 @@ describe("norm", () => {
     // "1. 5 things" - a match manufactured out of a numbered list.
     expect(norm("1. 5 things")).toBe("1. 5 things");
   });
+
+  it("deletes the soft hyphen, which toText decodes from &shy; and browsers do not render", () => {
+    // U+00AD is a line-break hint, invisible unless the line wraps there.
+    // Before plan 1.2 it survived norm() and defeated the match on a page
+    // that visibly said the word - a false MISS, which above the prose floor
+    // is an accusation (docs/calibration-2026-09.md, "The soft hyphen").
+    // Built from a code point: the character is invisible in a source file.
+    const shy = String.fromCharCode(0xad);
+    expect(norm(`closer co${shy}operation on enforcement`)).toBe("closer cooperation on enforcement");
+  });
 });
 
 describe("phraseFound", () => {
@@ -68,5 +78,13 @@ describe("phraseFound", () => {
 
   it("still refuses a numbered-list rendering of a decimal", () => {
     expect(phraseFound("1. 5 things you should know", "1.5 things")).toBe(false);
+  });
+
+  it("finds a claim whose word the document splits with a soft hyphen", () => {
+    const shy = String.fromCharCode(0xad);
+    const doc = `The two sides agreed on closer co${shy}operation on enforcement, officials said.`;
+    expect(phraseFound(doc, "closer cooperation on enforcement")).toBe(true);
+    // Deleted, not folded to a hyphen: the browser shows no character there.
+    expect(phraseFound(doc, "closer co-operation on enforcement")).toBe(false);
   });
 });
