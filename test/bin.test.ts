@@ -65,11 +65,20 @@ describe("validateFlags", () => {
 
   it("CHARACTERIZATION: a single-dash flag is not validated at all - `-j` passes as a positional", () => {
     // The limit named plainly: validateFlags inspects only `--`-prefixed args,
-    // so anything with one dash is invisible to it and falls through to be
-    // read as a positional command or document argument. `-j` is the obvious
-    // hazard - a user who abbreviates `--json` gets no error, and `main()`
-    // then reads "-j" as the document path and exits 2 with a file-read
-    // message that names the wrong problem.
+    // so anything with one dash is invisible to it. A user who abbreviates
+    // `--json` to `-j` gets no error either way, and which failure they get
+    // depends only on where they put it (both verified against the built CLI
+    // on 2026-09-07):
+    //
+    //   check doc.md -j   ->  ignored entirely. The run proceeds, `-j` is not
+    //                         in `flags` (that set is also `--`-only), so it
+    //                         silently does nothing and the gate exits 0.
+    //   check -j doc.md   ->  `-j` is destructured as the DOCUMENT path, so
+    //                         the run dies with "cannot read -j: ENOENT" and
+    //                         exit 2 - a message that names the wrong problem.
+    //
+    // The trailing form is the one asserted here, because it is the one that
+    // fails silently rather than loudly.
     //
     // NOT desired behaviour and NOT to be "fixed" here. The flag tables this
     // would need (which flags each command accepts, short forms included) are
