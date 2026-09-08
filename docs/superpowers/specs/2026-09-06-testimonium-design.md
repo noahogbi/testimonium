@@ -374,8 +374,11 @@ VETO - overrides everything, including P1
 
   N5  The body is not text at all. Two independent triggers, either one
       sufficient:
-        (a) the response `content-type` is non-textual - not `text/*`, not
-            XML, JSON or a `+xml`/`+json` type. An ABSENT content-type is
+        (a) the response `content-type` falls outside the accepted set: any
+            `text/*`, plus `application/xml`, `application/xhtml+xml`,
+            `application/json`, and any type ending `+xml` or `+json`. The
+            type is compared case-insensitively with parameters (`charset`)
+            dropped. An ABSENT content-type is
             treated as textual, which is forced rather than merely
             defensible: the pdftotext rung returns no headers at all
             alongside real extracted text, so the opposite choice would
