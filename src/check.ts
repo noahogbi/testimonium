@@ -1,6 +1,6 @@
 import { isBlocked, verdict } from "./classify/verdict.js";
 import { defaultFetcher } from "./fetch/default-fetcher.js";
-import { readSource, type Read } from "./fetch/read-source.js";
+import { bestReadable, readSource, type Read } from "./fetch/read-source.js";
 import type { Fetcher } from "./fetch/types.js";
 import { dedupeEvidence, excerptFor, type Evidence } from "./text/excerpt.js";
 import { norm } from "./text/normalize.js";
@@ -94,8 +94,22 @@ export async function check(
   // a short real article followed by a fat block page is the ordinary case,
   // not an exotic one.
   const proven = reads.find((r) => verdict(r.computed.signals) === "supported");
-  const won = proven ?? reads.reduce((a, b) =>
-    b.computed.signals.proseChars > a.computed.signals.proseChars ? b : a);
+  // Rule 2 (spec 6.6): failing a proof, the READABLE read with the most prose
+  // - not the largest read. A fat challenge page over the floor used to
+  // outrank a smaller readable document, so the verdict was computed on the
+  // wall and a partial miss the document had positively shown became
+  // `unreachable`. This is one of the two places plan 1.2 moves a verdict
+  // toward accusation (the other is the ladder's escalation in
+  // read-source.ts, which accuses only when the readable read is also the
+  // largest), and it does so only where a readable read exists to accuse
+  // from; the union below still decides WHICH claims are missed.
+  // Rule 3: with no readable read either, the largest read carries the
+  // verdict to verdict(), which returns `unreachable` for a vetoed or
+  // sub-floor body - the 3974d27 route, kept so that no unlicensed verdict
+  // moves. (Its one inherited shape, a full match assembled across unvetoed
+  // sub-floor reads, is pinned as an accepted exposure in check.test.ts.)
+  const largest = reads.reduce((a, b) => (b.computed.signals.proseChars > a.computed.signals.proseChars ? b : a));
+  const won = proven ?? bestReadable(reads) ?? largest;
 
   // A claim located by ANY rung is proven present - a match is proof of a read.
   // Assembling across reads is what stops an `unsupported` verdict that names
