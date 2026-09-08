@@ -367,7 +367,7 @@ verdict *toward* `unsupported`, which this plan's constraints forbid; it is plan
 the README's "What this does not do" for the same disclosure aimed at a user rather than a
 maintainer.
 
-### The soft hyphen decodes but `norm()` does not strip it - a false MISS
+### The soft hyphen decoded but `norm()` did not strip it - a false MISS, closed by plan 1.2
 
 **Added 2026-09-07, final fix round.** The one gap on this page that runs in the ACCUSATION
 direction, and until now it was disclosed nowhere at all - not here, not in the README.
@@ -397,6 +397,24 @@ did not decode at all and the raw `&shy;` sat in the text instead. Adding `shy` 
 changed which character breaks the match, not whether it breaks. The fix belongs with
 `norm()`'s folding table and is parked for plan 2; it is recorded here because it was the
 only one of these gaps written down nowhere.
+
+**Closed 2026-09-08 (plan 1.2).** `norm()` now deletes U+00AD alongside the zero-widths
+(`src/text/normalize.ts`), and the excerpt fold drops it the same way so the offset map stays
+aligned with the matcher (`DROP` in `src/text/excerpt.ts`). Deleted, not folded to a hyphen:
+the character marks a place a word MAY break, so the word the page shows is the unbroken one.
+Re-measured after the change, from a fresh build, with
+
+    npm run build && node -e "Promise.all([import('./dist/text/normalize.js'), import('./dist/text/extract.js')]).then(([n, x]) => { const doc = x.toText('<p>closer co&shy;operation on enforcement</p>'); for (const c of ['cooperation', 'co-operation']) console.log(c, n.phraseFound(doc, c)); })"
+
+| claim | `phraseFound` |
+|---|---|
+| `cooperation` | **true** |
+| `co-operation` | **false** |
+
+`co-operation` still misses, and should: nothing on the page says it. The fixture corpus holds
+no soft hyphen in either form (39 files, 0 `&shy;`, 0 raw U+00AD, counted 2026-09-08), so no
+fixture verdict moved. The one-line command above printed `false` / `false` at ae9d299 before
+the change; run it again before believing this table.
 
 ## The two N5 constants, and what does and does not license them
 

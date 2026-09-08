@@ -247,17 +247,6 @@ will eventually surprise a real user if it isn't said here first.
   density threshold. That number has never been swept against real pages with
   genuinely low but non-zero binary density, so moving it would be trading a
   disclosed evasion for an undisclosed one. See `docs/calibration-2026-09.md`.
-- **A soft hyphen inside a word makes that word's claim miss.** `&shy;`
-  (U+00AD) is a rendering hint: a browser shows "co&shy;operation" as
-  *cooperation* and breaks it only at a line end. `toText` decodes the entity
-  and `norm()` does not strip the character, so the claim `cooperation`
-  reports as missing on a page that visibly says it - and `co-operation` does
-  not match either, because the soft hyphen is not one of the dashes `norm()`
-  folds. Verified 2026-09-07. That is a false **miss**, which above the prose
-  floor means an accusation, so it is the direction that matters most. It is
-  not a regression - it missed before this branch too - and the fix belongs
-  with `norm()`'s folding table in plan 2. If a claim you can see on the page
-  reports missing, check the source for `&shy;`.
 - **If a site is redesigned and now serves different prose-rich content at a
   cited URL, `testimonium` can report `unsupported`.** It verifies that the
   page *carries the phrases*, not that it is *the same page* it was when you
