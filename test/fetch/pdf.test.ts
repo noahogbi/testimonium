@@ -29,6 +29,25 @@ describe("isPdf", () => {
   it("does not match an ordinary HTML url", () => {
     expect(isPdf("https://example.com/article/2024/report")).toBe(false);
   });
+
+  it("matches on the PATH only - a /pdf/ inside a query string is not a path segment", () => {
+    // The doc comment and the plan both say "path segment"; the regex was
+    // matching the whole URL, so a redirector or a tracking parameter carrying
+    // "/pdf/" chose the PDF rung for an HTML page. Query and fragment are
+    // stripped before matching.
+    expect(isPdf("https://x.com/a?u=/pdf/")).toBe(false);
+    expect(isPdf("https://x.com/a?next=https://y.com/pdf/123")).toBe(false);
+    expect(isPdf("https://x.com/a#/pdf/")).toBe(false);
+    expect(isPdf("https://x.com/article?file=report.pdf")).toBe(false);
+    expect(isPdf("https://x.com/article#report.pdf")).toBe(false);
+  });
+
+  it("still matches a real .pdf path that carries a query string or fragment", () => {
+    // The other direction, which stripping must NOT regress.
+    expect(isPdf("https://x.com/doc.pdf?v=2")).toBe(true);
+    expect(isPdf("https://x.com/doc.pdf#page=4")).toBe(true);
+    expect(isPdf("https://arxiv.org/pdf/1706.03762v7?download=1")).toBe(true);
+  });
 });
 
 describe("pdfRungAvailable", () => {

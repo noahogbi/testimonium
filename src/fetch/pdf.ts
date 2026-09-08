@@ -8,14 +8,23 @@ import { EMPTY_RESPONSE, type RawResponse } from "./types.js";
 /** A `/pdf/` path segment is a cheap, pre-fetch recovery for the
  *  content-negotiated case: arxiv.org/pdf/1706.03762v7 carries no `.pdf`
  *  suffix but does carry this segment. Checked on the URL alone, before any
- *  fetch, exactly as `.pdf($|\?)` is - `ladder.ts` requires the rung be
+ *  fetch, exactly as the `.pdf` suffix is - `ladder.ts` requires the rung be
  *  chosen up front. Worst case the guess is wrong and the body is HTML,
  *  which reads as `unreachable` (pdftotext fails on non-PDF bytes) - never
  *  an accusation. A bare "pdf" substring inside a longer path segment
  *  (`/pdfs/`, `/mypdf/`) does NOT match; the slashes on both sides require a
- *  whole segment. */
-export const isPdf = (url: string, contentType = ""): boolean =>
-  /\.pdf($|\?)/i.test(url) || /\/pdf\//i.test(url) || /application\/pdf/i.test(contentType);
+ *  whole segment.
+ *
+ *  **Matched against the PATH, with query and fragment stripped first.** Both
+ *  patterns used to run over the whole URL string, so `?u=/pdf/` on a
+ *  redirector and `#report.pdf` on an anchor chose the PDF rung for an HTML
+ *  page - contradicting this comment and the plan, which both say "path
+ *  segment". Stripping also fixes the mirror defect: `.pdf` followed by a
+ *  FRAGMENT is a real PDF and the old `\.pdf($|\?)` did not match it. */
+export const isPdf = (url: string, contentType = ""): boolean => {
+  const path = url.split("#")[0]?.split("?")[0] ?? "";
+  return /\.pdf$/i.test(path) || /\/pdf\//i.test(path) || /application\/pdf/i.test(contentType);
+};
 
 /** Extract a PDF's text so a filing can be phrase-checked against its own
  *  bytes. Without this a PDF URL is matched as HTML, every claim misses, and
