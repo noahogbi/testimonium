@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { check } from "../src/check.js";
+import { THRESHOLDS, proseVolume } from "../src/classify/thresholds.js";
+import { toText } from "../src/text/extract.js";
 import type { Fetcher, RawResponse, RungId } from "../src/fetch/types.js";
 import { CHALLENGE_PATHS, CHALLENGE_SIGNATURES, type Rule } from "../src/rules/challenge.js";
 import { HOST_RULES } from "../src/rules/hosts.js";
@@ -179,8 +181,23 @@ describe("check", () => {
     // proved, because `proven` is found by scanning `reads` for the first one
     // whose OWN verdict is `supported` - a rung that comes later and is itself
     // gone does not get consulted at all once that happens.
+    //
+    // THE 404 BODY HAS TO BE THE LARGER READ, and that is the whole reason it
+    // is shaped this way. Every cross-rung test on this branch once used a
+    // vetoed body SMALLER than the stub, so the fallback reducer - largest
+    // prose volume wins - picked the same read `proven` picks and `proven`
+    // discriminated nothing: deleting it left the entire suite green. The body
+    // below is the shape the corpus's real ECB capture has, heavy navigation
+    // chrome served at 404 (13,216 extracted characters there), reproduced
+    // inline rather than read from fixtures/corpus.json because this file
+    // deliberately holds no fixture reads - and because a test whose
+    // discriminating power depends on a captured file's SIZE would degrade
+    // silently the day that file was re-captured. The two assertions below
+    // pin the property instead of trusting it.
     const shortStub = `<html><body><p>The committee report states that spending rose sharply.</p></body></html>`;
-    const gone = `<html><body>Not Found</body></html>`;
+    const gone = `<html><body><nav>${"Home Publications Statistics Press Media Careers Legal notice Privacy statement Accessibility Sitemap Contact. ".repeat(130)}</nav><p>The page you requested could not be found.</p></body></html>`;
+    expect(proseVolume(toText(gone))).toBeGreaterThan(proseVolume(toText(shortStub)));
+    expect(proseVolume(toText(gone))).toBeGreaterThanOrEqual(THRESHOLDS.minProseChars);
     const r = await check("https://e.com/committee-report", ["spending rose sharply"], {
       fetcher: stub({ node: { rawBody: shortStub, status: 200 }, curl: { rawBody: gone, status: 404 } }),
     });
