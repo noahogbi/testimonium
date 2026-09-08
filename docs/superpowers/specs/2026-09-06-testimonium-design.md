@@ -450,12 +450,24 @@ length cap, and that veto stands even where the claims would otherwise have
 matched in full. What the list can no longer do is produce `unsupported`. Every
 verdict it decides is a withheld accusation, never a supplied one.
 
-That asymmetry is what the rot argument rests on, and it is narrower than draft 1
-claimed. A missing signature costs reach - the wall falls through to P2 and lands
-on `unreachable` anyway. An over-broad signature costs an attestation - a real
-document that matches it and is short reads `unreachable` instead of `supported`.
-Neither direction can accuse an author who did nothing wrong. This much follows
-from the structure of the verdict table and needs no measurement.
+The rot argument survives, but only below the prose floor, and draft 1 stated it
+without that condition. N3 fires only where `proseVolume` is under
+`maxChallengeChars` (800), which sits far below `minProseChars` (4,500) on the
+same measured quantity. So beneath the floor the list is genuinely rot-tolerant:
+a wall it fails to name falls through to P2 and lands on `unreachable` anyway,
+and an over-broad entry costs an attestation rather than truth - a real document
+that matches it and is short reads `unreachable` where it would have read
+`supported`.
+
+Above the floor neither protection applies. A wall padded past ~4,500 extracted
+characters is vetoed by neither the signature, which only applies below 800, nor
+the floor, which only blocks an accusation on a short body. There the list's
+completeness does bear on truth, and a wall can mint an accusation against an
+author who did nothing wrong. That is the known gap carried as a fixture in
+`fixtures/corpus.json` and measured in `docs/calibration-2026-09.md`, and it is
+why draft 1's "never truth" was wrong rather than merely imprecise. The
+structural half of this needs no measurement; the exposure above the floor has
+been measured, and the thresholds were left alone deliberately.
 
 Draft 1 called the list "an optimization" that "may rot freely; the cost is
 latency and reach, never truth". N3 made that false. It is the same false claim
