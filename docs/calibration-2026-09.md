@@ -375,27 +375,27 @@ direction, and until now it was disclosed nowhere at all - not here, not in the 
 `&shy;` (U+00AD SOFT HYPHEN) is a rendering hint: a browser shows `co&shy;operation` as
 *cooperation* and breaks the word there only if the line runs out. Task 1 added `shy` to the
 entity table, so `toText` now decodes it into a literal U+00AD in the extracted text.
-`norm()` does not remove it - U+00AD is outside both of `norm()`'s stripping ranges, which
-cover U+200B..U+200F plus U+2060 and U+FEFF for zero-widths, and U+2010..U+2015 plus U+2212
+`norm()` did not remove it - U+00AD was outside both of `norm()`'s stripping ranges at that commit, which covered
+U+200B..U+200F plus U+2060 and U+FEFF for zero-widths, and U+2010..U+2015 plus U+2212
 for dashes. (Written as code points deliberately: every character in those two ranges is
 either invisible or indistinguishable from an ASCII hyphen in an editor, and this
 repository has twice been corrupted by pasting such characters literally.)
 
-Measured directly *[re-measured 2026-09-07]* on a paragraph reading
+Measured directly at ae9d299 *[re-measured 2026-09-07]*, before the change, on a paragraph reading
 `closer co&shy;operation on enforcement`:
 
-| claim | `phraseFound` |
+| claim | `phraseFound` at ae9d299 |
 |---|---|
 | `cooperation` | **false** |
 | `co-operation` | **false** |
 
-Both spellings a reader might reasonably copy out miss. On a body above the 4,500-character
-prose floor that is an `unsupported` verdict against an accurate citation.
+Both spellings a reader might reasonably copy out missed. On a body above the 4,500-character
+prose floor that was an `unsupported` verdict against an accurate citation.
 
 **Not a regression** - it missed before this branch too, because before Task 1 the entity
 did not decode at all and the raw `&shy;` sat in the text instead. Adding `shy` to the table
-changed which character breaks the match, not whether it breaks. The fix belongs with
-`norm()`'s folding table and is parked for plan 2; it is recorded here because it was the
+changed which character breaks the match, not whether it breaks. The fix belonged with
+`norm()`'s folding table and was parked for plan 2 (it landed in plan 1.2, below); it was recorded here because it was the
 only one of these gaps written down nowhere.
 
 **Closed 2026-09-08 (plan 1.2).** `norm()` now deletes U+00AD alongside the zero-widths
