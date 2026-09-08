@@ -415,8 +415,14 @@ that sit nowhere near each other:
 |---|---:|---|
 | all 34 pre-Task-3 corpus fixture rows | **0.0000** (maximum over all 34, not a mean) | re-measured 2026-09-07 |
 | `fixtures/challenge/pdf-binary-served-at-200.bin` | **0.5315** | re-measured 2026-09-07 |
-| real arxiv PDF bytes | 0.5887 | plan 1.1 reviewer, live fetch; not reproducible from this repo |
+| real arxiv PDF bytes | 0.5888 | plan 1.1 reviewer, live fetch (38,579 binary of 65,517 sampled code points); not reproducible from this repo |
 | constructed binary wrapped in tag-shaped spans | 0.316 | plan 1.1 reviewer; not reproducible from this repo |
+
+The arxiv row was reported as 0.5887 when it was taken, computed against the 65,536-**unit**
+sample window that shipped at the time. The same raw counts over **code points** - the unit
+the scan uses now - give 0.5888. That difference is exactly the unit mismatch this round
+closed, and it is worth leaving visible: the old denominator understated every density it
+measured, always in the direction that withholds a veto.
 
 So every measurement to date is either exactly zero or above 0.3, and 0.01 is an arbitrary
 point inside a 0.3-wide empty band. **The measurement that would matter has not been made:

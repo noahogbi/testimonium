@@ -470,9 +470,18 @@ property depends entirely on thresholds nobody has calibrated.
 > safely" is a design intention, not a property.
 
 **On HTTP status.** The origin spec's section 2 concluded that a status code is
-unreliable in both directions, and that conclusion stands on its own: this scheme
-consults no status, so a document served under a 400 or a 404 is judged by its
-body like any other.
+unreliable in both directions. That conclusion still holds in the direction that
+protects the author: no status is ever read as proof the real page was reached, so
+a 200 licenses nothing by itself and a document served under a 400 is judged by
+its body like any other.
+
+The scheme does consult status, in one direction only. N4 (section 6.2) reads 404
+and 410 as evidence the document is gone and forces `unreachable`. A status can
+therefore withhold an accusation; it can never supply one. This paragraph
+previously said the scheme "consults no status" - true when it was written, and
+falsified by N4 when N4 landed during plan 1. It is corrected here rather than
+left standing, because a spec that has gone quietly false is the failure this
+tool exists to catch.
 
 Draft 1 supported that point with two examples and both were wrong, in the exact
 manner section 0 of this document warns against. `www.meta.com`'s 253KB under an
@@ -481,7 +490,9 @@ Meta"; `news.skhynix.com`'s 112KB 404 extracts to 522 characters of "404, Page
 Not Found." They are large *error shells*, not readable documents. The origin
 spec said "rendered HTML under a 400" and was accurate; draft 1 escalated that to
 "readable document" and made it false. Neither page is rescued by this scheme -
-both fail P2 and stay `unreachable`, exactly as before.
+both stay `unreachable`, exactly as before - the
+404 now by N4, before prose volume is consulted at all, and the 400 by P2 on its
+12 characters of text.
 `[verified: both URLs re-fetched and extracted, 2026-09-06]`
 
 The honest form of the claim is therefore a-priori rather than empirical: status

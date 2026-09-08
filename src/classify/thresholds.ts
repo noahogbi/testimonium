@@ -55,12 +55,15 @@ export const THRESHOLDS = {
    *  - 0.5315 on `fixtures/challenge/pdf-binary-served-at-200.bin`, the
    *    synthetic-but-structurally-faithful PDF this repo carries. Also
    *    re-measured 2026-09-07.
-   *  - 0.5887 on the bytes of a real arxiv PDF, and 0.316 on constructed
+   *  - 0.5888 on the bytes of a real arxiv PDF, and 0.316 on constructed
    *    binary wrapped in tag-shaped spans. Both are the plan-1.1 reviewer's
-   *    measurements, reported here as reported: this repo holds no copy of
-   *    either body, so neither was re-measured. `docs/calibration-2026-09.md`
-   *    records the arxiv sample as 38,579 binary of 65,517 sampled code
-   *    points.
+   *    measurements: this repo holds no copy of either body, so neither was
+   *    re-measured here. The reviewer reported 0.5887, computed against the
+   *    65,536-UNIT window that shipped before this round. Its own raw counts
+   *    are 38,579 binary of 65,517 sampled CODE POINTS, which is 0.5888 on
+   *    the code-point denominator the scan uses now. The gap between those
+   *    two figures IS the unit mismatch this round closed, visible on a real
+   *    body: the old denominator flattered every density it measured.
    *
    *  So every measurement to date is either exactly zero or above 0.3, and
    *  0.01 is an arbitrary point in a 0.3-wide empty band. **What has NOT been
