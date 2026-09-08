@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { verdict, type Signals } from "../../src/classify/verdict.js";
+import { isReadable, verdict, type Signals } from "../../src/classify/verdict.js";
+import { THRESHOLDS } from "../../src/classify/thresholds.js";
 
 const base: Signals = {
   matched: 0,
@@ -85,5 +86,38 @@ describe("verdict", () => {
     expect(verdict({ ...base, matched: 0, proseChars: 300, slugLabelOverlap: 0, headMarkers: true })).toBe(
       "unreachable",
     );
+  });
+});
+
+describe("isReadable", () => {
+  // Spec 6.6: readable = no veto fires AND proseChars >= minProseChars. The
+  // predicate readSource escalates on (Task 2), reachability reports (Task 3)
+  // and check aggregates with (Task 4). It is NOT `!isBlocked`: 22 of the 25
+  // challenge fixtures pass every veto and fail only the floor.
+  const floor = THRESHOLDS.minProseChars;
+
+  it("is true at the floor and above", () => {
+    expect(isReadable({ ...base, proseChars: floor })).toBe(true);
+    expect(isReadable({ ...base, proseChars: 20_000 })).toBe(true);
+  });
+
+  it("is false under the floor with no veto", () => {
+    expect(isReadable({ ...base, proseChars: floor - 1 })).toBe(false);
+    expect(isReadable({ ...base, proseChars: 0 })).toBe(false);
+  });
+
+  it("is false under each of the five vetoes, however much prose", () => {
+    const vetoes = ["challengeHeader", "challengePath", "challengeSignature", "documentGone", "notText"] as const;
+    for (const veto of vetoes) {
+      expect(isReadable({ ...base, proseChars: 20_000, [veto]: true }), veto).toBe(false);
+    }
+  });
+
+  it("agrees with verdict(): a clean partial match is unsupported iff readable", () => {
+    // verdict()'s last branch and this predicate must never drift apart.
+    for (const proseChars of [0, 900, floor - 1, floor, 20_000]) {
+      const s: Signals = { ...base, proseChars, matched: 1, total: 3 };
+      expect(verdict(s) === "unsupported", String(proseChars)).toBe(isReadable(s));
+    }
   });
 });
