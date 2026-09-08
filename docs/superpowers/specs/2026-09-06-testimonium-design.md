@@ -3,6 +3,9 @@
 **Date:** 2026-09-06
 **Status:** Draft 2 - Fable review returned REVISE with five blockers; all five are
 addressed below. Awaiting editor review, then `writing-plans`.
+**Amended:** 2026-09-07, section 6.2 only, adding a fifth veto (N5, "the body is not
+text at all"). Authorised by `docs/superpowers/plans/2026-09-07-plan-1-1-extraction.md`,
+which declares the amendment in its own header.
 **Language:** TypeScript, Node >= 20, npm.
 **Sibling to:** `urtext`. Not a subcommand of it. See section 3.
 
@@ -369,19 +372,55 @@ VETO - overrides everything, including P1
       pairs returned zero solutions with that fixture and 249 without it.
       Body shape cannot see what the status line says plainly.
 
+  N5  The body is not text at all. Two independent triggers, either one
+      sufficient:
+        (a) the response `content-type` is non-textual - not `text/*`, not
+            XML, JSON or a `+xml`/`+json` type. An ABSENT content-type is
+            treated as textual, which is forced rather than merely
+            defensible: the pdftotext rung returns no headers at all
+            alongside real extracted text, so the opposite choice would
+            veto every PDF the tool CAN read;
+        (b) the raw body, before any tag-stripping, is dense with U+FFFD
+            replacement characters and C0 control bytes. Prose is not, and
+            no script is - CJK, emoji and mathematical notation all sit
+            above U+0020.
+
+      **AMENDMENT, 2026-09-07, from plan 1.1
+      (`docs/superpowers/plans/2026-09-07-plan-1-1-extraction.md`).** N1-N4
+      all ask whether a server or a wall stopped us. N5 asks whether what
+      came back is prose in the first place, and nothing in draft 2 asked
+      that. Without it a content-negotiated PDF - an arxiv or DOI link with
+      no `.pdf` in the path - decodes to a megabyte of "prose", clears
+      every threshold, and turns a claim the document genuinely contains
+      into an accusation. [measured: a real paper extracted 1,037,512
+      characters, 230x the floor, with no veto firing]
+
+      The two constants behind (b) - the density and the sample window -
+      are NOT calibrated against the corpus the way 6.3's prose floor is.
+      See `src/classify/thresholds.ts`, which says so, and
+      `docs/calibration-2026-09.md` for the gaps this veto is known to
+      leave open.
+
 VERDICT
   claims.length == 0                          -> unclaimed   (never supported)
-  N1 | N2 | N3 | N4                           -> unreachable
+  N1 | N2 | N3 | N4 | N5                      -> unreachable
   matched == claims.length                    -> supported
   P2                                          -> unsupported
   otherwise                                   -> unreachable
 ```
 
-Accusation rests on P2 and the four vetoes. Measured separation on the
+Accusation rests on P2 and the five vetoes. Measured separation on the
 fixture corpus: largest non-vetoed challenge 1,180 characters, smallest
-real document 6,858 - a gap of 5,678, with the floor licensed at 4,500.
-N4 removes the padded error shells that prose volume cannot see; nothing
-else needs removing.
+real document 6,394 - a gap of 5,214, with the floor licensed at 4,500.
+N4 removes the padded error shells that prose volume cannot see, and N5
+the bodies that are not prose at all; nothing else needs removing.
+
+*(Amended 2026-09-07 with N5, per plan 1.1. The document figure was 6,858
+when this paragraph was written; it is 6,394 as of the current corpus -
+re-measured 2026-09-07 with `node scripts/calibrate.mjs`, and the reason
+for the change is recorded in `docs/calibration-2026-09.md`. Both N4 and N5
+are load-bearing on this corpus: without N5 a fixture extracting 6,221
+characters sits inside the 1,180-to-6,394 gap and collapses most of it.)*
 
 **Read the table's shape, because it is the whole correction.** Attestation and
 accusation have different burdens. A full match is its own proof of a read and

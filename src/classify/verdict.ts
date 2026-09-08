@@ -55,12 +55,22 @@ export interface Signals {
  * here without a fixture.
  */
 /**
- * The five vetoes, in ONE place, because two callers ask this question.
+ * The five vetoes, in ONE place, because THREE call sites ask this question:
  *
- * `reachability` (the preflight) asked it separately and its copy omitted N4,
- * so a 404 serving intact navigation chrome read `readable` in the preflight
- * and `unreachable` in the gate - a preflight that contradicts the gate is
- * worse than no preflight. Exported so the two cannot drift again.
+ *   1. `verdict()`, below - the gate's own `unreachable` branch.
+ *   2. `reachability()` in src/reachability.ts - the preflight.
+ *   3. `check()` in src/check.ts - which uses it to keep a vetoed read's
+ *      matches out of the cross-rung union, since a match inside a body the
+ *      classifier called not-the-document is the WALL'S text, not the
+ *      author's evidence.
+ *
+ * The preflight asked it separately once and its copy omitted N4, so a 404
+ * serving intact navigation chrome read `readable` in the preflight and
+ * `unreachable` in the gate - a preflight that contradicts the gate is worse
+ * than no preflight. Exported so no copy of the veto set can drift from this
+ * one. (This comment said "two callers" while there were three; the count is
+ * load-bearing, because a fourth site added without importing from here is the
+ * exact failure the export exists to prevent.)
  */
 export function isBlocked(
   s: Pick<Signals, "challengeHeader" | "challengePath" | "challengeSignature" | "documentGone" | "notText">,

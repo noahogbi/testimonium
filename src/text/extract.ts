@@ -52,8 +52,17 @@ const NAMED: Readonly<Record<string, number>> = {
   aelig: 0xe6, AElig: 0xc6, oslash: 0xf8, Oslash: 0xd8,
   aring: 0xe5, Aring: 0xc5, oelig: 0x153, OElig: 0x152,
   // Greek: the eight letters an earlier pass already carried, plus the rest a
-  // real citation hits ("chi-squared", "TNF-alpha") and the capitals that
-  // differ visibly from their Latin look-alikes.
+  // real citation hits ("chi-squared", "TNF-alpha").
+  //
+  // THE SET IS PARTIAL, in both cases, and no rule generates it - it is the
+  // letters successive passes happened to need. The capitals were once
+  // described here as "the capitals that differ visibly from their Latin
+  // look-alikes", which is false: Gamma (U+0393), Xi (U+039E) and Psi
+  // (U+03A8) all differ visibly and none of them is below. Lowercase zeta,
+  // eta, iota, omicron, upsilon and xi are absent too, so `xi` is missing in
+  // both cases. A missing entry leaves the raw entity in the extracted text,
+  // which is a false-MISS - an accusation route - so completing the set is
+  // safe in the direction that matters; it is simply not done here.
   alpha: 0x3b1, beta: 0x3b2, gamma: 0x3b3, delta: 0x3b4, epsilon: 0x3b5,
   theta: 0x3b8, kappa: 0x3ba, lambda: 0x3bb, mu: 0x3bc, nu: 0x3bd,
   pi: 0x3c0, rho: 0x3c1, sigma: 0x3c3, tau: 0x3c4, phi: 0x3c6, chi: 0x3c7,
