@@ -105,16 +105,30 @@ function isTextualContentType(raw: string | undefined): boolean {
 /** Binary decoded as UTF-8 is dense with replacement characters and C0 control
  *  bytes; prose is not - and no script is, since CJK, emoji and mathematical
  *  notation all sit above U+0020. Tests the RAW body: toText's tag stripping
- *  mangles binary in ways that hide the evidence. */
+ *  mangles binary in ways that hide the evidence.
+ *
+ *  CODE POINTS on both sides of the ratio, and for the window. The scan has
+ *  always counted code points (`for...of` over a string iterates them), but it
+ *  used to divide by `String.length`, which counts UTF-16 units - so every
+ *  astral character added two to the denominator and nothing to the numerator,
+ *  halving the measured density of any body carrying them. That halving is in
+ *  the UNDER-veto direction, which is the accusation direction: an emoji-laden
+ *  binary body measured at half its true density and read as prose.
+ *
+ *  Both numbers live in THRESHOLDS; read their docstrings before touching
+ *  either, because neither is calibrated and the one that looks like a
+ *  tolerance is not measured as one. */
 function looksBinary(rawBody: string): boolean {
   if (rawBody.length === 0) return false;
-  const sample = rawBody.length > 65536 ? rawBody.slice(0, 65536) : rawBody;
   let bad = 0;
-  for (const ch of sample) {
+  let seen = 0;
+  for (const ch of rawBody) {
+    if (seen >= THRESHOLDS.binarySampleCodePoints) break;
+    seen++;
     const c = ch.codePointAt(0) ?? 0;
     if (c === 0xfffd || c === 0 || c < 0x09 || (c > 0x0d && c < 0x20)) bad++;
   }
-  return bad / sample.length > 0.01;
+  return seen > 0 && bad / seen > THRESHOLDS.maxBinaryDensity;
 }
 
 export function computeSignals(input: SignalInput): SignalResult {
