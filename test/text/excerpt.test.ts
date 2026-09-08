@@ -139,6 +139,26 @@ describe("excerptFor", () => {
       }
     }
   });
+
+  it("LOCATES a claim spanning a soft hyphen norm() deletes", () => {
+    // Same seam as the zero-width test above: a character norm() deletes that
+    // DROP keeps is pushed into the folded string, the index map diverges from
+    // the matcher, and phraseFound says true while excerptFor returns null -
+    // `supported` with no passage behind it. Plan 1.2 adds U+00AD to norm();
+    // this test is what makes adding it to DROP as well non-optional.
+    const shy = String.fromCharCode(0xad);
+    const tail = "Further discussion followed at length. ".repeat(8);
+    const cases = [
+      { name: "in the document", doc: `The two sides agreed on closer co${shy}operation on enforcement, officials said. ${tail}`, claim: "closer cooperation on enforcement" },
+      { name: "in the author's claim", doc: `The two sides agreed on closer cooperation on enforcement, officials said. ${tail}`, claim: `closer co${shy}operation on enforcement` },
+    ];
+    for (const c of cases) {
+      expect(phraseFound(c.doc, c.claim), `matcher, ${c.name}`).toBe(true);
+      const e = excerptFor(c.doc, c.claim);
+      expect(e, c.name).not.toBeNull();
+      expect(phraseFound(e!, c.claim), `contract, ${c.name}`).toBe(true);
+    }
+  });
 });
 
 describe("dedupeEvidence", () => {

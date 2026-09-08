@@ -33,7 +33,8 @@ const FOLD: Record<string, string> = {
 /** Characters norm() deletes outright. Dropping is safe for the index map:
  *  the map records the source offset of each character that SURVIVES.
  *
- *  The zero-width set mirrors norm()'s /[\u200B-\u200F\u2060\uFEFF]/g exactly.
+ *  The set mirrors norm()'s /[\u00AD\u200B-\u200F\u2060\uFEFF]/g exactly - the
+ *  zero-widths and, since plan 1.2, the soft hyphen.
  *  Reproducing only the comma was the same defect the Unicode dash range had:
  *  a character the matcher deletes but the fold keeps is pushed into the folded
  *  string, the index map diverges, and a claim spanning one reports phraseFound
@@ -42,6 +43,7 @@ const FOLD: Record<string, string> = {
  *  one. */
 const DROP = new Set([
   ",",
+  "\u00AD",
   "\u200B", "\u200C", "\u200D", "\u200E", "\u200F", "\u2060", "\uFEFF",
 ]);
 

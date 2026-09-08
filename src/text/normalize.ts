@@ -12,7 +12,10 @@ export function norm(s: string): string {
     // article held 21 (8x U+200B, 5x U+200C, 8x U+2060), landing inside
     // "in contact<U+2060>with Tesla". U+FEFF is here for the same reason a BOM
     // survives a mid-document concatenation.
-    .replace(/[\u200B-\u200F\u2060\uFEFF]/g, "")
+    // U+00AD SOFT HYPHEN is deleted here too (spec 7.3, plan 1.2): toText
+    // decodes &shy; into it, a browser renders nothing there, and the claim
+    // quoting the visible word missed - a false miss on a readable page.
+    .replace(/[\u00AD\u200B-\u200F\u2060\uFEFF]/g, "")
     .replace(/[\u2018\u2019]/g, "'")
     .replace(/[\u201C\u201D]/g, '"')
     // Every Unicode hyphen and dash folded to ASCII, not just en and em.
