@@ -138,7 +138,9 @@ before you trust a green run to mean more than it does.
 - **A PDF cited from a URL carrying neither `.pdf` nor a `/pdf/` path
   segment reads as `unreachable`.** It reads that way because every
   HTML rung returns the raw bytes, N5 vetoes each read in turn, and the
-  ladder runs out of rungs. The PDF rung has to be chosen before any fetch
+  ladder runs out of rungs - where N5 fires at all: the third of N5's
+  evasions, below, is an uncompressed PDF it does not catch, and that body
+  is judged as text. The PDF rung has to be chosen before any fetch
   happens (see N5, above), and the URL is all that choice has to go on -
   `isPdf` recognizes a `.pdf` suffix and a `/pdf/` path segment, nothing
   else. That is a capability traded for a fix, not a free improvement:

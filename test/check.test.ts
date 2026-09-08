@@ -528,14 +528,12 @@ describe("check", () => {
     // bullet, and the second-worst outcome class in the keystone rule
     // (a false attestation), so the shape is pinned as a choice.
     const CHROME = `<html><title>Page not found</title><body>${"Browse our publications, statistics and press releases. ".repeat(120)}</body></html>`;
+    const STUB = "<html><body><p>The committee report states that spending rose sharply.</p></body></html>";
+    // The shape is the point: the 404 body is over the floor, the stub under it.
+    expect(proseVolume(toText(CHROME))).toBeGreaterThanOrEqual(THRESHOLDS.minProseChars);
+    expect(proseVolume(toText(STUB))).toBeLessThan(THRESHOLDS.minProseChars);
     const r = await check("https://e.com/committee-report", ["spending rose sharply"], {
-      fetcher: stub({
-        node: { rawBody: CHROME, status: 404 },
-        curl: {
-          rawBody: "<html><body><p>The committee report states that spending rose sharply.</p></body></html>",
-          status: 200,
-        },
-      }),
+      fetcher: stub({ node: { rawBody: CHROME, status: 404 }, curl: { rawBody: STUB, status: 200 } }),
     });
     expect(r.rungsAttempted).toEqual(["node", "curl"]);
     expect(r.verdict).toBe("supported");
@@ -564,9 +562,10 @@ describe("check", () => {
     // veto removed zero thresholds satisfied the acceptance test.
     //
     // The cost is recorded and accepted: a misconfigured host serving a
-    // real document under a 404 on every rung loses its evidence. That
-    // degrades to unreachable, which renders nothing and fails nothing -
-    // the safe direction.
+    // real document under a 404 - with nothing readable from a later rung,
+    // as here, where curl answers the stub's empty default - loses its
+    // evidence. That degrades to unreachable, which renders nothing and
+    // fails nothing - the safe direction.
     for (const status of [404, 410]) {
       const r = await check("https://e.com/committee-report", ["spending rose sharply"], {
         fetcher: stub({ node: { rawBody: LONG_PROSE, status } }),
