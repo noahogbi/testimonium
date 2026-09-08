@@ -111,15 +111,19 @@ before you trust a green run to mean more than it does.
   contain is the honest half of that sentence; the rest of it used to read
   "every verdict is a string search over fetched text, nothing more", and
   that was false. `supported` and the `missed` list are string searches.
-  `unreachable` is decided from **seven** inputs: the HTTP status (404/410),
-  a vendor challenge response header, the post-redirect URL, a length
-  threshold on the extracted text, a match against the bundled
+  Whether a read is vetoed is decided from **seven** inputs: the HTTP status
+  (404/410), a vendor challenge response header, the post-redirect URL, a
+  length threshold on the extracted text, a match against the bundled
   challenge-signature list, the response's **`content-type`**, and whether
   the raw body looks like binary. The fifth of those *is* a search of the
   prose - twelve regexes over the normalized extracted text
   (`src/rules/challenge.ts`), and a hit feeds the blocked decision directly.
   The last two are **N5**, and they are independent of each other: either one
-  alone forces `unreachable`. A `content-type` outside the accepted set - any
+  alone vetoes the read. A vetoed read is never judged on its own; the
+  ladder climbs past it, and the citation reads `unreachable` only when no
+  rung produced a readable read and none matched in full (spec 6.6 rule 3;
+  the ladder is under Measured limits below). A `content-type` outside the
+  accepted set - any
   `text/*`, plus `application/xml`, `application/xhtml+xml`,
   `application/json`, and anything ending `+xml` or `+json` - is enough on its
   own, whatever the body turns out to contain; separately, a raw body dense
@@ -305,7 +309,6 @@ testimonium reachability <doc.md>   preflight. no claims file needed
 Both read `<doc>` as GitHub-Flavored Markdown footnotes. `check` reads
 `<doc>.claims.json` beside it and writes `<doc>.evidence.json` - commit both;
 a later re-check's output is then a diff. `reachability` needs neither.
-
 Both read a URL through the same fetch ladder, under the same rules, and
 judge each read by the same definition of a read document, so on the same
 responses a URL `reachability` calls readable is one `check` never calls
