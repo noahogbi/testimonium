@@ -69,6 +69,37 @@ describe("check", () => {
     expect(r.verdict).toBe("unreachable");
   });
 
+  it("honors N1 from a caller's fetcher that returns WIRE-CASED header keys", async () => {
+    // A demonstrated false accusation. Header field names are case-insensitive
+    // on the wire, and `Record<string, string>` is not. Both bundled fetchers
+    // lowercase their keys as an implementation detail; nothing in the
+    // RawResponse contract ever required it, so a caller-supplied
+    // CheckOptions.fetcher - the documented bring-your-own-reader escape hatch
+    // - that passes headers through as the server cased them used to lose N1
+    // silently, and this exact input returned `unsupported` with the claim
+    // named in `missed`. The body is padded past the prose floor so nothing
+    // else can be doing the rejecting.
+    const r = await check("https://e.com/a", ["a claim this wall does not carry"], {
+      fetcher: stub({
+        node: { rawBody: LONG_PROSE, status: 200, headers: { "CF-Mitigated": "challenge" } },
+        curl: { rawBody: LONG_PROSE, status: 200, headers: { "CF-Mitigated": "challenge" } },
+      }),
+    });
+    expect(r.verdict).toBe("unreachable");
+  });
+
+  it("honors N5's content-type trigger from a WIRE-CASED header key and value", async () => {
+    // The same defect on N5's independent trigger, and cased both ways at
+    // once: `Content-Type` as a key, `APPLICATION/PDF` as a value.
+    const r = await check("https://e.com/a", ["a claim these bytes do not carry"], {
+      fetcher: stub({
+        node: { rawBody: LONG_PROSE, status: 200, headers: { "Content-Type": "APPLICATION/PDF" } },
+        curl: { rawBody: LONG_PROSE, status: 200, headers: { "Content-Type": "APPLICATION/PDF" } },
+      }),
+    });
+    expect(r.verdict).toBe("unreachable");
+  });
+
   it("returns unclaimed rather than supported for an empty claim list", async () => {
     const r = await check("https://e.com/a", [], { fetcher: stub({ node: { rawBody: LONG_PROSE, status: 200 } }) });
     expect(r.verdict).toBe("unclaimed");

@@ -44,6 +44,29 @@ describe("N5 - the body is not text", () => {
     expect(s.signals.notText).toBe(false);
   });
 
+  it("reads header KEYS case-insensitively, whatever the fetcher hands over", () => {
+    // Field names are case-insensitive on the wire (RFC 9110 5.1) and a
+    // Record<string, string> is not. computeSignals normalises, so N1 and N5
+    // are properties of the classifier rather than of whichever fetcher
+    // happened to be installed. Before this, a plugin fetcher passing headers
+    // through as the server cased them lost both vetoes silently.
+    const pdfKey = computeSignals({ ...base, rawBody: prose, headers: { "Content-Type": "application/pdf" } });
+    expect(pdfKey.signals.notText).toBe(true);
+    const cfKey = computeSignals({ ...base, rawBody: prose, headers: { "CF-Mitigated": "challenge" } });
+    expect(cfKey.signals.challengeHeader).toBe(true);
+  });
+
+  it("reads header VALUES case-insensitively, including the charset parameter", () => {
+    const shouty = computeSignals({ ...base, rawBody: prose, headers: { "content-type": "APPLICATION/PDF" } });
+    expect(shouty.signals.notText).toBe(true);
+    for (const ct of ["TEXT/HTML; CHARSET=UTF-8", "Text/Html;CharSet=utf-8", "Application/XHTML+XML"]) {
+      const s = computeSignals({ ...base, rawBody: prose, headers: { "content-type": ct } });
+      expect(s.signals.notText, ct).toBe(false);
+    }
+    const cfValue = computeSignals({ ...base, rawBody: prose, headers: { "cf-mitigated": "CHALLENGE" } });
+    expect(cfValue.signals.challengeHeader).toBe(true);
+  });
+
   it("vetoes even a full claim match - a non-text body is not the document", () => {
     const body = "%PDF-1.7 a phrase " + (" " + REPL).repeat(400);
     const s = computeSignals({ ...base, rawBody: body, headers: { "content-type": "application/pdf" } });
