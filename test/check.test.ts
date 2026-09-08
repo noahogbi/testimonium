@@ -363,6 +363,58 @@ describe("check", () => {
     }
   });
 
+  it("climbs past a first rung vetoed only by N4 - a 404 carrying a full page of chrome", async () => {
+    // Spec 6.6, "Escalation": climb unless the last read is readable. At
+    // 3974d27 this file's copy of the ladder climbed on N1, N2 and N3 only, so
+    // a first rung answering 404 with a body over the floor ENDED the ladder -
+    // while reachability's copy climbed on all five vetoes. Written before the
+    // reader was unified, this failed with rungsAttempted ["node"] and the
+    // verdict "unreachable": the proof that no test covered the seam.
+    const r = await check("https://e.com/committee-report", ["spending rose sharply"], {
+      fetcher: stub({ node: { rawBody: LONG_PROSE, status: 404 }, curl: { rawBody: LONG_PROSE, status: 200 } }),
+    });
+    expect(r.rungsAttempted).toEqual(["node", "curl"]);
+    expect(r.verdict).toBe("supported");
+    expect(r.evidence?.[0]?.rung).toBe("curl");
+  });
+
+  it("climbs past a first rung vetoed only by N5 - a non-text content-type over the floor", async () => {
+    const r = await check("https://e.com/committee-report", ["spending rose sharply"], {
+      fetcher: stub({
+        node: { rawBody: LONG_PROSE, status: 200, headers: { "content-type": "application/pdf" } },
+        curl: { rawBody: LONG_PROSE, status: 200 },
+      }),
+    });
+    expect(r.rungsAttempted).toEqual(["node", "curl"]);
+    expect(r.verdict).toBe("supported");
+    expect(r.evidence?.[0]?.rung).toBe("curl");
+  });
+
+  it("climbs past a first rung vetoed only by N4 and ACCUSES from the readable second read", async () => {
+    // The same escalation, where the readable second read carries only some
+    // of the claims. This is the one place Task 2 moves a verdict toward an
+    // accusation: at 3974d27 the ladder stopped at the 404 and answered
+    // `unreachable`; now it climbs, and the curl read - the largest read, no
+    // veto, over the floor - is judged on its own and names what it lacks.
+    // That is within the keystone rule (a readable read is positive proof of
+    // a read) and it is disclosed in the CHANGELOG (Task 7).
+    //
+    // The curl body is asserted LARGER than the node body. Until Task 4 lands
+    // rule 2, `check` still hands a prose tie to the first read, which here
+    // is the vetoed 404: with equal bodies this pin would answer
+    // `unreachable` after this task and only turn `unsupported` after
+    // Task 4. The ordering keeps this a pin on escalation alone.
+    const largerReport = `<html><title>The Committee Report</title><body>${"The committee report states that spending rose sharply. ".repeat(150)}</body></html>`;
+    expect(proseVolume(toText(largerReport))).toBeGreaterThan(proseVolume(toText(LONG_PROSE)));
+    const r = await check("https://e.com/committee-report", ["spending rose sharply", "revenue fell"], {
+      fetcher: stub({ node: { rawBody: LONG_PROSE, status: 404 }, curl: { rawBody: largerReport, status: 200 } }),
+    });
+    expect(r.rungsAttempted).toEqual(["node", "curl"]);
+    expect(r.verdict).toBe("unsupported");
+    expect(r.missed).toEqual(["revenue fell"]);
+    expect(r).not.toHaveProperty("evidence");
+  });
+
   it("does not consult HTTP status outside the 404/410 veto", async () => {
     // The property the design actually holds. A 400 or a 500 says nothing
     // about whether the bytes are the document - spec 6.3 records a 400

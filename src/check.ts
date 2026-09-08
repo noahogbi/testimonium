@@ -1,9 +1,7 @@
-import { computeSignals } from "./classify/signals.js";
 import { isBlocked, verdict } from "./classify/verdict.js";
 import { defaultFetcher } from "./fetch/default-fetcher.js";
-import { nextAction, type Attempt } from "./fetch/ladder.js";
-import { isPdf } from "./fetch/pdf.js";
-import { EMPTY_RESPONSE, type Fetcher, type RawResponse, type RungId } from "./fetch/types.js";
+import { readSource, type Read } from "./fetch/read-source.js";
+import type { Fetcher } from "./fetch/types.js";
 import { dedupeEvidence, excerptFor, type Evidence } from "./text/excerpt.js";
 import { norm } from "./text/normalize.js";
 import { buildResult, type CitationResult } from "./io/evidence.js";
@@ -35,6 +33,11 @@ export interface CheckOptions {
  * mapping lived in the caller, a second caller reimplemented it inline, and
  * that copy diverged three ways on the day the rule landed. Comments do not
  * bind; the ladder has to be un-copyable.
+ *
+ * Since plan 1.2 the loop itself lives in fetch/read-source.ts (spec 6.6),
+ * shared with reachability() and kept off the public surface for the same
+ * reason: a caller holding raw reads can assemble a verdict this function
+ * never issued.
  */
 export async function check(
   url: string,
@@ -66,55 +69,15 @@ export async function check(
   // logic - a local host rule that loads and validates but is never consulted
   // is the same silent-no-op failure that signatures/paths had (Critical 1).
   const fetcher = opts.fetcher ?? defaultFetcher(opts.rules ? { hosts: opts.rules.hosts } : {});
-  const pdfUrl = isPdf(url);
-  const history: Attempt[] = [];
-  const attempted: RungId[] = [];
-  // EVERY rung's computation is kept, not just the longest. The rung is carried
-  // WITH the signals, not read off the end of the history: taking the last
-  // attempted rung mis-attributes evidence whenever an earlier rung is the one
-  // that read the document.
-  const reads: { rung: RungId; computed: ReturnType<typeof computeSignals> }[] = [];
-
-  for (;;) {
-    const action = nextAction(history, fetcher.rungs, pdfUrl);
-    if (action.kind === "stop") break;
-
-    // A Fetcher must not throw - see the contract on the interface. The three
-    // bundled rungs all return EMPTY_RESPONSE on failure. A third-party
-    // fetcher that throws anyway degrades to an unread rung rather than
-    // aborting a run midway through a document, and is WARNED about rather
-    // than swallowed.
-    let response: RawResponse;
-    try {
-      response = await fetcher.fetch(url, action.rung);
-    } catch (e) {
-      console.warn(
-        `warn fetcher rung "${action.rung}" threw for ${url}: ${e instanceof Error ? e.message : String(e)}`,
-      );
-      response = EMPTY_RESPONSE;
-    }
-    attempted.push(action.rung);
-    const computed = computeSignals({
-      rawBody: response.rawBody,
-      headers: response.headers,
-      finalUrl: response.finalUrl || url,
-      status: response.status,
-      claims,
-      sourceLabel: opts.sourceLabel ?? "",
-      ...(opts.rules ? { rules: opts.rules } : {}),
-    });
-
-    reads.push({ rung: action.rung, computed });
-
-    history.push({
-      rung: action.rung,
-      proseChars: computed.signals.proseChars,
-      challenged:
-        computed.signals.challengeHeader ||
-        computed.signals.challengePath ||
-        computed.signals.challengeSignature,
-    });
-  }
+  // THE ONE LADDER (spec 6.6). Every rung's read comes back, in order, with
+  // its rung attached - the rung is carried WITH the signals, not read off the
+  // end of the history, because taking the last attempted rung mis-attributes
+  // evidence whenever an earlier rung is the one that read the document.
+  const { reads, attempted, pdfUrl } = await readSource(url, claims, {
+    fetcher,
+    sourceLabel: opts.sourceLabel ?? "",
+    ...(opts.rules ? { rules: opts.rules } : {}),
+  });
 
   if (reads.length === 0) {
     return buildResult({
@@ -143,7 +106,7 @@ export async function check(
   // every claim with no single rung covering them all returned `unsupported`
   // with an EMPTY `missed` and no evidence: a build failed, and the tool named
   // nothing it could be failed for.
-  const locatedBy = new Map<string, (typeof reads)[number]>();
+  const locatedBy = new Map<string, Read>();
   for (const r of reads) {
     // A read the classifier itself vetoed is NOT the document - spec 6.2 is
     // explicit that a challenge body cannot be one. A match inside it is the

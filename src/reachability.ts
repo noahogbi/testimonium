@@ -1,6 +1,6 @@
 import { computeSignals } from "./classify/signals.js";
 import { THRESHOLDS } from "./classify/thresholds.js";
-import { isBlocked } from "./classify/verdict.js";
+import { isBlocked, isReadable } from "./classify/verdict.js";
 import { defaultFetcher } from "./fetch/default-fetcher.js";
 import { nextAction, type Attempt } from "./fetch/ladder.js";
 import { isPdf } from "./fetch/pdf.js";
@@ -85,7 +85,7 @@ export async function reachability(
       challenged = challenged || blocked;
       gone = gone || c.signals.documentGone;
       notText = notText || c.signals.notText;
-      history.push({ rung: action.rung, proseChars: c.signals.proseChars, challenged: blocked });
+      history.push({ rung: action.rung, readable: isReadable(c.signals) });
     }
 
     if (bestProse >= THRESHOLDS.minProseChars && !challenged) {

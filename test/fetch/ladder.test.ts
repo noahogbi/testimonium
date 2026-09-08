@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 import { nextAction, type Attempt } from "../../src/fetch/ladder.js";
 
 const ALL = ["node", "curl", "pdftotext"] as const;
-const read: Attempt = { rung: "node", proseChars: 20_000, challenged: false };
-const challenged: Attempt = { rung: "node", proseChars: 120, challenged: true };
-const empty: Attempt = { rung: "node", proseChars: 0, challenged: false };
+// The ladder sees one bit per attempt: did that rung read the document
+// (spec 6.6, isReadable - no veto AND prose over the floor)? It is not told a
+// prose count or which veto fired, so no caller can hand it a private
+// definition of "challenged". Both copies of the loop at 3974d27 did exactly
+// that, and disagreed.
+const read: Attempt = { rung: "node", readable: true };
+const unread: Attempt = { rung: "node", readable: false };
 
 describe("nextAction", () => {
   it("starts at the node rung for an HTML url", () => {
@@ -17,14 +21,10 @@ describe("nextAction", () => {
     expect(nextAction([], ALL, true)).toEqual({ kind: "try", rung: "pdftotext" });
   });
 
-  it("falls through to curl when the node rung was challenged", () => {
+  it("falls through to curl when the node rung did not read the document", () => {
     // Some hosts challenge node fetch and hand curl the document. The origin's
     // second caller gave up here and lost every such source.
-    expect(nextAction([challenged], ALL, false)).toEqual({ kind: "try", rung: "curl" });
-  });
-
-  it("falls through to curl when the node rung returned nothing", () => {
-    expect(nextAction([empty], ALL, false)).toEqual({ kind: "try", rung: "curl" });
+    expect(nextAction([unread], ALL, false)).toEqual({ kind: "try", rung: "curl" });
   });
 
   it("stops once a rung has read a document", () => {
@@ -32,17 +32,17 @@ describe("nextAction", () => {
   });
 
   it("stops when every available rung has been tried", () => {
-    const history: Attempt[] = [challenged, { ...challenged, rung: "curl" }];
+    const history: Attempt[] = [unread, { ...unread, rung: "curl" }];
     expect(nextAction(history, ["node", "curl"], false)).toEqual({ kind: "stop" });
   });
 
   it("does not try a rung this machine does not have", () => {
     // A serverless caller has node only. The ladder truncates rather than
     // crashing, and the truncation is reported as provenance.
-    expect(nextAction([challenged], ["node"], false)).toEqual({ kind: "stop" });
+    expect(nextAction([unread], ["node"], false)).toEqual({ kind: "stop" });
   });
 
   it("never retries a rung it has already attempted", () => {
-    expect(nextAction([challenged, { ...challenged, rung: "curl" }], ALL, false)).toEqual({ kind: "stop" });
+    expect(nextAction([unread, { ...unread, rung: "curl" }], ALL, false)).toEqual({ kind: "stop" });
   });
 });
