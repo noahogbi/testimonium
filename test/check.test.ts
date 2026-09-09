@@ -55,11 +55,11 @@ describe("check", () => {
   });
 
   it("returns unsupported when a claim is absent from a document we read", async () => {
-    const r = await check("https://e.com/committee-report", ["spending rose sharply", "no such phrase"], {
+    const r = await check("https://e.com/committee-report", ["spending rose sharply", "no such phrase appears here"], {
       fetcher: stub({ node: { rawBody: LONG_PROSE, status: 200 } }),
     });
     expect(r.verdict).toBe("unsupported");
-    expect(r.missed).toEqual(["no such phrase"]);
+    expect(r.missed).toEqual(["no such phrase appears here"]);
     expect(r).not.toHaveProperty("evidence");
   });
 
@@ -74,14 +74,14 @@ describe("check", () => {
 
   it("returns unreachable, not unsupported, when every rung is challenged", async () => {
     const wall = "<html><body>Verifying you are human.</body></html>";
-    const r = await check("https://e.com/a", ["anything"], {
+    const r = await check("https://e.com/a", ["anything at all on this page"], {
       fetcher: stub({ node: { rawBody: wall, status: 202 }, curl: { rawBody: wall, status: 202 } }),
     });
     expect(r.verdict).toBe("unreachable");
   });
 
   it("returns unreachable when a vendor challenge header is present at 200", async () => {
-    const r = await check("https://e.com/a", ["anything"], {
+    const r = await check("https://e.com/a", ["anything at all on this page"], {
       fetcher: stub({
         node: { rawBody: LONG_PROSE, status: 200, headers: { "cf-mitigated": "challenge" } },
         curl: { rawBody: LONG_PROSE, status: 200, headers: { "cf-mitigated": "challenge" } },
@@ -127,7 +127,7 @@ describe("check", () => {
   });
 
   it("marks the ladder truncated when a rung is unavailable", async () => {
-    const r = await check("https://e.com/a", ["nope"], {
+    const r = await check("https://e.com/a", ["nope not a phrase here"], {
       fetcher: stub({ node: { rawBody: LONG_PROSE, status: 200 } }, ["node"]),
     });
     expect(r.ladderTruncated).toBe(true);
@@ -143,7 +143,7 @@ describe("check", () => {
         throw new Error("boom");
       },
     };
-    const r = await check("https://e.com/a", ["anything"], { fetcher: throwing });
+    const r = await check("https://e.com/a", ["anything at all on this page"], { fetcher: throwing });
     expect(r.verdict).toBe("unreachable");
     expect(r.rungsAttempted).toEqual(["node", "curl"]);
     expect(r).not.toHaveProperty("evidence");
@@ -245,19 +245,54 @@ describe("check", () => {
     for (const c of found) expect(r.missed).not.toContain(c);
   });
 
-  it("rejects an empty or whitespace-only claim rather than attesting to it", async () => {
+  it("rejects an empty or whitespace-only claim rather than attesting to it - now through the floor", async () => {
     // "".includes("") is true, so an empty claim matches EVERY document and
     // would mint `supported` with a null excerpt. parseClaimsFile protects the
     // CLI; check() is the exported front door and defends itself.
+    // Since the claim floor landed this is refused BY the floor - all three
+    // fold to 0 characters - and the message is the floor's. The predicate is
+    // unchanged: it is still norm(), not trim().
     for (const bad of ["", "   ", "\t\n"]) {
       await expect(
         check("https://e.com/a", [bad], { fetcher: stub({ node: { rawBody: LONG_PROSE, status: 200 } }) }),
-      ).rejects.toThrow(/empty or whitespace-only/);
+      ).rejects.toThrow(/0 characters once normalized/);
     }
     // An empty ARRAY is still legitimate - that is `unclaimed`, tested above.
     await expect(
-      check("https://e.com/a", ["real claim", ""], { fetcher: stub({ node: { rawBody: LONG_PROSE, status: 200 } }) }),
+      check("https://e.com/a", ["a real claim that clears the floor", ""], { fetcher: stub({ node: { rawBody: LONG_PROSE, status: 200 } }) }),
     ).rejects.toThrow(/index 1/);
+  });
+
+  it("REFUSES a claim under the floor at the front door, before any fetch", async () => {
+    // The same refusal as the loader's, at the exported front door, with the
+    // same message builder - spec 7.3 requires the three doors to agree.
+    // Asserted BEFORE any IO: a caller bug is not a fetch failure, and a run
+    // that spends twenty fetches before refusing its own input wastes the
+    // author's time and the host's.
+    let fetched = 0;
+    const counting: Fetcher = {
+      rungs: ["node", "curl"] as RungId[],
+      async fetch(url) {
+        fetched += 1;
+        return { rawBody: LONG_PROSE, status: 200, headers: {}, finalUrl: url, bytes: 0 };
+      },
+    };
+    const short = "x".repeat(THRESHOLDS.minClaimChars - 1);
+    await expect(check("https://e.com/a", [short], { fetcher: counting })).rejects.toThrow(
+      /characters once normalized/,
+    );
+    expect(fetched).toBe(0);
+  });
+
+  it("accepts a claim exactly at the floor", async () => {
+    // Both strings are built from the constant, so Task 2 re-deriving the
+    // floor cannot turn this boundary test red for the wrong reason.
+    const atFloor = "y".repeat(THRESHOLDS.minClaimChars);
+    const body = `<html><title>The Committee Report</title><body>${`The report says ${atFloor} here. `.repeat(200)}</body></html>`;
+    const r = await check("https://e.com/a", [atFloor], {
+      fetcher: stub({ node: { rawBody: body, status: 200 } }),
+    });
+    expect(r.verdict).toBe("supported");
   });
 
   it("rejects a claim that survives trim() but NORMALIZES to empty", async () => {
@@ -267,11 +302,14 @@ describe("check", () => {
     // waves it through. That minted `supported` with a null excerpt: an
     // attestation with nothing behind it, and reachable from the CLI, because
     // parseClaimsFile tested the same wrong predicate.
+    // Since the claim floor landed this is refused BY the floor - all three
+    // fold to 0 characters - and the message is the floor's. The predicate is
+    // unchanged: it is still norm(), not trim().
     for (const bad of [",", ",,,", "\u200b"]) {
       await expect(
         check("https://e.com/a", [bad], { fetcher: stub({ node: { rawBody: LONG_PROSE, status: 200 } }) }),
         JSON.stringify(bad),
-      ).rejects.toThrow(/empty or whitespace-only/);
+      ).rejects.toThrow(/0 characters once normalized/);
     }
   });
 
@@ -425,12 +463,12 @@ describe("check", () => {
     // Task 4. The ordering keeps this a pin on escalation alone.
     const largerReport = `<html><title>The Committee Report</title><body>${"The committee report states that spending rose sharply. ".repeat(150)}</body></html>`;
     expect(proseVolume(toText(largerReport))).toBeGreaterThan(proseVolume(toText(LONG_PROSE)));
-    const r = await check("https://e.com/committee-report", ["spending rose sharply", "revenue fell"], {
+    const r = await check("https://e.com/committee-report", ["spending rose sharply", "revenue fell in the fourth quarter"], {
       fetcher: stub({ node: { rawBody: LONG_PROSE, status: 404 }, curl: { rawBody: largerReport, status: 200 } }),
     });
     expect(r.rungsAttempted).toEqual(["node", "curl"]);
     expect(r.verdict).toBe("unsupported");
-    expect(r.missed).toEqual(["revenue fell"]);
+    expect(r.missed).toEqual(["revenue fell in the fourth quarter"]);
     expect(r).not.toHaveProperty("evidence");
   });
 
@@ -454,7 +492,7 @@ describe("check", () => {
     const smallerReadable = `<html><title>The Committee Report</title><body>${"The committee report states that spending rose sharply. ".repeat(90)}</body></html>`;
     expect(proseVolume(toText(smallerReadable))).toBeGreaterThanOrEqual(THRESHOLDS.minProseChars);
     expect(proseVolume(toText(smallerReadable))).toBeLessThan(proseVolume(toText(LONG_PROSE)));
-    const r = await check("https://e.com/committee-report", ["spending rose sharply", "no such phrase"], {
+    const r = await check("https://e.com/committee-report", ["spending rose sharply", "no such phrase appears here"], {
       fetcher: stub({
         node: { rawBody: LONG_PROSE, status: 200, finalUrl: "https://e.com/cdn-cgi/challenge-platform/h/b" },
         curl: { rawBody: smallerReadable, status: 200 },
@@ -462,7 +500,7 @@ describe("check", () => {
     });
     expect(r.rungsAttempted).toEqual(["node", "curl"]);
     expect(r.verdict).toBe("unsupported");
-    expect(r.missed).toEqual(["no such phrase"]);
+    expect(r.missed).toEqual(["no such phrase appears here"]);
     // An unsupported result carries no evidence (io/evidence.ts): the miss
     // list is the whole report.
     expect(r).not.toHaveProperty("evidence");

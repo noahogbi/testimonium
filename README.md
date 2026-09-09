@@ -40,6 +40,14 @@ whitespace-insensitive) in the extracted text of that page:
 }
 ```
 
+Each phrase has a floor: **16 characters once normalized**. A shorter one is
+refused, by name, with its length and the floor - by the claims file's own
+loader and by `check()` alike. A bare number, a year, or a token like "the
+report" is present on any page that happens to mention it, so a match on one
+is a coincidence this tool cannot tell from evidence. Extend the phrase to
+take in the surrounding words. The number and what licenses it are in
+`docs/calibration-2026-09.md`.
+
 Before you write a claims file at all, find out what your corpus can even
 reach - this costs nothing and needs no claims:
 

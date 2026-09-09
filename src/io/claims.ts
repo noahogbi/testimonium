@@ -1,5 +1,6 @@
 import type { Footnote } from "../adapters/types.js";
 import { norm } from "../text/normalize.js";
+import { THRESHOLDS } from "../classify/thresholds.js";
 
 export type ClaimEntry = string[] | { notApplicable: string };
 export type ClaimsFile = Map<string, ClaimEntry>;
@@ -28,6 +29,41 @@ export function normalizeUrl(url: string): string {
   // resources; "https://e.com/" and "https://e.com" never are.
   if (u.pathname === "/" && !u.search && !u.hash) out = out.replace(/\/$/, "");
   return out;
+}
+
+/**
+ * The claim floor's predicate, applied to `norm(claim).length` because
+ * `norm()` is what the MATCHER runs (spec 7.3).
+ *
+ * It SUBSUMES the "non-empty once normalized" check that stood inside
+ * parseClaimsFile before: a claim norm() folds to "" is 0 characters, which
+ * is under any floor, and "," and U+200B both fold to "" while surviving
+ * trim(). Testing a weaker predicate than the matcher uses is how a false
+ * attestation walked in from the CLI once already, so the predicate stays
+ * norm-based and stays in one place.
+ */
+export function belowClaimFloor(claim: string): boolean {
+  return norm(claim).length < THRESHOLDS.minClaimChars;
+}
+
+/**
+ * The ONE message every door uses to refuse a short claim.
+ *
+ * Three doors ask this question - this loader, `check()`'s front door, and
+ * harvest's first filter (spec 7.3; 13 Q3) - and a floor that one door
+ * phrases differently from another is a floor the author has to learn twice.
+ * It names the claim, its normalized length, the floor and the remedy,
+ * because a refusal that does not say what to do instead is a wall.
+ *
+ * `where` is the caller's own prefix: the authored key for the loader,
+ * `check(<url>): claim at index N` for the front door, the URL for harvest.
+ */
+export function claimFloorMessage(where: string, claim: string): string {
+  return (
+    `${where}: ${JSON.stringify(claim)} is ${norm(claim).length} characters once normalized, ` +
+    `under the ${THRESHOLDS.minClaimChars}-character floor; ` +
+    `extend it to take in the surrounding words`
+  );
 }
 
 export function parseClaimsFile(json: string): ClaimsFile {
@@ -60,14 +96,16 @@ export function parseClaimsFile(json: string): ClaimsFile {
     }
 
     if (Array.isArray(value)) {
-      // `norm()`, NOT `trim()`: the predicate has to be the one the MATCHER
-      // uses. A phrase norm() folds to "" matches every document exactly as ""
-      // does, and trim() cannot see it - "," and ",,," survive trim (norm
-      // deletes commas) and U+200B is not whitespace to JS. Letting one
-      // through here walks a false attestation straight in from the CLI.
-      if (value.length === 0 || value.some((p) => typeof p !== "string" || !norm(p))) {
-        throw new Error(`${key}: claims must be a non-empty array of strings that are non-empty once normalized`);
+      if (value.length === 0 || value.some((p) => typeof p !== "string")) {
+        throw new Error(`${key}: claims must be a non-empty array of strings`);
       }
+      // The floor, refused rather than warned about (spec 7.3). It subsumes
+      // the "non-empty once normalized" check this branch used to make: a
+      // phrase norm() folds to "" is 0 characters and cannot clear any floor.
+      // The type check above stays and runs first, so norm() is never handed
+      // a non-string.
+      const short = (value as string[]).find(belowClaimFloor);
+      if (short !== undefined) throw new Error(claimFloorMessage(key, short));
       out.set(url, value as string[]);
       continue;
     }
