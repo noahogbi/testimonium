@@ -482,10 +482,11 @@ against, so a sentence in it that has gone quietly false is worse than one in
 the code. Pinned for the signature case by `test/check.test.ts`, "N3 through
 the cross-read union"; the veto-wide mechanism is measured above.
 
-The rot argument survives, but only below the prose floor, and draft 1 stated it
-without that condition. N3 fires only where `proseVolume` is under
-`maxChallengeChars` (800), which sits far below `minProseChars` (4,500) on the
-same measured quantity. So beneath the floor rot can never mint an accusation:
+The rot argument survives below the prose floor in the accusation direction
+only, and draft 1 stated it without either condition. N3 fires only where
+`proseVolume` is under `maxChallengeChars` (800), which sits far below
+`minProseChars` (4,500) on the same measured quantity. So beneath the floor
+rot can never mint an accusation:
 an unnamed wall is not excluded from the cross-rung union, so nothing it fails
 to name can turn a present claim into `missed`. It is not free of cost,
 though - an unvetoed wall that matches every claim, alone or completed through

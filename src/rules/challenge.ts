@@ -10,9 +10,10 @@ export interface Rule {
  * Bot-challenge wording. THIS LIST ROTS, AND THAT IS TOLERATED BY DESIGN.
  *
  * A measured battery found 11 of 17 realistic walls evading a list of this
- * shape. Its COMPLETENESS is not what protects a citation: the prose floor in
- * src/classify/verdict.ts does that, and it holds for walls nobody has written
- * down. A match's main job is triggering an early fall-through to the next
+ * shape. Its COMPLETENESS is not what protects a citation from a false
+ * ACCUSATION: the prose floor in src/classify/verdict.ts does that, and it
+ * holds for walls nobody has written down (the attestation exception is
+ * below). A match's main job is triggering an early fall-through to the next
  * rung.
  *
  * It is NOT true that a match never decides a verdict, and this comment said
