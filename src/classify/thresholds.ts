@@ -1,15 +1,28 @@
 /**
- * Every number that can change a verdict, in one place. See
- * docs/calibration-2026-09.md for the measured populations behind them.
+ * Every number that decides what this tool reads, refuses or proposes, in one
+ * place. See docs/calibration-2026-09.md for the measured populations behind
+ * them. Four of the six can change a VERDICT; `minClaimChars` refuses an
+ * input before any verdict exists, and `harvestSeedChars` changes only what
+ * harvest proposes - everything it proposes is judged afterwards by check()
+ * like any hand-written claim. Each entry's own docstring says which it is.
  *
- * These are NOT tunable constants. They are the boundary between "we read a
- * document" and "we did not". Changing one without rerunning
- * scripts/calibrate.mjs against the corpus is a keystone violation.
+ * These are NOT tunable constants. The four VERDICT entries are the boundary
+ * between "we read a document" and "we did not"; `minClaimChars` refuses an
+ * input before any verdict exists and `harvestSeedChars` only changes what
+ * harvest proposes, so neither is that boundary. Changing any entry without
+ * rerunning the script its own docstring names - scripts/calibrate.mjs for
+ * the verdict entries, scripts/calibrate-claim-floor.mjs and
+ * scripts/calibrate-harvest-seed.mjs for the two below them - against the
+ * population that docstring names is a keystone violation.
  *
  * **They are not all licensed the same way, and the difference matters.**
  * `minProseChars` is calibrated: the acceptance test in
  * test/classify/acceptance.test.ts licenses it against the corpus, and
  * scripts/sweep-floor.mjs re-derives the range it may live in.
+ * `minClaimChars` is licensed a priori and CONFIRMED by measurement
+ * (scripts/calibrate-claim-floor.mjs, bound by
+ * test/classify/claim-floor.test.ts); `harvestSeedChars` is chosen by a rule
+ * stated before its sweep was run (scripts/calibrate-harvest-seed.mjs).
  * `maxChallengeChars`, `maxBinaryDensity` and `binarySampleCodePoints` are
  * NOT swept against anything - each one's own docstring says so, and says what
  * evidence there is instead. Do not read this file as though every entry
@@ -96,6 +109,60 @@ export const THRESHOLDS = {
    *  changes a shipped veto's behavior on real bodies and is calibration work,
    *  not a fix-round edit. */
   binarySampleCodePoints: 65_536,
+  /** The shortest claim that can attest anything about a source, applied to
+   *  `norm(claim).length`. REFUSED, not warned about, at all three entries -
+   *  the claims-file loader, `check()`'s front door and harvest's first
+   *  filter - with one message naming the claim, its length, the floor and
+   *  the remedy (spec 7.3; 13 Q3). A warning that a claim proves nothing
+   *  leaves it proving nothing while the run still passes.
+   *
+   *  It does not change a verdict. It refuses an input before there is a
+   *  verdict to change, which is why it is uniform across the three doors: a
+   *  floor one door enforces and another does not is a floor with a way past
+   *  it.
+   *
+   *  **Licensed a priori, confirmed by measurement.** A bare number, a year,
+   *  or a token like "the report" attests nothing about a source, and a match
+   *  on one is a coincidence this tool cannot tell from evidence. The
+   *  measurement below is the sanity check, not the derivation - see Fable
+   *  F6: "smallest F admitting zero spurious" would be a fit to two events.
+   *
+   *  Measured 2026-09-09 with `node scripts/calibrate-claim-floor.mjs` over
+   *  the 208 distinct real claims frozen in `fixtures/claims/` against the 10
+   *  unrelated `document` fixtures: 2 claims matched a page they were not
+   *  written about ("169" at 3 normalized characters, "SAUDI ARABIA" at 12),
+   *  none above 12, and this floor refuses 18 of 208 (8.7 percent), each a
+   *  number, a name or a fragment that states no proposition. 16 is that
+   *  ceiling plus margin. `test/classify/claim-floor.test.ts` binds it. A
+   *  re-run that puts the ceiling at or above this number is a finding to act
+   *  on. */
+  minClaimChars: 16,
+  /** Harvest's seed length: the L of the L-grams of the folded source that
+   *  `commonSpans` looks for in the folded document (spec 8.2 step 3).
+   *
+   *  DISTINCT from `minClaimChars`, and the distinction is the point: the
+   *  seed sets what extension can FIND, the floor sets what may be PROPOSED.
+   *  A seed below the floor finds the same maximal spans plus shorter ones
+   *  the floor then refuses, so it buys nothing and costs noise; a seed above
+   *  the floor is the precision knob. `harvestSeedChars >= minClaimChars` is
+   *  asserted by test/classify/claim-floor.test.ts.
+   *
+   *  It cannot change a verdict. It changes what harvest proposes, and every
+   *  proposal is afterwards judged by check() exactly as a hand-written claim
+   *  is. It lives here because spec 8.2 calls it a threshold and this file
+   *  holds them, not because it gates anything.
+   *
+   *  Chosen 2026-09-09 by the rule stated in
+   *  scripts/calibrate-harvest-seed.mjs - the smallest L in 20..25 whose mean
+   *  count of emitted above-floor spans per unrelated fixture pair is below
+   *  1.0 - from `node scripts/calibrate-harvest-seed.mjs` over the 45
+   *  unrelated pairs of the 10 document fixtures. Emitted spans per pair,
+   *  above the floor: mean 2.0 at L=13, 2.2 at 16, 1.2 at 20, 0.9 at 21, 0.3
+   *  at 25. L=20 does not satisfy the rule and L=21 does. The longest
+   *  cross-fixture span at every L swept is 27 normalized characters, "terms
+   *  of use privacy policy" - boilerplate, which is filter 2's job, not this
+   *  number's. */
+  harvestSeedChars: 21,
 } as const;
 
 /** P2's input. Extracted prose length - NOT a text-to-markup ratio, which
