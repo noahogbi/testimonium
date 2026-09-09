@@ -27,7 +27,7 @@
  */
 import { readFileSync } from "node:fs";
 import { toText } from "../dist/text/extract.js";
-import { foldWithMap } from "../dist/text/excerpt.js";
+import { commonSpans } from "../dist/harvest/spans.js";
 import { norm } from "../dist/text/normalize.js";
 import { THRESHOLDS } from "../dist/classify/thresholds.js";
 
@@ -38,92 +38,13 @@ const docs = corpus
   .filter((f) => f.kind === "document")
   .map((f) => ({ path: f.path, text: toText(readFileSync(f.path, "utf8")) }));
 
-/** First occurrence of every L-gram of the folded document. Built once per
- *  call so the source scan is a lookup per position rather than an indexOf
- *  over the whole document - what spec 8.2 means by "linear in the source". */
-function seedIndex(folded, L) {
-  const ix = new Map();
-  for (let i = 0; i + L <= folded.length; i++) {
-    const g = folded.slice(i, i + L);
-    if (!ix.has(g)) ix.set(g, i);
-  }
-  return ix;
-}
-
-/** A word character in fold space; a token ends at punctuation too. */
-const WORD = /[\p{L}\p{N}]/u;
-const wordAt = (t, i) => i >= 0 && i < t.length && WORD.test(t[i]);
-
-function dropContained(spans) {
-  const kept = [];
-  const normed = [];
-  for (const span of spans) {
-    const n = norm(span);
-    if (!n) continue;
-    if (normed.some((p) => p.includes(n))) continue;
-    for (let k = normed.length - 1; k >= 0; k--) {
-      if (n.includes(normed[k])) {
-        normed.splice(k, 1);
-        kept.splice(k, 1);
-      }
-    }
-    normed.push(n);
-    kept.push(span);
-  }
-  return kept;
-}
-
 /**
- * REPLICA of src/harvest/spans.ts's emit rules. Task 5 of plan 2 deletes this
- * function and imports the real `commonSpans` instead, then re-runs this
- * script to prove the numbers did not move. Until commonSpans exists this is
- * what there is, and the plan says so rather than pretending otherwise.
+ * The sweep calls the shipped `commonSpans` (src/harvest/spans.ts). Until
+ * plan 2's Task 5 this file carried a replica of its emit rules, because the
+ * seed length had to be chosen before the function that consumes it could be
+ * written. The replica is gone; the numbers below come from the code that
+ * ships.
  */
-function spansOf(docProse, sourceText, L) {
-  const D = foldWithMap(docProse);
-  const S = foldWithMap(sourceText);
-  const ix = seedIndex(D.folded, L);
-  const candidates = [];
-  let i = 0;
-  while (i + L <= S.folded.length) {
-    const at = ix.get(S.folded.slice(i, i + L));
-    if (at === undefined) {
-      i++;
-      continue;
-    }
-    let end = i + L;
-    let d = at + L;
-    while (end < S.folded.length && d < D.folded.length && S.folded[end] === D.folded[d]) {
-      end++;
-      d++;
-    }
-    let begin = i;
-    let c = at;
-    while (begin > 0 && c > 0 && S.folded[begin - 1] === D.folded[c - 1]) {
-      begin--;
-      c--;
-    }
-    i = Math.max(end, i + 1);
-    let s = begin;
-    let cs = c;
-    let e = end;
-    let de = d;
-    while (e > s && (wordAt(S.folded, e) || wordAt(D.folded, de))) {
-      e--;
-      de--;
-    }
-    while (s < e && (wordAt(S.folded, s - 1) || wordAt(D.folded, cs - 1))) {
-      s++;
-      cs++;
-    }
-    while (s < e && S.folded[s] === " ") s++;
-    while (e > s && S.folded[e - 1] === " ") e--;
-    if (e <= s) continue;
-    const span = sourceText.slice(S.map[s], S.map[e - 1] + 1).replace(/\s+/g, " ").trim();
-    if (span) candidates.push(span);
-  }
-  return dropContained(candidates);
-}
 
 const pairs = [];
 for (let a = 0; a < docs.length; a++) for (let b = a + 1; b < docs.length; b++) pairs.push([docs[a], docs[b]]);
@@ -135,7 +56,7 @@ for (const L of SWEEP) {
   const emitted = [];
   const above = [];
   for (const [src, doc] of pairs) {
-    const spans = spansOf(doc.text, src.text, L);
+    const spans = commonSpans(doc.text, src.text, L).spans;
     emitted.push(spans.length);
     above.push(spans.filter((x) => norm(x).length >= THRESHOLDS.minClaimChars).length);
   }
@@ -148,7 +69,7 @@ for (const L of SWEEP) {
 const CLASSIFY_L = Number(process.argv[2] ?? THRESHOLDS.harvestSeedChars);
 const seen = new Map();
 for (const [src, doc] of pairs) {
-  for (const span of spansOf(doc.text, src.text, CLASSIFY_L)) {
+  for (const span of commonSpans(doc.text, src.text, CLASSIFY_L).spans) {
     const k = norm(span);
     if (k.length < THRESHOLDS.minClaimChars) continue;
     seen.set(k, (seen.get(k) ?? 0) + 1);

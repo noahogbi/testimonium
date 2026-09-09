@@ -655,10 +655,30 @@ word-boundary snapping, whitespace collapse and containment dedupe, which is
 what an author actually reviews. That wording discrepancy in 8.2 is recorded
 here rather than edited away.
 
-The script's `spansOf` is a REPLICA of the emit rules `src/harvest/spans.ts`
-will ship, because `commonSpans` does not exist until Task 5. Its docstring
-says so. Task 5 deletes the replica, imports the shipped function, and re-runs
-this script to prove the numbers did not move.
+The script's `spansOf` WAS a REPLICA of the emit rules `src/harvest/spans.ts`
+now ships, written in Task 2 because `commonSpans` did not exist until Task 5.
+Task 5 deleted the replica and imported the shipped function.
+
+**Re-run 2026-09-09 against the shipped `commonSpans`, and every cell of the
+table above reproduces exactly** - as do the 32 distinct above-floor spans at
+L=21 and the 43 at L=20, span for span and pair count for pair count. So
+`harvestSeedChars = 21` is calibrated against the code that runs rather than
+against a replica of it, which is the whole reason the swap was scheduled.
+
+The replica's one known divergence risk, flagged by Task 2's reviewer, was
+`seedIndex` keeping only the FIRST occurrence of each L-gram. It was carried
+into the shipped function DELIBERATELY, and what that costs was measured on
+the same 45 pairs rather than argued: indexing every occurrence and taking
+the longest extension reproduces the counts above EXACTLY at L = 20, 21, 22,
+23, 24, 25 and 30 - the whole 20..25 band the selection rule ranges over - and
+differs only far below it, at L=13 (above-floor mean 2.2 against 2.0, max 20
+against 15) and L=16 (2.3 against 2.2, max 21 against 19), where indexing every
+occurrence finds slightly MORE. So the choice cannot move `harvestSeedChars`,
+and its exposure is a MISS at seed lengths this tool does not ship, never a
+false proposal. `src/harvest/spans.ts` carries that measurement in the
+docstring of the function the choice is made in. Note that it is NOT true in
+general that the containment drop recovers what a later occurrence would add -
+the L=13 row is that claim measured false.
 
 ### Every cross-fixture common span, hand-classified
 
