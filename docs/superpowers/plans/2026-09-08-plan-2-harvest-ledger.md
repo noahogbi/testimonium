@@ -1662,3 +1662,88 @@ edit that wrote an escape: `src/text/excerpt.ts` 57, `test/text/excerpt.test.ts`
 `fixtures/challenge/pdf-binary-served-at-200.bin` (63, by design), with the
 instrument proved able to report non-zero first.
 `fixtures/challenge-battery.mjs` was NOT run.
+
+---
+
+## Final whole-branch review, fix wave, and close-out
+
+Final whole-branch review (opus) over ff71ec8..f6efbe7, 26 commits:
+**READY WITH FIXES - no Critical.** The keystone is clean end to end
+(isReadable at sources.ts:121 is the sole filter, harvest.ts:130 iterates only
+that list, isBlocked appears nowhere executable in harvest, and the
+isReadable -> !isBlocked mutation goes red). "No verdict moved" was PROVEN
+rather than argued: across check()'s entire dependency chain the branch has
+exactly four non-comment deltas - the front-door guard, +prose, +finalUrl and
+two new constants - and no existing threshold value changed, so every input the
+old guard refused is still refused. Both calibration scripts reproduce
+cell-for-cell (32-span table set-equal with pair counts, 12/20 split, ceiling
+12, 18/208 = 8.7%) with a negative control proven to fire. 18 of 20 mutations
+red, each proven applied and restored; the two survivors are correct.
+It found nine one-clause fixes, none executable, and answered both judgement
+items: preserve the Fable reviews rather than relabel 27 citations, and the CLI
+coverage gap does NOT block - "no exit 1" is STRUCTURAL, not merely observed
+(awk finds exactly three returns: 2, 2, 0, and bin.ts's top-level .catch maps
+any throw to 2), and the sub-floor claims file produces a message BYTE-IDENTICAL
+to check's, which is the README migration sentence proven rather than asserted.
+Its sharpest finding: TASK 10 HALF-FIXED A TWIN. It corrected the README's
+global-flags sentence and left the spec's counterpart standing - the exact
+failure [[doc-drift-sweep-whole-document]] is named for, inside the task whose
+entire job was that sweep. Also measured: bin.ts's "under --json nothing is
+read or written on disk" was FALSE (it reads <doc>.claims.json and exits 2 on a
+malformed one), found by running rather than reading.
+
+Final fix wave (sonnet, single dispatch as the skill requires): commits
+2744796 + 1106424. Eight of nine closed, item 9 correctly parked. 361 tests,
+tsc clean, NO EXECUTABLE LINE CHANGED (21 changed +/- lines across src/+test/,
+0 non-comment, detector proven on a planted `const x = 1;`).
+Item 4 is the one worth recording: 27 shipped citations across 16 src/ and
+test/ files and the spec pointed at two review documents in git-ignored scratch
+that cleanup destroys, and BOTH documents number their findings from F1 (and,
+the re-review found, from F6 as well). Preserving both files into
+docs/superpowers/plans/ with a header naming the range each owns fixed all 27
+at once without touching a single citation. Relabelling was considered and
+rejected: rewriting 27 sites risks inventing a falsehood at 27 sites. This is a
+defect the PROCESS created, not the code - the branch would have merged with 27
+dangling references and the documents that resolved them deleted.
+
+Scoped re-review of the fix wave (opus) over f6efbe7..1106424: ALL NINE
+ADDRESSED. Byte-fidelity of the preserved reviews proven by sha256 - removing
+exactly the 9 inserted header lines reproduces both scratch originals
+bit-for-bit. Nine citation spot-checks across nine files all resolve to the
+right document under its stated numbering. Item 5 proven BY RUNNING, with the
+skipped instrument proven live: with a malformed claims file, `harvest --json`
+exits 2 and leaves the draft's md5 unchanged; with a hostile _note draft
+present, --json exits 0 while the same run WITHOUT --json exits 2 on it.
+
+Ruling: F-1 - CHANGELOG.md:14's "harvest is a second consumer of the reader
+plan 1.2 built" is PARKED and surfaced to the user rather than fixed, though it
+is one word. readSource has three callers, so as an ordinal it is the same
+undercount item 2 corrected in fetch/types.ts, and it sits in a PRESENT-TENSE
+plan 2 section - but it survives on the ordinary reading of "a second" as "an
+additional", the whole-branch reviewer called it not a blocker, and the skill
+allows exactly one fix wave precisely so that close-out does not become an
+unbounded cycle. Offered to the user as a one-word follow-up instead. - Cost if
+wrong: a CHANGELOG sentence undercounts a caller list by one, in a document
+whose next edit will touch that section anyway.
+
+Ruling: F-2 - three residual scratch citations are ACCEPTED as-is: the prior
+plan's 2026-09-07-plan-1-2-reader.md:31 cites a directory that never existed
+(2026-09-07-plan-2-harvest; only the 09-08 one does), and plan-2-harvest.md:34
+and the ledger still reference scratch - because all three now have a
+resolvable in-repo target, the first is a PRIOR plan's historical document that
+this branch has no license to rewrite, and the other two are records of where
+work happened rather than pointers a reader must follow. - Cost if wrong: a
+reader chasing a path in a historical plan document finds nothing and looks in
+docs/superpowers/plans/ instead, where the content now is.
+
+Ruling: F-3 - the preserved reviews' headers say "moved out of git-ignored
+scratch" while the originals still sit in the workspace. Left as written,
+because the sentence becomes true the moment the workspace is deleted, which is
+the next step in this plan's own close-out. - Cost if wrong: two headers are
+briefly imprecise inside a directory that no longer exists.
+
+Close-out: 28 commits over main @ ff71ec8, 361 tests (from 281), tsc clean,
+build clean, tree clean, example/ untouched across the whole branch, three
+standing ASCII exceptions unchanged at 57/45/3, the only tracked NUL file the
+deliberate pdf-binary fixture. The keystone holds: only io/draft.ts and
+io/evidence.ts write, and neither addresses <doc>.claims.json.
