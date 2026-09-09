@@ -6,4 +6,4 @@ export type { Verdict } from "./classify/verdict.js";
 export type { Fetcher, RawResponse, RungId } from "./fetch/types.js";
 export { parseGfmFootnotes } from "./adapters/gfm-footnotes.js";
 export { parseClaimsFile, normalizeUrl, joinClaims } from "./io/claims.js";
-export const VERSION = "0.1.0";
+export { VERSION } from "./version.js";

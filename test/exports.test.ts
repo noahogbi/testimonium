@@ -25,7 +25,36 @@ describe("package surface", () => {
     }
   });
 
-  it("VERSION agrees with package.json - two copies of one number until plan 2 picks a source", async () => {
+  it("pins the exact set of named runtime exports, not just six names that must be absent", async () => {
+    // The test above (spec 5.3) only proves six named internals are absent;
+    // it says nothing about what IS present, so a name added to
+    // src/index.ts by accident - or a name quietly dropped - passes it
+    // either way. Task 9 touches this file to add VERSION's re-export, which
+    // is the moment to close that gap: an allowlist pin turns any change to
+    // the public runtime surface into a deliberate edit to a red test,
+    // rather than a silent one. Type-only exports (CheckOptions,
+    // ReachabilityResult, ReachabilityOptions, CitationResult, FiredRule,
+    // RuleSet, Verdict, Fetcher, RawResponse, RungId) are erased at compile
+    // time and never appear in Object.keys, so they are not - and cannot be
+    // - part of this list.
+    const api = await import("../src/index.js");
+    expect(Object.keys(api).sort()).toEqual([
+      "VERSION",
+      "check",
+      "joinClaims",
+      "loadRules",
+      "normalizeUrl",
+      "parseClaimsFile",
+      "parseGfmFootnotes",
+      "reachability",
+    ]);
+  });
+
+  it("VERSION agrees with package.json - src/version.ts is the source, this test is the join", async () => {
+    // Plan 2 picked the source (Fable F13): src/version.ts. package.json's
+    // own `version` is npm's and cannot be removed, so the two files stay
+    // two files and this test is what keeps them equal. `harvest` stamps
+    // VERSION into every draft it writes.
     const pkg = JSON.parse(readFileSync("package.json", "utf8"));
     const { VERSION } = await import("../src/index.js");
     expect(VERSION).toBe(pkg.version);

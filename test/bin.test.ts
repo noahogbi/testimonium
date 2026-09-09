@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyRun, validateFlags } from "../src/bin.js";
+import { classifyRun, claimsPathFor, draftPathFor, evidencePathFor, USAGE, validateFlags } from "../src/bin.js";
 
 describe("exit codes", () => {
   it("exits 0 when everything is supported", () => {
@@ -90,5 +90,49 @@ describe("validateFlags", () => {
     // "accepts a run with no flags at all" above and discriminated nothing.
     expect(validateFlags(["check", "doc.md", "-j"])).toBeNull();
     expect(validateFlags(["check", "doc.md", "-fail-on-unreachable"])).toBeNull();
+  });
+});
+
+describe("draftPathFor", () => {
+  it("names <doc>.claims.draft.json beside the document, like its two siblings", () => {
+    // Spec 8.2, "CLI": bin.ts gains draftPathFor beside claimsPathFor and
+    // evidencePathFor. All three replace the document's extension, so the
+    // three files sit together and a versioned prose directory stays
+    // readable.
+    expect(draftPathFor("essay.md").endsWith("essay.claims.draft.json")).toBe(true);
+    expect(claimsPathFor("essay.md").endsWith("essay.claims.json")).toBe(true);
+    expect(evidencePathFor("essay.md").endsWith("essay.evidence.json")).toBe(true);
+    // The draft is NOT the claims file, and the names must not collide.
+    expect(draftPathFor("essay.md")).not.toBe(claimsPathFor("essay.md"));
+  });
+
+  it("keeps the document's directory", () => {
+    expect(draftPathFor("docs/drafts/essay.markdown")).toContain("drafts");
+    expect(draftPathFor("docs/drafts/essay.markdown").endsWith("essay.claims.draft.json")).toBe(true);
+  });
+});
+
+describe("the usage string", () => {
+  it("names all three commands", () => {
+    // A command the usage line does not name is a command nobody finds.
+    for (const command of ["check", "harvest", "reachability"]) {
+      expect(USAGE, command).toContain(command);
+    }
+  });
+});
+
+describe("validateFlags and harvest", () => {
+  it("accepts a harvest run with the global flags", () => {
+    expect(validateFlags(["harvest", "doc.md", "--json", "--rules", "local.json"])).toBeNull();
+  });
+
+  it("CHARACTERIZATION: the command-agnostic gap now covers a third command", () => {
+    // `harvest doc.md --fail-on-unreachable` is accepted and ignored, exactly
+    // as `reachability doc.md --fail-on-unreachable` is. Per-command flag
+    // tables stay parked - they would change check and reachability too, and
+    // spec 8.2 licenses no such change - and this test is what makes closing
+    // the gap later a deliberate edit to a red test.
+    expect(validateFlags(["harvest", "doc.md", "--fail-on-unreachable"])).toBeNull();
+    expect(validateFlags(["harvest", "doc.md", "--explain-fetch"])).toBeNull();
   });
 });
