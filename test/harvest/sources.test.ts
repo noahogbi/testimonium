@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { scanSources } from "../../src/harvest/sources.js";
 import { parseClaimsFile } from "../../src/io/claims.js";
+import { computeSignals } from "../../src/classify/signals.js";
 import { THRESHOLDS, proseVolume } from "../../src/classify/thresholds.js";
+import { isBlocked } from "../../src/classify/verdict.js";
 import { toText } from "../../src/text/extract.js";
+import { norm } from "../../src/text/normalize.js";
 import type { Fetcher, RawResponse, RungId } from "../../src/fetch/types.js";
 import type { Footnote } from "../../src/adapters/types.js";
 
@@ -44,16 +47,44 @@ describe("scanSources", () => {
     expect(fetches).toBe(1);
   });
 
+  it("pins the shape of a source's reads: rung, extracted text, and its norm", async () => {
+    // Review r1, Important 1: the earlier tests pin which URLs become
+    // sources but never what a source CONTAINS. Task 7's frequency filter
+    // reads normText directly (spec 8.2 step 3); an unnormalized normText
+    // would silently under-drop boilerplate with nothing here going red.
+    // Built from toText/norm THEMSELVES, not restated, so a change to either
+    // function cannot desynchronize this pin from what they actually do.
+    //
+    // The readable read is deliberately CURL, not node: a hardcoded
+    // `rung: "node"` mutation would pass this assertion vacuously if the
+    // fixture's real rung already happened to be "node".
+    const scan = await scanSources([fn(1, "https://e.com/a")], {
+      fetcher: stub({ node: { rawBody: WALL, status: 202 }, curl: { rawBody: DOC_BODY, status: 200 } }),
+    });
+    const extracted = toText(DOC_BODY);
+    expect(scan.sources[0]!.reads).toEqual([{ rung: "curl", text: extracted, normText: norm(extracted) }]);
+    expect(scan.sources[0]!.rungsAttempted).toEqual(["node", "curl"]);
+  });
+
   it("keeps only READABLE reads: a sub-floor stub proposes nothing (Fable F1)", async () => {
     // The stub passes all five vetoes and fails only the prose floor. Under
     // `!isBlocked` it would be a harvest source, and harvest would propose
     // the lede that check() then attests against a paywall stub.
     expect(proseVolume(toText(STUB_BODY))).toBeLessThan(THRESHOLDS.minProseChars);
+    // The premise this whole test depends on: STUB_BODY trips no veto. If it
+    // ever acquired one, the assertions below would pass VACUOUSLY under
+    // `!isBlocked` too, and this test would silently stop exercising the
+    // most important guard in the plan (review r1, Important 2). Held here
+    // rather than trusted from the file's history.
+    expect(isBlocked(computeSignals({
+      rawBody: STUB_BODY, headers: {}, finalUrl: "https://e.com/a",
+      status: 200, claims: [],
+    }).signals)).toBe(false);
     const scan = await scanSources([fn(1, "https://e.com/a")], {
       fetcher: stub({ node: { rawBody: STUB_BODY, status: 200 }, curl: { rawBody: STUB_BODY, status: 200 } }),
     });
     expect(scan.sources).toEqual([]);
-    expect(scan.unreachable).toEqual([{ url: "https://e.com/a", rungsAttempted: ["node", "curl"] }]);
+    expect(scan.unreachable).toEqual([{ url: "https://e.com/a", rungsAttempted: ["node", "curl"], pdfUrl: false }]);
   });
 
   it("reports an unreachable URL with every rung it attempted", async () => {
@@ -62,6 +93,17 @@ describe("scanSources", () => {
     });
     expect(scan.sources).toEqual([]);
     expect(scan.unreachable[0]!.rungsAttempted).toEqual(["node", "curl"]);
+  });
+
+  it("carries pdfUrl on an unreachable PDF citation, for a machine that cannot read PDFs", async () => {
+    // Task 8's report needs to tell "we could not read it" from "this
+    // machine cannot read PDFs" (review r1, Minor 3) - the same distinction
+    // `check` already surfaces via `isPdfUrl` (src/check.ts:89,164).
+    const scan = await scanSources([fn(1, "https://e.com/paper.pdf")], {
+      fetcher: stub({}, ["node", "curl"]),
+    });
+    expect(scan.sources).toEqual([]);
+    expect(scan.unreachable).toEqual([{ url: "https://e.com/paper.pdf", rungsAttempted: [], pdfUrl: true }]);
   });
 
   it("skips a notApplicable URL, lists it with its reason, and never fetches it", async () => {

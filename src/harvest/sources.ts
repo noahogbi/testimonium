@@ -47,8 +47,11 @@ export interface HarvestSource {
 export interface SourceScan {
   readonly sources: HarvestSource[];
   /** A URL with no readable read. Nothing is proposed for it, and the report
-   *  says which rungs were tried (spec 8.2 step 2). */
-  readonly unreachable: { url: string; rungsAttempted: RungId[] }[];
+   *  says which rungs were tried (spec 8.2 step 2) plus, so Task 8's report
+   *  can tell "we could not read it" from "this machine cannot read PDFs"
+   *  the way `check` already does via `isPdfUrl` (src/check.ts), whether the
+   *  URL was a PDF citation to begin with. */
+  readonly unreachable: { url: string; rungsAttempted: RungId[]; pdfUrl: boolean }[];
   /** A URL the author has declared not checkable. Never fetched. */
   readonly skipped: { url: string; reason: string }[];
 }
@@ -109,7 +112,7 @@ export async function scanSources(
       continue;
     }
 
-    const { reads, attempted } = await readSource(footnote.url, [], {
+    const { reads, attempted, pdfUrl } = await readSource(footnote.url, [], {
       fetcher: opts.fetcher,
       sourceLabel: footnote.label,
       ...(opts.rules ? { rules: opts.rules } : {}),
@@ -117,7 +120,7 @@ export async function scanSources(
 
     const readable = reads.filter((r) => isReadable(r.computed.signals));
     if (readable.length === 0) {
-      unreachable.push({ url: footnote.url, rungsAttempted: attempted });
+      unreachable.push({ url: footnote.url, rungsAttempted: attempted, pdfUrl });
       continue;
     }
 
