@@ -110,18 +110,32 @@ export const THRESHOLDS = {
    *  not a fix-round edit. */
   binarySampleCodePoints: 65_536,
   /** The shortest claim that can attest anything about a source, applied to
-   *  `norm(claim).length`. REFUSED, not warned about, at all three entries -
-   *  the claims-file loader, `check()`'s front door and harvest's first
-   *  filter - with one message naming the claim, its length, the floor and
-   *  the remedy (spec 7.3; 13 Q3). All three doors are shut as of Task 7:
-   *  the loader and `check()` enforce it from Task 3 (`src/io/claims.ts`),
-   *  and harvest's first filter enforces it from Task 7
-   *  (`src/harvest/filters.ts`), applying the same `belowClaimFloor` and
-   *  `claimFloorMessage` to every candidate span before it can be proposed.
-   *  Task 5's `commonSpans`, which consumes `harvestSeedChars` below, applies
-   *  no floor of its own - that gap is what Task 7 closes. A warning that a
-   *  claim proves nothing leaves it proving nothing while the run still
-   *  passes.
+   *  `norm(claim).length`. REFUSED, not warned about, at every door a claim
+   *  can come through - the claims-file loader, `check()`'s front door and
+   *  harvest's first filter - with one message naming the claim, its length,
+   *  the floor and the remedy (spec 7.3; 13 Q3). A warning that a claim
+   *  proves nothing leaves it proving nothing while the run still passes.
+   *
+   *  ONE IMPLEMENTATION, EVERY DOOR, and that is the durable statement here.
+   *  Each door calls `belowClaimFloor` and `claimFloorMessage` from
+   *  `src/io/claims.ts`; neither predicate nor message is restated anywhere,
+   *  so an author meets the same wording whichever door she arrives at. That
+   *  is checkable rather than asserted:
+   *  `grep -rnE "belowClaimFloor|claimFloorMessage" src/` should show only
+   *  those two definitions and calls into them, and
+   *  `test/harvest/filters.test.ts` asserts harvest's own message is the
+   *  loader's. Span-finding applies no floor of its own - `commonSpans`,
+   *  which consumes `harvestSeedChars` below, emits every maximal shared span
+   *  and the filter is what refuses the short ones - so the floor has one
+   *  site there too.
+   *
+   *  THIS PARAGRAPH NAMES NO TASK OR PLAN, DELIBERATELY. Four earlier
+   *  revisions of it said which task had wired which door, and each went
+   *  stale the next time a door moved: four corrections to one docstring
+   *  inside one plan, every sentence true when it was written. A docstring
+   *  that describes the state of other code has to be re-earned whenever that
+   *  code moves; one that describes what the constant IS, and names a command
+   *  that checks it, does not.
    *
    *  It does not change a verdict. It refuses an input before there is a
    *  verdict to change, which is why it is uniform across the three doors: a

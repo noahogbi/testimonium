@@ -17,7 +17,7 @@
 - **THE KEYSTONE RULE (spec 2):** `unsupported` requires positive proof the real page was read. **Harvest never writes `<doc>.claims.json`; it writes the draft only.** A proposal becomes a claim when the author moves it, and not before.
 - **Harvest proposes nothing from a read that would not license an accusation** (spec 6.6, "Harvest reads only what is readable"). The predicate is `isReadable` from `src/classify/verdict.ts` - never `!isBlocked`, which admits every paywall stub and 22 of the 25 challenge fixtures. Only readable reads propose, and only readable reads vote in the frequency filter.
 - **Nothing new becomes public** (spec 5.3). `src/index.ts` keeps exactly the exports it has at `ff71ec8`, `package.json`'s `exports` map stays `.` and `./package.json`, and `test/exports.test.ts` pins both. Every new module is imported by path inside `src/` and by the test suite; none is re-exported.
-- **All source and test files are pure ASCII.** Check with `LC_ALL=C tr -d '\000-\177' < FILE | wc -c` -> must print `0`. The one standing exception is `src/text/excerpt.ts`, which carries exactly **57** non-ASCII bytes and must still carry 57 after this plan. Write non-ASCII in source as backslash-u escapes and in tests with `String.fromCharCode` / `String.fromCodePoint`. **The tooling that applies edits has stored a backslash-u escape as the raw character before, twice in this repository's history: after every edit that writes one, re-run the byte count.** Fixtures are not source: `fixtures/**` may hold non-ASCII, and the four claims fixtures this plan freezes happen to be pure ASCII (verified 2026-09-08) - record the count, do not require zero.
+- **All source and test files are pure ASCII.** Check with `LC_ALL=C tr -d '\000-\177' < FILE | wc -c` -> must print `0`. **CORRECTED 2026-09-09 (Task 10):** this said "the one standing exception is `src/text/excerpt.ts`", and that was false of this repository before plan 2 began. There are **three** standing exceptions, and every dispatch from Task 6 onward named all three: `src/text/excerpt.ts` (**57** non-ASCII bytes), `test/text/excerpt.test.ts` (**45**) and `test/text/extract.test.ts` (**3**), the latter two from plan 1.2's `3f74990`. All three still carry those counts (re-measured 2026-09-09 over every tracked file); every other tracked `.ts` under `src/` and `test/` prints `0`. The false single-exception form never surfaced because no task touched those two test files, so every implementer's "0 non-ASCII on the files I touched" was true and consistent with it - a premise no evidence the checks collect could contradict. Write non-ASCII in source as backslash-u escapes and in tests with `String.fromCharCode` / `String.fromCodePoint`. **The tooling that applies edits has stored a backslash-u escape as the raw character before, twice in this repository's history: after every edit that writes one, re-run the byte count.** Fixtures are not source: `fixtures/**` may hold non-ASCII, and the four claims fixtures this plan freezes happen to be pure ASCII (verified 2026-09-08) - record the count, do not require zero.
 - **No NUL bytes anywhere.** `LC_ALL=C tr -cd '\000' < FILE | wc -c` must print `0`, and the instrument is proved first: `printf 'a\0b' | LC_ALL=C tr -cd '\000' | wc -c` prints `1`.
 - **`npm test` green and `npx tsc --noEmit` clean at every commit.** Never commit with a red test.
 - **Conventional commit prefixes with the scope in parentheses**, as `git log --oneline -30` shows: `feat(classify)`, `feat(fetch)`, `feat(harvest)`, `fix(text)`, `docs(spec)`, `docs(readme)`, `test:`, `chore:`.
@@ -51,7 +51,7 @@ And one thing it must take first, before any harvest code, because plan 1.2's le
 - **`SignalResult` gains `finalUrl`.** 8.2 step 2 requires the report to say when a readable read's `finalUrl` differs in path from the URL asked for, and nothing on `Read` carries it today. It is reported, never gated - `check`'s behaviour is byte-identical after this plan.
 - **A missing `<doc>.claims.json` is not an error.** Harvest's whole migration story is a document that has no claims file yet. A file that *exists* and the loader refuses is exit 2 with the loader's own message (8.2 filter 4).
 - **`--json` prints the draft to stdout instead of writing it**, the convention `reachability --json` follows (`bin.ts:128`). Under `--json` no draft file is read or written, so the overwrite rule does not apply, **and stdout carries the JSON and nothing else** - the per-URL report goes to stderr, so `harvest doc.md --json > draft.json` produces a file `jq` and an editor can read (Fable F6). `reachability --json` already prints pure JSON; `check --json` mixes report and JSON on stdout, and that inconsistency is plan 1's and is not widened here.
-- **A draft entry with no surviving claims is omitted from the file, not written as `[]`.** `harvest()` reports one proposal entry per readable URL whether or not anything survived the filters, and `parseClaimsFile` refuses an empty array - so writing `"url": []` would break the migration story on its ordinary case: the author renames the draft and `check` exits 2 naming a key she never wrote (Fable F1). `buildDraft` is the single place that drops them, and the per-URL report line has already said that URL proposed 0.
+- **A draft entry with no surviving claims is omitted from the file, not written as `[]`.** `harvest()` reports one proposal entry per readable URL whether or not anything survived the filters, and `parseClaimsFile` refuses an empty array - so writing `"url": []` would break the migration story on its ordinary case: the author renames the draft and `check` exits 2 naming a key she never wrote (Fable F1). `buildDraft` is the single place that drops them, and the per-URL report line has already said that URL proposed 0. **DISAMBIGUATED 2026-09-09 (Task 10):** Task 9 carried this citation forward as a miscitation, and it is not one - it is AMBIGUOUS. Two Fable documents in this plan's workspace each number their findings from F1: the design review's F1 is the `!isBlocked`-versus-`isReadable` predicate finding (cited at `src/harvest/sources.ts` and `test/harvest/sources.test.ts`), and the plan review's F1 is this one, "exclude zero-claim entries from the draft file". Every "Fable F1" in this plan and in `src/` resolves to the right finding in its own document; nothing was relabelled. What is worth naming is that both review files are git-ignored scratch, so every `Fable F*` citation in shipped source outlives the document it points at.
 - **The parked astral-fold item is RE-PARKED, with the argument, on 2026-09-08.** Plan 1.2's ledger (Task 5 minor) parked it here: `foldWithMap` iterates per UTF-16 unit, so an astral character is never case-folded, and "harvest is the consumer". This plan does not fix it. Fixing it means making `foldWithMap` iterate by code point rather than by UTF-16 unit - a behaviour change to a primitive plan 1.2 stabilised and pinned, in a task whose own job is to consume it. Its consumer here fails only in the safe direction: a span whose only difference from the source is the case of an astral character never matches, so `commonSpans` misses a proposal it could have made. A false MISS, never a false proposal and never a false accusation - the direction this tool is allowed to fail in. Re-parked for a future plan with that argument on the record rather than dropped, and Task 10's ledger step writes the line.
 - **The `_note` overwrite rule is read as "byte-identical outside the version and date fields".** 8.2 says an existing draft is overwritten "only when its `_note` is byte-identical to the marker harvest would write". Read literally, a draft written yesterday could never be overwritten today, because today's marker carries today's date - which would make `harvest` unusable on its second day. The rule's purpose is to detect an author's edit, and that purpose is served exactly as well by requiring every byte outside the version and the date to match. **This is a deliberate reading of an ambiguous sentence, recorded here and in the ledger.**
 - **Proposals for a URL are the union over *all* its readable reads**, not the best one. 8.2 step 2 says "Only readable reads propose or vote", plural; a node read and a curl read of the same URL can carry different text, and both were read.
@@ -285,6 +285,8 @@ ruling C13; this sentence had not. Corrected 2026-09-08: it generalised a host
 rule's contract to all three lists, and was false for two of them.
 ```
 
+**CORRECTED 2026-09-09 (Task 10):** the block above is the text Task 1 was told to write, and it is not the text that shipped. Task 1's review (Important 4) found the attribution wrong - `git log -S "signature and path rules" -- src/rules/load.ts` returns only `e4d9f46`, plan 1's final fix wave, fifteen commits after C13's `7a0cf6f` - so the shipped spec reads "since plan 1's final fix wave (`e4d9f46`)". Read this block as the instruction, not as the spec.
+
 - [ ] **Step 7: Sweep the two source comments carrying the same claim**
 
 `src/rules/challenge.ts`, in the `CHALLENGE_SIGNATURES` header comment: replace the run of lines that begins ` * It is NOT true that a match never decides a verdict, and this comment said` and ends ` * still change an outcome.` - **lines 18-24, seven lines**. It is the comment's THIRD paragraph, not its last: line 25 is ` *` and the pattern-guidance paragraph begins at line 26 and must survive untouched. Anchor on the two texts, not on the numbers, and check line 26 is still there afterwards. Replace with:
@@ -312,7 +314,7 @@ rule's contract to all three lists, and was false for two of them.
 
 The first half of that replacement corrects a second, separate drift the sweep turns up: "forces `unreachable` on its own" was true when written and was falsified by plan 1.2's escalation, in exactly the way the spec's N4 paragraph records for N4.
 
-The rot sentence is scoped rather than left unconditional, because the unconditional form is the exact sentence spec 6.3 records draft 1 getting wrong ("The rot argument survives, but only below the prose floor, and draft 1 stated it without that condition"). It survives under a marginal-cost reading - a complete list could not have vetoed an above-the-cap body either, so rot changes no outcome - but a comment that pattern-matches a recorded error should say which reading it means.
+The rot sentence is scoped rather than left unconditional, because the unconditional form is the exact sentence spec 6.3 records draft 1 getting wrong ("The rot argument survives, but only below the prose floor, and draft 1 stated it without that condition"). It survives under a marginal-cost reading - a complete list could not have vetoed an above-the-cap body either, so rot changes no outcome - but a comment that pattern-matches a recorded error should say which reading it means. **CORRECTED 2026-09-09 (Task 10):** the sentence quoted here is spec 6.3 as it stood before Task 1, and Task 1's own five fix rounds rewrote it. It now reads "The rot argument survives below the prose floor in the accusation direction only, and draft 1 stated it without either condition" - two conditions, direction as well as floor, which is the axis three of Task 1's sweeps missed. Read the quote as the state of the spec when this plan was written.
 
 `src/rules/load.ts`, in the `loadRules` doc comment, the clause `can turn a real document into a false `unreachable`` (line 59) understates the same cost. Replace `can turn a real document into a false `unreachable`` with:
 
@@ -2876,7 +2878,7 @@ Expected: FAIL, `expected { floor: 0, frequency: 1, ... } to deeply equal { floo
 ```bash
 cd C:/Users/noaho/testimonium-plan2 && grep -rn "belowClaimFloor\|claimFloorMessage" src/
 ```
-Expected: **ten lines** - two definitions, one use of each in `src/io/claims.ts`, `src/check.ts` and `src/harvest/filters.ts`, and the import line in each of the latter two (one line apiece, both names; `grep -n` prints lines, not matches, so they are expected). Task 3 recorded seven. Spec 7.3's "three sites" is now literally true; record the count in the ledger.
+Expected: **ten CODE lines** - two definitions, one use of each in `src/io/claims.ts`, `src/check.ts` and `src/harvest/filters.ts`, and the import line in each of the latter two (one line apiece, both names; `grep -n` prints lines, not matches, so they are expected). Task 3 recorded seven. Spec 7.3's "three sites" is now literally true; record the count in the ledger. **CORRECTED 2026-09-09 (Task 10):** this said "ten lines" flat, and the command prints **twelve**, at Task 7's own HEAD and still today. The extra two are PROSE, not code: Task 7's own docstring fix named both functions in `src/classify/thresholds.ts`, and Task 10 kept them there deliberately, because "every door calls these two" is the invariant that docstring now asserts and a grep is how a reader checks it. Ten code lines is still right; the number printed is twelve. Task 7's report was corrected at the time and this step was not - a doc-drift sweep covers the verification transcript too.
 
 - [ ] **Step 9: Suite, byte checks, commit**
 
@@ -3337,6 +3339,21 @@ export interface HarvestReport {
   readonly proposals: HarvestProposal[];
   readonly unreachable: { url: string; rungsAttempted: RungId[] }[];
   readonly skipped: { url: string; reason: string }[];
+  // ^ CORRECTED 2026-09-09 (Task 10). Two things in the block above are stale
+  //   against the shipped code, both because a later decision moved past this
+  //   text rather than because the text was wrong when written.
+  //   (1) `unreachable` ships as
+  //       `{ url: string; rungsAttempted: RungId[]; pdfUrl: boolean }[]`.
+  //       Controller ruling T6-R4 added `pdfUrl` to `SourceScan.unreachable`
+  //       FOR this report, after this block was written: "we could not read
+  //       it" and "this machine cannot read PDFs" are different messages to
+  //       an author. Narrowing it back would orphan the field.
+  //   (2) `bugs` is NOT "reported with a BUG label". Task 8's fix round split
+  //       the field into a real map-integrity defect and a benign
+  //       `norm()`-boundary drop whose own message begins "NOT A BUG", so a
+  //       blanket label would relabel every benign line as a defect. See the
+  //       shipped `HarvestProposal.bugs` docstring, and the correction to
+  //       Task 9's display snippet further down.
   /** Fewer than two URLs held a readable read, so the cross-source frequency
    *  filter had nothing to compare against. Vacuous, not wrong (13 Q5) - and
    *  the report says so in words rather than leaving the author to infer it
@@ -3668,10 +3685,19 @@ Insert this block immediately after the `if (command === "reachability") { ... }
             "Read these proposals against the page you actually got.",
         );
       }
-      // A self-validation failure is a BUG in this tool, not a filter's work,
-      // so it is labelled and it does not change the exit code (spec 8.2
+      // CORRECTED 2026-09-09 (Task 10). This block said "a self-validation
+      // failure is a BUG in this tool ... so it is labelled", and prescribed
+      // `say(`        BUG: ${bug}`)`. Both were true when written and were
+      // falsified by Task 8's fix round, which split `p.bugs` into a real
+      // map-integrity defect and a benign `norm()`-boundary drop whose own
+      // message begins "NOT A BUG". The prescribed snippet would have printed
+      // "BUG: NOT A BUG, a norm() boundary: ..." and buried the real
+      // map-integrity line among the benign ones. The shipped code prints
+      // each line unprefixed, and Task 9's implementer refused the snippet and
+      // flagged the conflict rather than following it. What remains true is
+      // the second half: none of these lines changes the exit code (spec 8.2
       // step 4).
-      for (const bug of p.bugs) say(`        BUG: ${bug}`);
+      for (const bug of p.bugs) say(`        ${bug}`);
     }
     for (const u of report.unreachable) {
       say(`  ${u.url} - UNREADABLE, nothing proposed (tried: ${u.rungsAttempted.join(", ")})`);
@@ -4106,10 +4132,27 @@ cd C:/Users/noaho/testimonium-plan2 && npm test && npx tsc --noEmit && npm run b
 ```
 Expected: **341 passed**, typecheck silent, build clean, and `git status --short` showing only `README.md`, `CHANGELOG.md` and the two docs (`dist/` is git-ignored).
 
+**CORRECTED 2026-09-09 (Task 10), and this is the step correcting itself.** Two numbers here were wrong before this task ran, and both would have produced a failure that looks like a defect rather than like a stale expectation.
+
+*The count.* **361, not 341.** The header ladder was written before any fix round existed and cannot account for tests those rounds add (controller ruling T6-R1 retired it as the authority after Task 6). The rule that replaced it is: the task's own specified `it()` count added to the current actual total. Task 10 specifies **zero** new `it()` blocks, so 361 in and 361 out.
+
+*The file list.* Task 10 also touches `src/check.ts`, `src/harvest/spans.ts` and `src/classify/thresholds.ts` (comment-only - no executable line changes), this plan file, and the new `docs/superpowers/plans/2026-09-08-plan-2-harvest-ledger.md`. `docs/calibration-2026-09.md` is NOT touched: both calibration scripts were re-run on 2026-09-09 and every number in that document reproduced, so nothing moved.
+
 ```bash
 cd C:/Users/noaho/testimonium-plan2 && printf 'a\0b' | LC_ALL=C tr -cd '\000' | wc -c && for f in $(git diff --name-only ff71ec8..HEAD; echo README.md CHANGELOG.md) ; do printf "%s nonascii=" "$f"; LC_ALL=C tr -d '\000-\177' < "$f" | wc -c; printf "%s nul=" "$f"; LC_ALL=C tr -cd '\000' < "$f" | wc -c; done
 ```
 Expected: self-test `1`; `nul=0` for every file without exception; `nonascii=0` for everything except `src/text/excerpt.ts` (**57**), `README.md` (**3** unless a step above deliberately added one, in which case record the new number and why) and `docs/calibration-2026-09.md` (the number Task 2 recorded).
+
+**CORRECTED 2026-09-09 (Task 10), and the correction is narrower than it was routed here as.** Task 6's reviewer routed this step forward as one that "would FAIL as written". Run on 2026-09-09, it does not: the loop iterates `git diff --name-only ff71ec8..HEAD` plus two files, and the two test files that break the stated exception set are not in that range, because no plan-2 task touched them. What IS wrong is the expectation's own wording - "`nonascii=0` for everything except" these three is a claim about the REPOSITORY, and it is false of the repository, inheriting the false single-exception premise from the Global Constraint at the top of this plan (corrected there too). A false universal that this particular file list happens never to exercise is the same defect as one that fails: it is true only by the accident of what the loop reaches. The true expectation, re-measured 2026-09-09 over every tracked file:
+
+- `src/text/excerpt.ts` **57**
+- `test/text/excerpt.test.ts` **45**
+- `test/text/extract.test.ts` **3**
+- `docs/calibration-2026-09.md` **185** (165 at `main`; Task 2's two fix rounds added an n-tilde and a c-cedilla, then two more, and the doc records why)
+- `README.md` **3** (a single U+2265, predating plan 2)
+- every other tracked file **0**, `fixtures/**` excepted - a fixture is a recording and may hold anything, including the NULs in `fixtures/challenge/pdf-binary-served-at-200.bin`, which is the only tracked file with any.
+
+The loop's own file list reaches only two of these: `README.md` at 3 and `docs/calibration-2026-09.md` at 185, both as expected. Widen the check to every tracked file if you want the expectation tested rather than merely stated - `for f in $(git ls-files); do ...; done`, with `fixtures/**` allowed to be non-zero.
 
 ```bash
 cd C:/Users/noaho/testimonium-plan2 && git diff -w --stat ff71ec8..HEAD && git diff --stat ff71ec8..HEAD

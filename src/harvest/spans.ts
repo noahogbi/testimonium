@@ -14,16 +14,17 @@ export interface SpanResult {
    *  8.2 step 4; Fable F3c).
    *
    *  NOT EVERY ENTRY IS A BUG, which is why each line now says which it is.
-   *  Spec 8.2 step 4 calls the three assertions "each a bug if it fails";
-   *  measured 2026-09-09 (fix round 1) that is FALSE of assertion 1 and half
+   *  Spec 8.2 step 4 used to call the three assertions "each a bug if it
+   *  fails"; measured 2026-09-09 that is FALSE of assertion 1 and half
    *  true of assertion 2, because `norm()` applies four digit-magnitude
    *  rewrites `foldWithMap` deliberately does not, and their input can
    *  straddle a span's edge on a page that is working perfectly. The DROPS
    *  are correct and stay - see `normBoundaryNote` for why - but the LABEL
    *  was wrong, and a real offset-map fault was invisible inside a routine
-   *  boundary effect. The spec sentence is routed to Task 10 and is not
-   *  amended here. A caller must therefore NOT print a blanket `BUG:` prefix
-   *  over this list; each line carries its own reading.
+   *  boundary effect. The spec was amended to agree with this file on
+   *  2026-09-09; step 4 now says which assertion is which. A caller must NOT
+   *  print a blanket `BUG:` prefix over this list; each line carries its own
+   *  reading.
    *
    *  Five conditions can land here: spec 8.2 step 4's THREE assertions
    *  (present in the source, present in the document, and the fold round trip
@@ -34,11 +35,16 @@ export interface SpanResult {
    *  span that was never found, which is the one outcome that would make a bug
    *  in this file invisible.
    *
-   *  ONE drop is deliberately NOT reported here: when the word-boundary snap
-   *  consumes the whole match (`e <= s`), because the matched run held no
-   *  whole word in either text. That is the snap working, not failing - the
-   *  ordinary case of a seed landing mid-token - so reporting it would fill
-   *  `bugs` with noise and destroy the signal the rest of this list carries. */
+   *  ONE drop is deliberately NOT reported here: `e <= s`, when the trims
+   *  have consumed the whole match. THREE kinds of trim narrow `[s, e)`
+   *  before that test, each running at both ends - the word-boundary snap,
+   *  the astral-half trim and the space trim - and the branch belongs to all
+   *  of them, not to the snap alone (it named only the snap until
+   *  2026-09-09, which was incomplete rather than false). Each is the trim
+   *  WORKING: a seed landing mid-token, a divergence between the halves of
+   *  one astral character, a run that is whitespace once its boundaries have
+   *  been snapped off. Reporting any of them would fill `bugs` with noise and
+   *  destroy the signal the rest of this list carries. */
   readonly bugs: string[];
 }
 

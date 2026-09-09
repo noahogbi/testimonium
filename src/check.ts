@@ -93,9 +93,13 @@ export async function check(
   // A full match is its own proof of a read (verdict.ts), so a rung that
   // reached `supported` settles it. Discarding that read merely because a later
   // rung returned a longer body is how a citation the tool ALREADY verified
-  // becomes an accusation - and the ladder escalates on ANY sub-floor read, so
-  // a short real article followed by a fat block page is the ordinary case,
-  // not an exotic one.
+  // becomes an accusation - and the HTML ladder escalates on ANY sub-floor
+  // read, so a short real article followed by a fat block page is the ordinary
+  // case, not an exotic one. HTML is load-bearing: `nextAction` returns from
+  // its `isPdfUrl` branch before the escalation rule is reached
+  // (fetch/ladder.ts), so a PDF citation gets one rung whatever it read and
+  // this route needs two. The unqualified form of this sentence shipped false
+  // for a PDF URL until 2026-09-09.
   const proven = reads.find((r) => verdict(r.computed.signals) === "supported");
   // Rule 2 (spec 6.6): failing a proof, the READABLE read with the most prose
   // - not the largest read. A fat challenge page over the floor used to

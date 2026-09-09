@@ -32,14 +32,14 @@ export interface HarvestProposal {
   /** Self-validation lines from `commonSpans`, never counted as a filter's
    *  work (spec 8.2 step 4).
    *
-   *  DO NOT RENDER THESE UNDER A BLANKET `BUG:` PREFIX. Spec 8.2 step 4 calls
-   *  the three assertions "each a bug if it fails", and fix round 1 measured
-   *  that false for assertion 1: a source reading "6 billion" against a draft
-   *  reading "7 billion" lands a line here from a page that is working
+   *  DO NOT RENDER THESE UNDER A BLANKET `BUG:` PREFIX. Spec 8.2 step 4 used
+   *  to call the three assertions "each a bug if it fails", and that was
+   *  measured false for assertion 1: a source reading "6 billion" against a
+   *  draft reading "7 billion" lands a line here from a page that is working
    *  perfectly. Each line says which reading it carries - see
    *  `normBoundaryNote` and `documentMismatchNote` in harvest/spans.ts - and
-   *  the caller prints the line, not a label of its own. The spec sentence is
-   *  routed to Task 10. */
+   *  the caller prints the line, not a label of its own. The spec was amended
+   *  to agree with this file on 2026-09-09. */
   readonly bugs: string[];
   readonly redirectedTo: string | null;
 }
@@ -81,8 +81,9 @@ export interface HarvestReport {
  *
  * HARVEST IS NOT SAFE BY CONSTRUCTION - spec 8.2, "What it is not", which
  * corrected the section 8 paragraph that once claimed the opposite. (The
- * README carries no harvest section yet; Task 10 writes one, and until it
- * lands the spec is the only place this is written down.) A span common
+ * README's own `## Harvest` section says the same thing to the author, in her
+ * words rather than the spec's, as of 2026-09-09; before that the spec was
+ * the only place it was written down.) A span common
  * to the draft and a source is by definition a span `check` will find in that
  * source, so harvest carries the checker's exposures unreduced - an
  * above-floor un-vetoed wall, and a redirect to a homepage that shares a

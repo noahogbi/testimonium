@@ -89,9 +89,13 @@ describe("validateFlags", () => {
     // fails silently rather than loudly.
     //
     // NOT desired behaviour and NOT to be "fixed" here. The flag tables this
-    // would need (which flags each command accepts, short forms included) are
+    // would need (which flags each command accepts, short forms included) were
     // parked for plan 2 alongside the other validateFlags gap - `reachability
-    // doc.md --fail-on-unreachable` is accepted and ignored. This test exists
+    // doc.md --fail-on-unreachable` is accepted and ignored. Plan 2 did not
+    // close either: it re-parked them and added a third command to the same
+    // gap, characterized below in "the command-agnostic gap now covers a third
+    // command". Closing them would change check and reachability too, and spec
+    // 8.2 licenses no such change. This test exists
     // so the limit is written down where the behaviour lives, and so closing
     // it later is a deliberate edit to a red test rather than a silent
     // widening. It replaces a case that was byte-for-byte identical to

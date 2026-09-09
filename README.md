@@ -41,8 +41,10 @@ whitespace-insensitive) in the extracted text of that page:
 ```
 
 Each phrase has a floor: **16 characters once normalized**. A shorter one is
-refused, by name, with its length and the floor - by the claims file's own
-loader and by `check()` alike. A bare number, a year, or a token like "the
+refused, by name, with its length and the floor, at every door a claim can
+come through: the claims file's own loader, `check()`, and `harvest`'s first
+filter, which drops such a candidate rather than proposing it. All three say
+it in the same words. A bare number, a year, or a token like "the
 report" is present on any page that happens to mention it, so a match on one
 is a coincidence this tool cannot tell from evidence. Extend the phrase to
 take in the surrounding words. The number and what licenses it are in
@@ -74,10 +76,14 @@ the phrase, fix the citation, or mark the footnote `{"notApplicable":
 outlet.
 
 Global flags: `--json`, `--rules <path>`. `check` additionally takes
-`--allow-unclaimed`, `--fail-on-unreachable`, and `--explain-fetch` - the last
-of these is **not** global: `reachability` never consults it, and its result
-type carries no fired-rule provenance to print, so passing it to
-`reachability` is a silent no-op. There is no `--fetcher` flag - swapping the
+`--allow-unclaimed`, `--fail-on-unreachable`, and `--explain-fetch`, and none
+of the three is **global** - but the flag validator does not know that. It is
+command-agnostic, so `harvest essay.md --fail-on-unreachable` and
+`reachability essay.md --explain-fetch` are accepted and then silently
+ignored: neither command consults them, and neither result type carries
+fired-rule provenance to print. That gap is characterized by a test rather
+than closed, because per-command flag tables would change all three commands
+and nothing here yet requires them. There is no `--fetcher` flag - swapping the
 fetcher (a headless browser, a paid proxy) is a programmatic option
 (`CheckOptions.fetcher`), not a CLI one, because a CLI plugin registry is a
 design nothing in this tool yet requires.
@@ -181,10 +187,11 @@ before you trust a green run to mean more than it does.
   extracted prose as a result. A claims-file phrase present only inside
   `<!-- ... -->`, never in anything a reader would see rendered, can
   therefore verify as `supported`: a false attestation from text no reader
-  sees. Verified live on current `main`. It is disclosed rather than fixed
-  here because closing it can only move a verdict *toward* `unsupported`,
-  which this plan's constraints forbid - it is plan 2 work. See
-  `docs/calibration-2026-09.md` for how this was checked.
+  sees. Verified live on current `main`, and still open: closing it can only
+  move a verdict *toward* `unsupported`, so it is a verdict change and not a
+  repair, and no plan has yet taken it. It is disclosed here rather than
+  promised to a plan. See `docs/calibration-2026-09.md` for how this was
+  checked.
 - **The audience is small**, and that is a limit, not a roadmap item - the
   way `urtext` says three of seven analyzers find nothing in a Python repo.
   Direct fit is people who already keep verbatim source quotes and are
@@ -249,12 +256,15 @@ will eventually surprise a real user if it isn't said here first.
   mirror's home page - because no signal the classifier gates on
   distinguishes the same page at 200 from a different document at 200 (the
   classifier computes slug overlap and the head markers and gates on
-  neither; it also never compares a read's `finalUrl` with the URL it was
-  asked for, so a redirect away from the citation is observable and, today,
-  unobserved - a gate left unbuilt, not a limit of the signals). A vetoed
+  neither; the GATE also never compares a read's `finalUrl` with the URL it
+  was asked for, so a redirect away from the citation is observable and, in
+  `check`, unobserved - a gate left unbuilt, not a limit of the signals.
+  `harvest` does compare it, and reports a proposal from a read whose final
+  path differs from the cited path; it gates on nothing either). A vetoed
   wall on the first rung leaves no trace on such a result beyond
-  `rungsAttempted`; a sub-floor read leaves one whenever it matched a claim,
-  since its matches still enter the union and drop that claim from `missed`.
+  `rungsAttempted`; a sub-floor read leaves one whenever it matched a claim
+  no readable read carried, since its matches still enter the union and drop
+  that claim from `missed`.
   `firedRule` is the winning read's.
 - **The same false accusation is reachable a second way, and that route has
   no fixture at all.** The signature list only vetoes a *short* body: above
@@ -317,7 +327,7 @@ will eventually surprise a real user if it isn't said here first.
   one, `check` still runs and still exits 0 - but every PDF citation
   attempts *nothing at all*, reports `unreachable`, and passes.
   `rungsAvailable` and `ladderTruncated` are on every result for
-  exactly this reason, and the CLI prints "ladder truncated" beside each
+  exactly this reason, and `check` prints "ladder truncated" beside each
   affected *unreachable* citation - a `supported` verdict reached from a
   truncated ladder prints no such note, even though the same caveat applies
   to it. If your CI image is minimal, read those fields before reading the
@@ -327,36 +337,96 @@ will eventually surprise a real user if it isn't said here first.
 
 ```
 testimonium check <doc.md>          the gate. exit 0 clean, 1 author-fixable, 2 infra
+testimonium harvest <doc.md>        propose claims. writes a draft, never the claims file
 testimonium reachability <doc.md>   preflight. no claims file needed
 ```
 
-Both read `<doc>` as GitHub-Flavored Markdown footnotes. `check` reads
+All three read `<doc>` as GitHub-Flavored Markdown footnotes. `check` reads
 `<doc>.claims.json` beside it and writes `<doc>.evidence.json` - commit both;
 a later re-check's output is then a diff. `reachability` needs neither.
-Both read a URL through the same fetch ladder, under the same rules, and
-judge each read by the same definition of a read document, so on the same
+`harvest` reads `<doc>.claims.json` if it is there - to skip what you have
+marked not applicable and to leave what you have already claimed alone - and
+writes `<doc>.claims.draft.json`, which is not the claims file and never
+becomes one without you.
+`check` and `reachability` read a URL through the same fetch ladder, under the
+same rules, and judge each read by the same definition of a read document, so
+on the same
 responses a URL `reachability` calls readable is one `check` never calls
 `unreachable`, and one it calls unreadable is one `check` never calls
 `unsupported` - it can still be `supported`, by a full match on a body under
 the prose floor.
 
+## Harvest: proposing claims, without proposing to trust them
+
+The claims file is the cost. `harvest` reads your draft and every source it
+cites, and proposes as candidate claims the phrases that appear verbatim in
+both - the sentences you copied out while writing. It writes them to
+`<doc>.claims.draft.json`. It never writes `<doc>.claims.json`.
+
+```
+node dist/bin.js harvest essay.md
+node dist/bin.js harvest essay.md --json   # print the draft instead of writing it
+```
+
+There is no model in it. It fetches through the same ladder `check` uses,
+proposes only from a read that cleared the same prose floor `check` demands
+before it will accuse anything, and every proposal is afterwards judged by
+`check` exactly as a phrase you typed by hand would be.
+
+**What it proposes is what you COPIED, and that is not the same as what you
+CLAIM.** A phrase found in both your draft and a source is evidence that a
+sentence was lifted from that page. It is not evidence that the sentence is
+the point of the citation. The draft file says so in its own `_note`, and
+moving a proposal into your claims file is the step that makes it a claim.
+Read every one against its source first.
+
+**Harvest is not safe by construction, and inherits every exposure `check`
+has.** A span common to your draft and a source is, by definition, a span
+`check` will find in that source - so a page that fools the gate fools
+harvest identically. The two that matter are in Measured limits above: a
+heavy-chrome error page served at HTTP 200, and a page reached after a
+redirect. For the second, harvest tells you: a proposal from a read whose
+final path differs from the path you cited is reported as `REDIRECTED`, with
+the URL it actually got. Nothing gates on it. You decide.
+
+**Four filters, in order, and the report says what each one took.** A phrase
+below the claim floor; a phrase that also appears in another source this
+document cites, which is how an outlet's name, a cookie notice or a wire
+story reprinted twice gets removed; a phrase matching a `boilerplate` rule in
+your own `--rules` file (none ship - a bundled rule would need a date from a
+live page); and a phrase you have already claimed for that URL. If your
+document has fewer than two readable sources the second filter has nothing to
+compare against, and the report says so in words rather than printing a zero.
+
+**Migration.** If `check` is already refusing your claims file - for a phrase
+under the floor, say - fix what it names first, then run `harvest`. Harvest
+reads the existing file through the same loader with no lenient variant, so a
+file `check` refuses is a file harvest refuses, with the same message and
+exit 2.
+
+Exit codes are 0 and 2 only: 0 when the draft was written or printed,
+including a draft that proposes nothing, and 2 for an input it could not read
+or a draft in the way that you had edited. There is no exit 1, because
+harvest has no verdict to fail on.
+
 ## What's not here
 
-This is plan 1 of three. `harvest` (propose candidate claims by finding
-verbatim overlap between your draft and the source, still no model) and
-`recheck` (re-run the claims against the live source and an archived copy, to
-tell real drift from a pipeline regression) are separate plans, not missing
-features of this one. There is also no renderer and no GitHub Action bundled
-here - `check`'s exit code is the integration point.
+`check`, `reachability` and `harvest` are here. `recheck` - re-running the
+claims against the live source and an archived copy, to tell real drift from
+a pipeline regression - is a separate plan, not a missing feature of this
+one. There is also no renderer and no GitHub Action bundled here - `check`'s
+exit code is the integration point.
 
 ## The real cost
 
 The claims file is hand-authored, and that is the actual cost centre of using
 this tool. Where a research note already quotes sources verbatim, filling in
 `essay.claims.json` is a copy-out. Where it doesn't, every claim is a fresh
-read of the source. There is no shortcut in this plan - paraphrase does not
-match by design, because a phrase that matches loosely is a phrase that
-matches something the source didn't actually say.
+read of the source. `harvest` shortens the copy-out and shortens nothing
+else: paraphrase does not match by design, because a phrase that matches
+loosely is a phrase that matches something the source didn't actually say,
+and a proposal is not a claim until you have read it against its source and
+moved it yourself.
 
 See `docs/first-run-2026-09.md` for a worked example: four real citations,
 what reachability and the gate reported, and what broke on the first honest

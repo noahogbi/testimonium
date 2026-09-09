@@ -510,9 +510,14 @@ wall can mint an accusation against an author who did nothing wrong. Measured
 2026-09-09 against the shipped build: a 5,005-character padded wall carrying a
 bundled signature phrase and its unlisted twin both return `unsupported`, the
 listed one with `challengeSignature` false though its phrase is in the list.
-Membership changes a verdict only below the cap, and the boundary is exact - at
-799 extracted characters the listed wall reads `unreachable` where its unlisted
-twin reads `supported`; at 800 both read `supported`. That is the known gap
+Membership changes a verdict only below the cap, and the boundary is exact -
+measured 2026-09-09 on a claims-PRESENT pair, at 799 extracted characters the
+listed wall reads `unreachable` where its unlisted twin reads `supported`, and
+at 800 both read `supported`. (Amended 2026-09-09: this clause named no
+population, and the pair the sentence before it measures is a claims-MISSING
+one, which reads `unreachable` on BOTH sides at 798 through 801 and never
+reads `supported`. The flip holds only where the claims are present; the
+sentence changed population silently.) That is the known gap
 carried as a fixture in `fixtures/corpus.json` and measured in
 `docs/calibration-2026-09.md`. It is NOT why draft 1's "never truth" was
 wrong: a complete list would not have closed this gap either, because no entry
@@ -542,8 +547,15 @@ wall.** Every wall in the battery - listed or not, English or not, inflected
 `minProseChars` 4,500). The defence there is a property of what a wall *is*,
 not of what we have written down about it. The converse is not free: a
 complete list can still supply an accusation through the union (above), and
-above the floor a wall can mint an accusation no list entry could have
-prevented (above).
+above the floor a wall can mint an accusation no **signature**-list entry
+could have prevented (above). The narrowing is the one the "Above the floor
+neither protection applies" paragraph already carries, added here 2026-09-09
+for the same reason: N3's signature list is gated on
+`proseVolume < maxChallengeChars` and cannot fire above the cap, but N2's
+path list has no length gate, so a `CHALLENGE_PATHS` entry does prevent
+exactly that accusation - measured 2026-09-09, the same 5,005-character
+padded wall returns `unsupported` at an ordinary `finalUrl` and
+`unreachable` when the `finalUrl` lands on `/captcha/`.
 
 **What is NOT yet established, and must not be claimed until it is.** Draft 1 of
 this spec asserted that all 11 evading walls "degrade to `unreachable`." That was
@@ -914,19 +926,27 @@ first filter - with a message that names the claim, its length, the floor, and
 the remedy: extend it to take in the surrounding words. The licence is a priori
 before it is measured: a bare number, a year, a token like "the report" attests
 nothing about a source, and a match on one is a coincidence the checker cannot
-tell from evidence. Measured on 2026-09-07 against the 203 distinct real claims
-in the origin repo's four claims files, chance matches against unrelated
-fixtures occurred at 3 and 12 normalized characters and never above 12; 16 is
-that ceiling plus margin, and it refuses 18 of the 203 (9 percent), each a
-number, a name or a fragment that states no proposition. This resolves Q3 in
+tell from evidence. Re-derived on 2026-09-09 by
+`node scripts/calibrate-claim-floor.mjs` against the 208 distinct real claims
+frozen in `fixtures/claims/` - the origin repo's four files, three from its
+working tree and one from
+`<pinned origin commit withheld>`, copied in so the number
+reproduces without it. Chance matches against unrelated fixtures occurred at
+3 and 12 normalized characters and never above 12; 16 is that ceiling plus
+margin, and it refuses 18 of 208 (8.7 percent), each a number, a name or a
+fragment that states no proposition. (This paragraph said "203 distinct real
+claims" and "18 of the 203" until 2026-09-09: the ceiling has not moved, the
+population has - the origin repo's working-tree files changed between the two
+measurements, which is why plan 2 froze them.) This resolves Q3 in
 section 13: a **refusal, uniform across the three sites, calibrated** - not a
 warning, because a warning that a claim proves nothing leaves it proving nothing
 while the run still passes. It is a breaking change for `check` against an
 existing claims file that carries such a claim, and it is meant to be: the file
-asserted something the tool could never have verified. Plan 2 implements it,
-after its calibration task has re-derived the number from a committed script; if
-the re-run moves the ceiling, the number moves with it and this paragraph is
-amended to match.
+asserted something the tool could never have verified. Plan 2 implemented it,
+after its calibration task re-derived the number from a committed script. The
+re-run did not move the ceiling - 12, against a floor of 16 - so the floor is
+unchanged; what moved was the population, and this paragraph is amended above
+to match, which is the clause this sentence promised.
 
 ### 7.4 The output schema cannot express an accusation
 
@@ -1094,9 +1114,9 @@ makes a proposal a claim.
    through the offset map, because a claim must be what the source says
    (section 7.3). `norm(text)` is computed once per read and reused by every
    filter; it is not recomputed per span.
-4. **Self-validation, per proposal.** Three assertions, each a bug if it
-   fails: `phraseFound(sourceText, span)`, so the checker will find it;
-   `phraseFound(docProse, span)`, so it is in the author's own draft; and
+4. **Self-validation, per proposal.** Three assertions, each of which drops
+   the span it fails: `phraseFound(sourceText, span)`, so the checker will
+   find it; `phraseFound(docProse, span)`, so it is in the author's own draft; and
    `foldWithMap(span).folded === matchedFoldedSpan`, so the offset map did not
    shift. The third is the one `phraseFound` cannot stand in for: a map that
    is off by one yields a slice the source still contains, one character
@@ -1105,6 +1125,24 @@ makes a proposal a claim.
    (U+0130) added two to the folded text, shifting every offset after it; plan
    1.2 repairs it to one entry per *output* unit and pins `folded.length ===
    map.length` on U+0130, final sigma and an astral letter.
+
+   *Amended 2026-09-09.* This paragraph said "three assertions, each a bug if
+   it fails". That is FALSE of the first and only half true of the second,
+   measured in plan 2: `norm()` rewrites a digit followed by "billion",
+   "million", "bn" or "mn" into the compact form ("6 billion" becomes "6bn"),
+   four length-changing rules `foldWithMap` deliberately omits because an
+   offset map cannot survive them, and their input can straddle a span's
+   edge on a page that is working perfectly - a source reading "6 billion"
+   against a draft reading "7 billion" snaps the left boundary onto
+   "billion", and `norm(span)` is then absent from `norm(sourceText)`, which
+   holds "6bn". The DROP is correct either way: a span `phraseFound` cannot
+   locate could never be verified by `check` either, so proposing it would set
+   the author up for a false accusation against her own citation. What was
+   wrong was the LABEL, and the cost was that a real offset-map fault sat
+   invisible inside a routine boundary effect. Assertion 3 is a bug; the
+   fold-drift half of assertion 2 is a bug; assertion 1 is not.
+   `src/harvest/spans.ts`'s `normBoundaryNote` and `documentMismatchNote`
+   carry the shipped wording, and `test/harvest.test.ts` pins both readings.
 5. **Filters**, in order, each reporting per URL how many spans it dropped:
    1. *Floor.* `norm(span).length >= THRESHOLDS.minClaimChars` (section 7.3).
    2. *Frequency.* For any *other* normalized URL V in the document with at
@@ -1113,9 +1151,19 @@ makes a proposal a claim.
       cookie notice, a shared byline, or a wire story reprinted by two cited
       outlets - and is dropped. A URL's own reads never vote against its own
       spans. With fewer than two URLs holding a readable read the filter is
-      vacuous, and the report says so in words. Plan 2's calibration counts
-      how many real claims appear in two cited sources of the same draft, so
-      the reprint cost is a number, not a guess.
+      vacuous, and the report says so in words. Plan 2's calibration did NOT
+      count how many real claims appear in two cited sources of the same
+      draft: the reprint cost - how many REAL claims this filter would eat -
+      is a disclosed gap, not a number. Recorded 2026-09-09, where this
+      sentence previously said the count would be made. The measurement needs
+      readable reads of the frozen drafts' OWN cited sources, which the frozen
+      corpus does not hold and which only live network reads could supply - a
+      network dependency inside the one task whose purpose is that its numbers
+      reproduce from frozen fixtures. What was measured instead is in
+      `docs/calibration-2026-09.md`: the floor against unrelated document
+      fixtures, and the seed noise across unrelated fixture pairs. That
+      document's "What was NOT done" section carries this gap beside the
+      host-same gap.
    3. *Boilerplate rules.* `RuleSet` gains `boilerplate: Rule[]`, the same
       dated `LocalRule` shape as signatures (`pattern`, `lastConfirmed`,
       `note`), each tested as a regex against `norm(span)`. Ships empty. The
@@ -1132,7 +1180,12 @@ makes a proposal a claim.
    source typography, plus `_note`: the tool's version, the date, and the
    sentence "every claim below is unconfirmed; harvest proposes what was
    copied, not what was meant". An existing draft is overwritten only when
-   its `_note` is byte-identical to the marker harvest would write; a missing
+   its `_note` is byte-identical to a marker harvest could have written -
+   every byte outside the version and the date must match. (Amended
+   2026-09-09: this said "the marker harvest would write", under which a draft
+   written yesterday could never be overwritten today, because the marker
+   carries the date. The rule exists to detect the author's edits, and every
+   byte outside those two fields carries that signal.) A missing
    or edited `_note` means the author has touched the file, and harvest exits
    2 naming the path and asking for a rename or delete. `--json` prints the
    draft to stdout instead of writing it, the convention `reachability
@@ -1148,11 +1201,20 @@ edited draft in the way. There is no exit 1: harvest has no verdict to fail on.
 be proposed, and `harvestSeedChars >= minClaimChars` is asserted by a test. A
 seed below the floor finds the same maximal spans plus shorter ones the floor
 then refuses, so it buys nothing and costs noise; a seed above the floor is the
-precision knob. Measured across unrelated fixture pairs, the mean count of
-chance L-gram matches per pair was 24.8 at L = 13, 5.0 at 16, 0.9 at 20 and 0.2
-at 25; the value is chosen in plan 2's calibration task from that script's
-re-run, in 20 to 25, and recorded in `docs/calibration-2026-09.md` with the
-command that produced it.
+precision knob. Measured across the 45 unrelated pairs of the 10 document
+fixtures by `scripts/calibrate-harvest-seed.mjs`, committed in plan 2 and
+re-run 2026-09-09: the mean count of above-floor spans emitted per pair was
+2.0 at L = 13, 2.2 at 16, 1.2 at 20, 0.9 at 21 and 0.3 at 25. Those figures
+count what `commonSpans` EMITS - after extension, word-boundary snapping and
+containment dedupe - because that is what an author reviews. (This paragraph
+previously quoted 24.8 / 5.0 / 0.9 / 0.2 at L = 13 / 16 / 20 / 25 and called
+them "chance L-gram matches per pair". Those came from a script written during
+the design review that was never committed and is in no git history, so
+nothing could reproduce them, and they counted seeds rather than emitted
+spans. Corrected 2026-09-09 against the committed script's own run.) The value
+chosen by the selection rule that script states - the smallest L in 20 to 25
+whose above-floor mean is below 1.0 - is 21, and it is recorded in
+`docs/calibration-2026-09.md` with the command that produced it.
 
 **Plan 2's first task is calibration**, before any harvest code: commit the
 probe as `scripts/calibrate-claim-floor.mjs` (its walker skips `notApplicable`
@@ -1324,9 +1386,12 @@ with their resolutions rather than deleted, so the reasoning survives.**
    calibrated.** `THRESHOLDS.minClaimChars` = 16 on `norm(claim).length`,
    refused by the claims-file loader, by `check()`'s front door and by harvest's
    first filter, with the same message at each. Section 7.3 carries the licence
-   and the measurement: 203 real claims, chance matches at 3 and 12 characters
-   and none above, 18 of 203 refused. Implemented in plan 2, whose calibration
-   task re-derives the number before any code depends on it.
+   and the measurement: 208 real claims, chance matches at 3 and 12 normalized
+   characters and none above, 18 of 208 refused, re-derived 2026-09-09 against
+   the population frozen in `fixtures/claims/`. This line said "203 real
+   claims" and "18 of 203" until then; 7.3 says why the population moved.
+   Implemented in plan 2, whose calibration task re-derived the number before
+   any code depended on it.
 4. **Archive failures.** web.archive.org's save-page-now is authenticated,
    rate-limited well below one call per source per run, and asynchronous - a job
    to poll rather than a request to make. Confirmed: it must never fail a run.
