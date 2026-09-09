@@ -1312,7 +1312,19 @@ and 2 have all shipped.
 built.** Fable's review of this section returned APPROVE WITH CORRECTIONS with
 fourteen findings, three of them blocking. Thirteen are folded in below and
 marked where they land; the fourteenth is 7.1's stale `RungId` snippet, which
-predates this section and is parked rather than fixed here. Two of the three
+predates this section and is parked rather than fixed here.
+
+**Corrected again 2026-09-09, from Fable's review of PLAN 3** - its corrections
+1 and 2, applied before the first task was dispatched. Two sentences of this
+section were wrong in ways only a plan drafted from them exposed: the index
+would have churned on every green run, and the gone row sat below the named
+confounds, which silently disables `--fail-on-gone` for any URL whose claims
+were edited. Both are corrected in place and marked where they land, in the same
+voice, because a section that has now been found false by two separate reviews
+is the last place to start editing quietly. Neither changes the format: no
+version bump.
+
+Two of the three
 blockers were present-tense
 claims about shipped code that were false when written: a `CheckOptions` sink
 that cannot be built, because the bytes are discarded before `check()` ever sees
@@ -1394,17 +1406,40 @@ authority.
 the difference, and `R` is the invariant above.
 
 ```
-named confound (claimsHash, pdftotext version,
-                local --rules file)                    -> reported, 0
 no baseline                                            -> reported, 0
 L = unreachable, documentGone                          -> "gone since <archivedAt>", 0
-                                                          (1 under --fail-on-gone)
+                                                          (1 under --fail-on-gone;
+                                                           any confounds computed for
+                                                           this citation are named on
+                                                           this row's report line)
+named confound (claimsHash, pdftotext version,
+                local --rules file)                    -> reported, 0
 L = unreachable, otherwise                             -> listed, never 1
 L = supported,   A = supported                         -> clean, 0
 L = supported,   A != supported                        -> pipeline drift, 2
 L = unsupported, A = supported                         -> SOURCE DRIFT, 1
 L = unsupported, A != supported                        -> pipeline drift / confounded, 2
 ```
+
+**Corrected 2026-09-09: the gone row is evaluated ABOVE the named confounds.**
+This block shipped with the confound row first and the gone row two rows below
+it, and the two paragraphs after it say the confounds short-circuit the
+procedure without exception. That ordering is superseded. Under it,
+`recheck --fail-on-gone` returns 0 for a genuinely deleted page whenever that
+URL's claims were edited since archiving - the flag the author passed to catch
+dead links, silently disabled by an unrelated edit, on the ordinary sequence
+(edit a claim, `check` fails, run `recheck`). It is wrong because a named
+confound explains a divergence between the ARMS, while gone-ness is the origin's
+own statement about `L` (N4), and no confound can produce or explain it: a
+claims edit cannot 404 a page, a local rule changes classification rather than
+the wire status, and the `pdftotext` confound cannot co-occur with gone at all,
+since that rung reports `status: 0` and N4 never fires on a PDF (the residue
+disclosed below). This is the one deliberate exception to "a named confound
+short-circuits everything", and it hides nothing: the confounds computed for a
+gone citation are carried on its outcome and named in its report line. The
+reorder cannot mint an unlicensed exit 1 either - the gone row's licence is the
+origin's 404, it contributes 0 by default and 1 only under the explicit opt-in,
+and it still sits below the no-baseline and R-invariant checks.
 
 **Exit 1 iff `L = unsupported` AND `A = supported` AND no named confound**, and
 it is worth saying plainly why that is the only row permitted to accuse.
@@ -1434,7 +1469,11 @@ Two further **named confounds** are evaluated in the same place, before `L` is
 consulted, and are reported the same way with an exit contribution of 0: a
 `pdftotext` version that differs from the one recorded for a read, and a local
 `--rules` file whose hash differs from the one recorded. Both are specified
-below. A named confound is **not** pipeline drift and must never be reported as
+below. *Corrected 2026-09-09:* "in the same place, before `L` is consulted" is
+superseded for one row - the gone row is evaluated ABOVE the confounds, for the
+reason given under the procedure block, and the confounds computed for that
+citation are carried on its outcome and named in its report line rather than
+suppressing it. A named confound is **not** pipeline drift and must never be reported as
 one: pipeline drift means a regression in THIS tool, and in both of these cases
 what changed is the author's own machine or the author's own data. The mirror of
 that rule matters as much - a change in the BUNDLED rules is ours, stays pipeline
@@ -1711,6 +1750,27 @@ paragraph owed and did not pay:
   and orphans the old blob, which stays. Growth is monotonic in a committed
   store. Orphans are GC-able later - every live hash is named in `index.json`, so
   the set of unreferenced blobs is computable - and no GC ships in plan 3.
+
+**Corrected 2026-09-09: an entry that changed in nothing material is
+PRESERVED.** The paragraph above discloses idempotency of the BLOBS only, and as
+this section stood the INDEX churned: every `check` stamps a fresh `archivedAt`
+into each entry it stages and stores that read's response headers, and the node
+rung's `date` header differs on every response - so a committed
+`<doc>.archive/index.json` would diff on EVERY green `check` of an unchanged
+corpus, leaving a dirty tree in the store this section requires committed. That
+is superseded. The writer keeps the EXISTING entry, byte for byte, when the
+incoming one differs in nothing material, where material means the reads'
+`(rung, status, finalUrl, hash)` tuples in order, `claimsHash`, `toolVersion`,
+`localRulesHash`, and each read's `pdftotextVersion`. The comparison ignores
+`headers` as well as `archivedAt`, and it must: a predicate that compared
+headers would never fire on the node rung, and the churn would survive its own
+fix. Keeping the whole old entry - old headers, old date - is coherent, because
+the entry is a record of what was seen at `archivedAt`. So `archivedAt` means
+"when this baseline was established or last materially changed", and "gone since
+`<archivedAt>`" reads "gone since at least that date"; a material change - a
+`toolVersion` bump included - rewrites the entry with a fresh `archivedAt`, so
+the bundled-version note self-heals on the next green `check`. This is writer
+behaviour, not shape: no format-version bump.
 
 **`recheck` runs `check()` twice.** Once with the recording fetcher over the live
 source, and once with a fetcher that replays the archive. `CheckOptions.fetcher`
