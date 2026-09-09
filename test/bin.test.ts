@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { classifyRun, claimsPathFor, draftPathFor, evidencePathFor, USAGE, validateFlags } from "../src/bin.js";
+import {
+  classifyRun,
+  claimsPathFor,
+  draftPathFor,
+  evidencePathFor,
+  harvestSummaryLine,
+  USAGE,
+  validateFlags,
+} from "../src/bin.js";
 
 describe("exit codes", () => {
   it("exits 0 when everything is supported", () => {
@@ -134,5 +142,30 @@ describe("validateFlags and harvest", () => {
     // the gap later a deliberate edit to a red test.
     expect(validateFlags(["harvest", "doc.md", "--fail-on-unreachable"])).toBeNull();
     expect(validateFlags(["harvest", "doc.md", "--explain-fetch"])).toBeNull();
+  });
+});
+
+describe("harvestSummaryLine", () => {
+  it("is singular at exactly one proposal, plural everywhere else", () => {
+    // Fix round 1: the shipped line read "1 proposals", ungrammatical at the
+    // one count where an author is most likely to be reading closely - her
+    // first successful harvest of a single-source document.
+    expect(harvestSummaryLine("essay.claims.draft.json", 1, 1)).toContain("1 proposal across");
+    expect(harvestSummaryLine("essay.claims.draft.json", 1, 1)).not.toContain("1 proposals");
+    expect(harvestSummaryLine("essay.claims.draft.json", 0, 3)).toContain("0 proposals across");
+    expect(harvestSummaryLine("essay.claims.draft.json", 5, 3)).toContain("5 proposals across");
+  });
+
+  it("names the URL count 'readable', because it is not the draft's key count", () => {
+    // report.proposals.length counts every READABLE source, whether or not
+    // it proposed anything; buildDraft omits a zero-claim entry, so a run
+    // that read 3 URLs and proposed from only 1 writes a draft with ONE key.
+    // "3 URLs" alone would read as a claim about the file just written, and
+    // it would be wrong.
+    const line = harvestSummaryLine("essay.claims.draft.json", 1, 3);
+    expect(line).toContain("across 3 readable URLs");
+    // "readable" is the word doing the work above; without it "3 URLs" would
+    // misdescribe the one-key draft this run just wrote.
+    expect(line).not.toContain("across 3 URLs");
   });
 });

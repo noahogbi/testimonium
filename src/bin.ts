@@ -93,6 +93,21 @@ export function draftPathFor(doc: string): string {
   return join(dirname(doc), `${basename(doc).replace(/\.[^.]+$/, "")}.claims.draft.json`);
 }
 
+/** The one-line summary printed after harvest writes a draft to disk.
+ *  Exported so a test can pin its grammar - singular "proposal" at exactly
+ *  one - and its qualifier: `readableUrlCount` is `report.proposals.length`,
+ *  one entry per READABLE source whether or not it proposed anything, not
+ *  the number of keys in the draft `buildDraft` just wrote. `buildDraft`
+ *  omits a zero-claim entry, so the two counts differ whenever any readable
+ *  source proposed nothing, and "URLs" alone would read as a count of the
+ *  file the author is about to open, which it is not. */
+export function harvestSummaryLine(draftPath: string, totalProposals: number, readableUrlCount: number): string {
+  return (
+    `\nwrote ${draftPath} - ${totalProposals} proposal${totalProposals === 1 ? "" : "s"} ` +
+    `across ${readableUrlCount} readable URLs`
+  );
+}
+
 async function main(argv: string[]): Promise<number> {
   const unknownFlag = validateFlags(argv);
   if (unknownFlag) {
@@ -249,7 +264,7 @@ async function main(argv: string[]): Promise<number> {
     } else {
       writeDraftFile(draftPath, draft);
       const total = report.proposals.reduce((n, p) => n + p.claims.length, 0);
-      console.log(`\nwrote ${draftPath} - ${total} proposals across ${report.proposals.length} URLs`);
+      console.log(harvestSummaryLine(draftPath, total, report.proposals.length));
       console.log(
         "Every claim in it is unconfirmed: harvest proposes what you COPIED, which is not always " +
           "what you CLAIM. Read each one against its source, move what you mean into the claims " +
