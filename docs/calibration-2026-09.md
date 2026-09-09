@@ -706,12 +706,22 @@ them - normalized, so lower-case.
 included, because all of it is noise an author must read. That is load-bearing:
 with the 12 boilerplate rows excluded from the above-floor count, L=20's mean
 falls to 0.7 and L=21's to 0.5, so the rule would pick 20. The split says what
-the noise *is*; it is not an input to the rule. (That variant is not a
-committed script and is not the shipped measurement: it is
-`scripts/calibrate-harvest-seed.mjs` with the 12 spans above removed from the
-`above` filter, run once to answer this question. Its above-floor means are
+the noise *is*; it is not an input to the rule.
+
+That variant is not a committed script and is not the shipped measurement. It
+is `scripts/calibrate-harvest-seed.mjs` with the **11 ASCII spans above, plus
+any span containing non-ASCII characters**, removed from the `above` filter,
+run once to answer this question. Its above-floor means are
 1.5 / 1.7 / 0.7 / 0.5 / 0.3 / 0.2 / 0.1 / 0.1 / 0.0 at
-L = 13 / 16 / 20 / 21 / 22 / 23 / 24 / 25 / 30.)
+L = 13 / 16 / 20 / 21 / 22 / 23 / 24 / 25 / 30.
+
+The non-ASCII clause is NOT the same as "the 12 rows of the table above", and
+the difference is visible in that list. The table is taken at L=21, where the
+only non-ASCII span is the 24-character language switcher; at L=13 and L=16 the
+population also holds `español français` (1 pair, 16 characters), a second
+switcher fragment the table therefore never lists. Removing only the table's 12
+rows gives **1.8 at L=16** instead of 1.7, and reproduces the other eight
+values exactly. The rule as stated above is the one that produces all nine.
 
 The `boilerplate` rows are what filter 2 (cross-source frequency) exists for,
 and none of them earns a bundled `boilerplate` rule: a bundled rule needs a
