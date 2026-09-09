@@ -56,8 +56,10 @@ function toHostRule(raw: Record<string, unknown>, where: string): HostRule {
  * identity), so the worst a stale one costs is one wasted request, never a
  * wrong verdict. It is NOT complete for signature and path rules - those feed
  * N2 and N3 directly, so a local rule that mismatches (a regex too broad, a
- * path too generic) can turn a real document into a false `unreachable`. That
- * risk is accepted deliberately: the whole point of `--rules` is to let an
+ * path too generic) can turn a real document into a false `unreachable` - or,
+ * where a later rung read a document, into a false `unsupported`, because the
+ * vetoed read's matches leave the union (spec 6.3). That risk is accepted
+ * deliberately: the whole point of `--rules` is to let an
  * operator add their own challenge patterns, and additive-only is what stops
  * the file from also being able to delete a bundled protection.
  */

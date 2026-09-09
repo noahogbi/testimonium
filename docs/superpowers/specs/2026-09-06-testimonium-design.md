@@ -454,20 +454,40 @@ draft 1:
 
 ### 6.3 What the inversion buys, and what remains to be proved
 
-**The signature list stops being able to mint an accusation.** It can still
-decide a verdict: N3 vetoes when a signature matches AND the body is under the
-length cap, and that veto stands even where the claims would otherwise have
-matched in full. What the list can no longer do is produce `unsupported`. Every
-verdict it decides is a withheld accusation, never a supplied one.
+**The signature list stops being able to mint an accusation from the read it
+vetoes.** N3 vetoes when a signature matches AND the body is under the length
+cap, and that veto stands even where the claims would otherwise have matched in
+full: the vetoed read is never judged on its own, and no `unsupported` is ever
+computed from a wall's signals. What the veto does not withhold is an accusation
+supplied by a LATER read. A vetoed read's matches are excluded from the
+cross-rung union (`src/check.ts`, `locatedBy`), so a claim that only the vetoed
+read carried is named in `missed` when a readable later rung is judged - and the
+veto is then the but-for cause of an `unsupported` that the readable read alone
+would not have produced. Measured 2026-09-08 against the shipped build: a
+signature-carrying body under the cap holding claim A, followed by a readable
+body holding claim B and not A, returns `unsupported` with A missed; the same
+body with the signature phrase removed returns `supported`. This paragraph said
+"Every verdict it decides is a withheld accusation, never a supplied one" until
+2026-09-08. That was false at 3974d27 and at every commit since - the union
+machinery is unchanged from it - and it is the twin of the false status claim the
+N4 paragraph below has now corrected twice. It is corrected here rather than left
+standing, for the reason given there: this document is the authority every ruling
+resolves against, so a sentence in it that has gone quietly false is worse than
+one in the code. Pinned by `test/check.test.ts`, "N3 through the cross-read
+union".
 
 The rot argument survives, but only below the prose floor, and draft 1 stated it
 without that condition. N3 fires only where `proseVolume` is under
 `maxChallengeChars` (800), which sits far below `minProseChars` (4,500) on the
 same measured quantity. So beneath the floor the list is genuinely rot-tolerant:
 a wall it fails to name falls through to P2 and lands on `unreachable` anyway,
-and an over-broad entry costs an attestation rather than truth - a real document
-that matches it and is short reads `unreachable` where it would have read
-`supported`.
+and an over-broad entry costs an attestation where the vetoed read is the only
+read - a real document that matches it and is short reads `unreachable` where it
+would have read `supported`. Where a later rung produced a readable read the cost
+is larger than an attestation: the vetoed read's matches leave the union, so a
+claim only it carried is named in `missed` and the citation reads `unsupported`.
+Corrected 2026-09-08 with the paragraph above; the same mechanism, stated where
+the cost is claimed.
 
 Above the floor neither protection applies. A wall padded past ~4,500 extracted
 characters is vetoed by neither the signature, which only applies below 800, nor
@@ -763,9 +783,14 @@ that unblocks the origin site's serverless gate.
 
 ### 7.2 Host rules and challenge signatures are data
 
-**A rule may add a fetch attempt. It may never subtract one, and it may never
-decide a verdict.** The generic ladder always runs in full. Under that contract a
-stale rule costs one wasted request - latency, not correctness.
+**A HOST rule may add a fetch attempt. It may never subtract one, and it may
+never decide a verdict.** The generic ladder always runs in full. Under that
+contract a stale host rule costs one wasted request - latency, not correctness.
+**Signature and path rules are not under that contract**: they feed N2 and N3,
+which veto a read, so an over-broad entry can cost correctness - 6.3 says what
+that cost is. `src/rules/load.ts`'s own comment has said so since plan 1's
+ruling C13; this sentence had not. Corrected 2026-09-08: it generalised a host
+rule's contract to all three lists, and was false for two of them.
 
 The origin module violates this in one place: its Bloomberg comment says "treat
 bloomberg.com as UNREADABLE: source to a carrier instead." That is editorial
@@ -1295,7 +1320,7 @@ Recorded so they are not relitigated without new information.
 | README leads with the argument; AI-drafted prose is a named section, not the headline | 4 |
 | `check()` owns the verdict; primitives sealed behind `exports` | 5.1, 5.3 |
 | Three layers: fetcher, pure classifier, pure ladder reducer | 5 |
-| Burden-of-proof inversion; the signature list can withhold an accusation, never supply one | 6, 6.3 |
+| Burden-of-proof inversion; the signature list withholds an accusation from the read it vetoes, and can supply one from a later readable read through the union | 6, 6.3 |
 | Accusation requires body-derived proof; head markers never license one | 6.2 |
 | Every N-signal vetoes, including over P1 | 6.2, 13 Q2 |
 | Prose volume, not text-to-markup ratio | 6.5 |

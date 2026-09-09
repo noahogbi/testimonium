@@ -576,6 +576,62 @@ describe("check", () => {
   });
 });
 
+describe("N3 through the cross-read union (spec 6.3; plan 1.2 ledger R13)", () => {
+  // The spec said the signature list "can withhold an accusation, never
+  // supply one". It supplies one here. check.ts's union loop skips a VETOED
+  // read's matches (a match inside a wall is the wall's text), so a claim
+  // that ONLY the vetoed read carried is named in `missed` when a readable
+  // later rung is judged - and removing the signature phrase, changing
+  // nothing else, turns the same pair of responses into `supported`. The
+  // veto is the but-for cause of the accusation.
+  //
+  // Pre-existing at 3974d27: the union machinery is unchanged from it, and
+  // N3 fires only under maxChallengeChars, so a vetoed N3 read is never the
+  // larger read rule 2 chooses between. Plan 1.2 did not cause this and did
+  // not fix it (ledger R13); this is the reviewed dispatch R13 asked for.
+  const A = "spending rose sharply";
+  const B = "the review is ongoing";
+  // Under maxChallengeChars (800 extracted characters) - N3's length
+  // conjunction - carrying a bundled signature ("just a moment") AND claim A.
+  const WALL = `<html><body><p>Just a moment...</p><p>The committee report states that ${A}.</p></body></html>`;
+  // Byte-for-byte the same but for the signature phrase.
+  const NO_SIGNATURE = `<html><body><p>One moment please.</p><p>The committee report states that ${A}.</p></body></html>`;
+  // Readable: over the prose floor, carrying B and NOT A.
+  const READABLE = `<html><title>The Committee Report</title><body>${`Separately, ${B}, the committee said. `.repeat(140)}</body></html>`;
+
+  it("a signature veto SUPPLIES an accusation the readable read alone would not", async () => {
+    // The shapes the test's power rests on are asserted, not assumed.
+    expect(proseVolume(toText(WALL))).toBeLessThan(THRESHOLDS.maxChallengeChars);
+    expect(proseVolume(toText(READABLE))).toBeGreaterThanOrEqual(THRESHOLDS.minProseChars);
+    expect(toText(READABLE)).not.toContain(A);
+
+    const r = await check("https://e.com/committee-report", [A, B], {
+      fetcher: stub({ node: { rawBody: WALL, status: 200 }, curl: { rawBody: READABLE, status: 200 } }),
+    });
+    expect(r.rungsAttempted).toEqual(["node", "curl"]);
+    expect(r.verdict).toBe("unsupported");
+    expect(r.missed).toEqual([A]);
+    // The wall leaves no trace on the result it caused: `won` is the readable
+    // read, which fired no rule, and an unsupported result carries no
+    // renderable field at all (spec 7.4).
+    expect(r).not.toHaveProperty("firedRule");
+    expect(r).not.toHaveProperty("evidence");
+  });
+
+  it("the same body without the signature phrase is supported, from the same two responses", async () => {
+    expect(proseVolume(toText(NO_SIGNATURE))).toBeLessThan(THRESHOLDS.maxChallengeChars);
+
+    const r = await check("https://e.com/committee-report", [A, B], {
+      fetcher: stub({ node: { rawBody: NO_SIGNATURE, status: 200 }, curl: { rawBody: READABLE, status: 200 } }),
+    });
+    expect(r.rungsAttempted).toEqual(["node", "curl"]);
+    expect(r.verdict).toBe("supported");
+    // A from the sub-floor node read, B from the readable curl read: rule 3's
+    // union, which the vetoed run above cannot reach.
+    expect(r.evidence?.map((e) => e.rung)).toEqual(["node", "curl"]);
+  });
+});
+
 describe("check with a local RuleSet (Task 15)", () => {
   // Task 15 fix round 1, Critical 2: loadRules()'s own tests only exercise
   // its pure merge logic. Nothing asserted that a local rule actually changes

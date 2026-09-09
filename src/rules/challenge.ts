@@ -16,12 +16,23 @@ export interface Rule {
  * rung.
  *
  * It is NOT true that a match never decides a verdict, and this comment said
- * so until 2026-09-07. A match on a body under THRESHOLDS.maxChallengeChars is
- * N3, which `isBlocked` ORs into the veto set and which forces `unreachable`
- * on its own. The safe reading is the one above: the list rotting costs reach
- * and latency, never a false accusation - because everything it misses still
- * has to clear the floor. The list rotting cannot cost truth; a match can
- * still change an outcome.
+ * so until 2026-09-07. A match on a body under THRESHOLDS.maxChallengeChars
+ * is N3, which `isBlocked` ORs into the veto set. Since plan 1.2 that veto
+ * ends the READ, not the citation: the ladder climbs past it, and the
+ * citation reads `unreachable` only when no rung produced a readable read
+ * and none matched in full (spec 6.6).
+ *
+ * The list ROTTING - failing to name a wall - changes no outcome a complete
+ * list would have prevented: above maxChallengeChars N3 cannot fire at all,
+ * and below it everything the list misses still has to clear the prose floor.
+ * (Spec 6.3 scopes the rot argument the same way, and records that draft 1
+ * stated it without the condition. Above the floor neither protection
+ * applies - that is 6.3's known gap, and rot does not widen it.) An
+ * OVER-BROAD entry can cost truth. A signature matching a short REAL read
+ * takes that read's matches out of check()'s cross-rung union, so a claim
+ * only it carried is named in `missed` when a readable later rung is judged -
+ * a false accusation, not a lost attestation (spec 6.3, corrected 2026-09-08;
+ * pinned by test/check.test.ts, "N3 through the cross-read union").
  *
  * Patterns are tested against normalized text, so case, smart quotes and
  * zero-width characters cannot dodge them. Prefer a loose pattern over an
