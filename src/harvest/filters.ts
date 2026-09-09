@@ -27,10 +27,14 @@ export interface FilterResult {
 export interface FilterInput {
   readonly source: HarvestSource;
   readonly spans: readonly string[];
-  /** Every OTHER source holding at least one readable read. The caller
-   *  excludes `source` itself: a URL's own reads never vote against its own
-   *  spans, and two citations that normalize alike are ONE source, so they
-   *  cannot vote against each other either (Fable F10). */
+  /** Every OTHER source holding at least one readable read. The caller is
+   *  EXPECTED to exclude `source` itself, but this function does not trust
+   *  that: a caller mistake that leaves the source in its own `others` has
+   *  a 100% blast radius (every span drops, silently), so `.key` is checked
+   *  here too, defensively (controller ruling, fix round 1). A URL's own
+   *  reads never vote against its own spans, and two citations that
+   *  normalize alike are ONE source, so they cannot vote against each other
+   *  either (Fable F10). */
   readonly others: readonly HarvestSource[];
   /** The claims `<doc>.claims.json` already records for this URL. */
   readonly existing: readonly string[];
@@ -69,8 +73,17 @@ export function applyFilters(input: FilterInput): FilterResult {
 
     // 2. Cross-source frequency (13 Q5, primary). `normText.includes(n)` is
     //    exactly phraseFound(read.text, span) with the haystack normalized
-    //    once, at read time.
-    if (input.others.some((other) => other.reads.some((read) => read.normText.includes(n)))) {
+    //    once, at read time. `other.key !== input.source.key` is a defensive
+    //    self-exclusion guard, not a restatement of the caller's contract: a
+    //    caller that wrongly includes the source in its own `others` must
+    //    not silently drop every proposal (controller ruling, fix round 1;
+    //    Important 6). Belt AND suspenders with the `others` docstring
+    //    above - Task 8 pins the caller's side separately.
+    if (
+      input.others.some(
+        (other) => other.key !== input.source.key && other.reads.some((read) => read.normText.includes(n)),
+      )
+    ) {
       frequency += 1;
       continue;
     }
@@ -85,8 +98,12 @@ export function applyFilters(input: FilterInput): FilterResult {
     // 4. Already claimed. Containment either way: a proposal inside an
     //    existing claim adds nothing, and one that contains it is the same
     //    claim with more context, which the author can widen by hand if she
-    //    wants it.
-    if (existing.some((e) => e.includes(n) || n.includes(e))) {
+    //    wants it. `e.length > 0` guards a normalized-empty existing entry
+    //    from swallowing every span via vacuous containment (every string
+    //    "contains" ""); unreachable today because `parseClaimsFile` refuses
+    //    a below-floor claim before it can reach `existing` (Minor 5), but
+    //    this filter does not depend on that caller staying strict.
+    if (existing.some((e) => e.length > 0 && (e.includes(n) || n.includes(e)))) {
       claimed += 1;
       continue;
     }

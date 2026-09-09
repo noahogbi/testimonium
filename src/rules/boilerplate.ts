@@ -18,10 +18,12 @@ import type { Rule } from "./challenge.js";
  * cure for that, and additive-only means her file can add to this list and
  * never delete from it.
  *
- * A rule is a SUBSTRING test on normalized text once it is compiled, so a
- * rule `all rights reserved` will also delete a real claim quoting a
- * copyright dispute. That makes the list a recall risk, not a correctness
- * one: a span it removes is a span the author does not see, and nothing it
- * removes can produce a false verdict.
+ * A rule is an UNANCHORED REGEX test against normalized text once it is
+ * compiled - `toRule` builds it with `new RegExp(pattern)`, no flags and no
+ * `^`/`$` - so a plain-text pattern like `all rights reserved` behaves as a
+ * substring match and will also delete a real claim quoting a copyright
+ * dispute. That makes the list a recall risk, not a correctness one: a span
+ * it removes is a span the author does not see, and nothing it removes can
+ * produce a false verdict.
  */
 export const BOILERPLATE_RULES: readonly Rule[] = [];
