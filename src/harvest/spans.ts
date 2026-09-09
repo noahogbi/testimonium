@@ -8,11 +8,22 @@ export interface SpanResult {
    *  and none beginning or ending on half of a surrogate pair. */
   readonly spans: string[];
   /** Spans dropped by a self-validation failure, one line each naming what
-   *  failed. A non-zero count is a BUG SIGNAL, not a filter statistic (spec
-   *  8.2 step 4; Fable F3c): every entry here is a property the code should
-   *  hold unconditionally. The caller reports these with a `BUG:` label and
-   *  does not change its exit code, and the span is not proposed - a span that
-   *  cannot be shown to be what the source says must not reach the author.
+   *  failed. The span is not proposed - a span that cannot be shown to be
+   *  what the source says must not reach the author - and no entry here is
+   *  ever counted as a filter's work or allowed to change an exit code (spec
+   *  8.2 step 4; Fable F3c).
+   *
+   *  NOT EVERY ENTRY IS A BUG, which is why each line now says which it is.
+   *  Spec 8.2 step 4 calls the three assertions "each a bug if it fails";
+   *  measured 2026-09-09 (fix round 1) that is FALSE of assertion 1 and half
+   *  true of assertion 2, because `norm()` applies four digit-magnitude
+   *  rewrites `foldWithMap` deliberately does not, and their input can
+   *  straddle a span's edge on a page that is working perfectly. The DROPS
+   *  are correct and stay - see `normBoundaryNote` for why - but the LABEL
+   *  was wrong, and a real offset-map fault was invisible inside a routine
+   *  boundary effect. The spec sentence is routed to Task 10 and is not
+   *  amended here. A caller must therefore NOT print a blanket `BUG:` prefix
+   *  over this list; each line carries its own reading.
    *
    *  Five conditions can land here: spec 8.2 step 4's THREE assertions
    *  (present in the source, present in the document, and the fold round trip
@@ -29,6 +40,71 @@ export interface SpanResult {
    *  ordinary case of a seed landing mid-token - so reporting it would fill
    *  `bugs` with noise and destroy the signal the rest of this list carries. */
   readonly bugs: string[];
+}
+
+/**
+ * Assertion 1's line. NOT a bug, and it must not read like one.
+ *
+ * `norm()` applies four rewrites `foldWithMap` deliberately omits, because
+ * they change length and the offset map cannot survive that: the
+ * digit-magnitude pair `(\d)\s*billion -> $1bn` and `(\d)\s*million -> $1mn`
+ * and their two `bn`/`mn` siblings. Their input can straddle a span's edge. A
+ * source reading "spent 6 billion dollars" against a draft reading "spent 7
+ * billion dollars" snaps the left boundary past the differing digit onto
+ * "billion", and `norm(span)` is then absent from `norm(sourceText)`, which
+ * holds "6bn". The page is working perfectly; nothing is broken.
+ *
+ * THIS IS THE ONLY WAY ASSERTION 1 CAN FAIL. The span is `sourceText.slice`d
+ * through the map, so it is a raw substring of the source whatever the map
+ * says - a wrong offset yields a DIFFERENT substring, never a non-substring -
+ * and `norm` is deterministic, so the only remaining freedom is its own
+ * context sensitivity. Measured 2026-09-09: with `foldWithMap`'s map shifted
+ * by one, assertion 1 did not fire on a fixture with no magnitude word, and
+ * assertion 2 caught the shift.
+ *
+ * THE DROP IS CORRECT AND STAYS (controller ruling, fix round 1). Assertion 1
+ * asks whether `phraseFound` will locate the span, and `check()` uses that
+ * same predicate, so a span failing it could never be verified afterwards -
+ * proposing it would set the author up for a false accusation against her own
+ * citation. What was wrong was the label, not the behaviour.
+ */
+export function normBoundaryNote(span: string): string {
+  return (
+    `NOT A BUG, a norm() boundary: this span is verbatim in the source, but ` +
+    `norm() rewrites the source's copy of it differently (a digit-magnitude ` +
+    `rule such as "6 billion" -> "6bn"), so check() could not find it either. ` +
+    `Dropped rather than proposed: ${JSON.stringify(span)}`
+  );
+}
+
+/**
+ * Assertion 2's line, which can be EITHER a bug or the same boundary effect
+ * on the DOCUMENT's side.
+ *
+ * A BUG: `norm()` and this file's fold table drifting apart, which has
+ * happened three times, and - measured 2026-09-09 - a shifted offset map,
+ * which reaches this assertion before assertion 3 does.
+ *
+ * NOT A BUG: a source spelling a magnitude in words against a draft spelling
+ * it in digits. "The agency spent seven billion dollars on procurement"
+ * against "the agency spent 7 billion dollars on procurement" proposes the
+ * span "billion dollars on procurement across every department", which is in
+ * `norm(sourceText)` (no digit precedes "billion" there, so nothing is
+ * rewritten) and absent from `norm(docProse)`, which holds "7bn". Measured
+ * 2026-09-09; the fixture is in test/harvest.test.ts.
+ *
+ * This code cannot tell the two apart without cutting the document's own
+ * slice back through `doc.map` and re-testing it, which fix round 1 is not
+ * adding this late. So the line names both readings rather than asserting the
+ * wrong one - the whole finding here was a message that read as a certainty
+ * it did not have.
+ */
+export function documentMismatchNote(span: string): string {
+  return (
+    `not found in the document - a BUG if norm() and the fold table have ` +
+    `drifted apart, NOT a bug if a digit-magnitude rewrite straddles this ` +
+    `span's edge: ${JSON.stringify(span)}`
+  );
 }
 
 /**
@@ -217,15 +293,17 @@ export function commonSpans(
       continue;
     }
 
-    // THE THREE ASSERTIONS (spec 8.2 step 4). Each is a bug if it fails.
-    // `normSource`/`normDoc` are `phraseFound`'s haystack side, hoisted - see
-    // the note where they are bound.
+    // THE THREE ASSERTIONS (spec 8.2 step 4). Assertion 3 is a bug if it
+    // fails, and so is the fold-drift half of assertion 2; assertion 1 is
+    // NOT - see `normBoundaryNote` and `documentMismatchNote`, which carry
+    // the measurement. `normSource`/`normDoc` are `phraseFound`'s haystack
+    // side, hoisted - see the note where they are bound.
     if (!normSource.includes(norm(span))) {
-      bugs.push(`not found in the source: ${JSON.stringify(span)}`);
+      bugs.push(normBoundaryNote(span));
       continue;
     }
     if (!normDoc.includes(norm(span))) {
-      bugs.push(`not found in the document: ${JSON.stringify(span)}`);
+      bugs.push(documentMismatchNote(span));
       continue;
     }
     // The one phraseFound cannot stand in for. phraseFound(text, slice) is

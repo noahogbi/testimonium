@@ -171,8 +171,9 @@ export const THRESHOLDS = {
    *  span is noise an author has to read and reject. That is load-bearing:
    *  with the 12 spans the calibration doc classifies as boilerplate excluded
    *  from the above-floor count, L=20's mean is 0.7 and the rule would pick 20
-   *  instead. Suppressing boilerplate from what harvest PROPOSES is filter 2's
-   *  job; it is not a filter on what this rule counted. */
+   *  instead. Suppressing boilerplate from what harvest PROPOSES is filters 2
+   *  and 3's job (cross-source recurrence, and the author's boilerplate
+   *  rules); it is not a filter on what this rule counted. */
   harvestSeedChars: 21,
 } as const;
 

@@ -1,18 +1,28 @@
 import { afterAll, describe, expect, it } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildDraft, draftInTheWay, draftNote, isHarvestNote, DRAFT_SENTENCE } from "../../src/io/draft.js";
+import {
+  buildDraft,
+  draftInTheWay,
+  draftNote,
+  isHarvestNote,
+  writeDraftFile,
+  DRAFT_SENTENCE,
+} from "../../src/io/draft.js";
 import { parseClaimsFile } from "../../src/io/claims.js";
 
 // Every file this suite writes lives under a fresh mkdtemp directory and is
 // removed afterwards. A measurement earlier in this plan rewrote 22 tracked
 // fixtures, so a test that writes anywhere but here is a defect.
 const scratch: string[] = [];
-const withFile = (contents: string): string => {
+const draftPath = (): string => {
   const dir = mkdtempSync(join(tmpdir(), "tstm-"));
   scratch.push(dir);
-  const p = join(dir, "doc.claims.draft.json");
+  return join(dir, "doc.claims.draft.json");
+};
+const withFile = (contents: string): string => {
+  const p = draftPath();
   writeFileSync(p, contents, "utf8");
   return p;
 };
@@ -100,5 +110,32 @@ describe("the harvest draft file", () => {
     const parsed = parseClaimsFile(JSON.stringify(d));
     expect([...parsed.keys()]).toEqual(["https://e.com/a"]);
     expect(parsed.get("https://e.com/a")).toEqual([CLAIM]);
+  });
+
+  it("what harvest WRITES is what draftInTheWay accepts and the loader parses", async () => {
+    // Fix round 1, Important 3. Every other test in this file hand-builds the
+    // file with JSON.stringify, so `writeDraftFile` - the only writer in the
+    // whole harvest feature, and the seam Task 9 depends on - had no test at
+    // all. A divergence between what harvest writes and what it will later
+    // agree to overwrite would have stayed green: the author would run
+    // harvest twice and be told on the second run that she had edited a file
+    // she never opened.
+    //
+    // Yesterday's date deliberately, because that is the case the literal
+    // reading of spec 8.2 step 6 would have made un-overwritable.
+    const p = draftPath();
+    writeDraftFile(p, buildDraft({
+      entries: [{ url: "https://e.com/a?utm_source=x", claims: [CLAIM] }],
+      version: "0.1.0",
+      date: "2026-09-08",
+    }));
+    expect(draftInTheWay(p)).toBeNull();
+    const parsed = parseClaimsFile(readFileSync(p, "utf8"));
+    expect([...parsed.keys()]).toEqual(["https://e.com/a"]);
+    expect(parsed.get("https://e.com/a")).toEqual([CLAIM]);
+    // The bytes, not just the parse: a file with no trailing newline is a
+    // file every diff tool complains about, and it sits beside the prose in
+    // the author's repo.
+    expect(readFileSync(p, "utf8").endsWith("}\n")).toBe(true);
   });
 });

@@ -23,12 +23,23 @@ export interface HarvestProposal {
   readonly key: string;
   /** Candidate claims, in the SOURCE's typography, after all four filters. */
   readonly claims: string[];
-  /** The rungs whose reads proposed. */
+  /** The rungs of this URL's readable reads - every one of them, whether or
+   *  not it proposed anything. A source that shares nothing with the draft,
+   *  or whose every span was filtered, still lists the rung that read it. */
   readonly rungs: RungId[];
   readonly drops: FilterDrops;
   readonly floorMessages: string[];
-  /** Self-validation failures, reported with a BUG label and never counted
-   *  as a filter's work (spec 8.2 step 4). */
+  /** Self-validation lines from `commonSpans`, never counted as a filter's
+   *  work (spec 8.2 step 4).
+   *
+   *  DO NOT RENDER THESE UNDER A BLANKET `BUG:` PREFIX. Spec 8.2 step 4 calls
+   *  the three assertions "each a bug if it fails", and fix round 1 measured
+   *  that false for assertion 1: a source reading "6 billion" against a draft
+   *  reading "7 billion" lands a line here from a page that is working
+   *  perfectly. Each line says which reading it carries - see
+   *  `normBoundaryNote` and `documentMismatchNote` in harvest/spans.ts - and
+   *  the caller prints the line, not a label of its own. The spec sentence is
+   *  routed to Task 10. */
   readonly bugs: string[];
   readonly redirectedTo: string | null;
 }
@@ -107,15 +118,14 @@ export async function harvest(doc: Document, opts: HarvestOptions = {}): Promise
     // draft file quietly listing every claim twice.
     const candidates: string[] = [];
     const bugs: string[] = [];
-    // `found.bugs` is empty on every well-formed input by design - a
-    // non-empty entry is a self-validation failure, which is a fault in
-    // commonSpans and not a property of any page - so no fixture can pin
-    // this pass-through either. Forcing assertion 1 in commonSpans to fail
-    // makes this loop report `not found in the source: "..."` and propose
-    // nothing; deleting the push leaves the same run reporting zero bugs
-    // (measured 2026-09-09). A dropped bug line is the one outcome that
-    // would make a fault in spans.ts invisible, which is why it is carried
-    // rather than swallowed.
+    // `found.bugs` is carried, never swallowed: a dropped line is the one
+    // outcome that would make a fault in spans.ts invisible. An earlier
+    // version of this comment claimed no fixture could reach it, because a
+    // non-empty `bugs` is a code fault rather than a property of any page.
+    // THAT WAS FALSE, and the fix-round-1 reviewer built the fixture: a
+    // source reading "6 billion" against a draft reading "7 billion" lands a
+    // `normBoundaryNote` line with nothing broken anywhere. Both sides of the
+    // assertion pair are now pinned in test/harvest.test.ts.
     for (const read of source.reads) {
       const found = commonSpans(doc.prose, read.text);
       bugs.push(...found.bugs);

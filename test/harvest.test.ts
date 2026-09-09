@@ -3,6 +3,7 @@ import { harvest } from "../src/harvest.js";
 import { parseGfmFootnotes } from "../src/adapters/gfm-footnotes.js";
 import { parseClaimsFile } from "../src/io/claims.js";
 import { THRESHOLDS, proseVolume } from "../src/classify/thresholds.js";
+import { documentMismatchNote, normBoundaryNote } from "../src/harvest/spans.js";
 import { toText } from "../src/text/extract.js";
 import type { Fetcher, RawResponse, RungId } from "../src/fetch/types.js";
 
@@ -26,6 +27,21 @@ const FILLER = "<p>Background material about budgets and departmental process.</
 const page = (...paragraphs: string[]): string =>
   `<html><title>The Committee Report</title><body>${paragraphs.map((p) => `<p>${p}</p>`).join("")}${FILLER}</body></html>`;
 const WALL = "<html><body>Verifying you are human.</body></html>";
+
+// The norm()/foldWithMap boundary fixtures (fix round 1). Every sentence is
+// built FROM the span the tests expect, so a change to the span cannot leave
+// the fixture asserting against a stale copy of it.
+const BOUNDARY_SPAN = "billion dollars on procurement across every department";
+const DIGIT_SENT = `the agency spent 7 ${BOUNDARY_SPAN}`;
+const SIX_SENT = `The agency spent 6 ${BOUNDARY_SPAN}.`;
+const WORD_SENT = `The agency spent seven ${BOUNDARY_SPAN}.`;
+const boundaryMd = (sentence: string): string =>
+  [
+    `Our draft says ${sentence}, which matters.[^1]`,
+    "",
+    "[^1]: The Committee Report, https://e.com/report",
+    "",
+  ].join("\n");
 
 const MD = [
   `Our draft says ${SHARED}, which matters.[^1]`,
@@ -226,5 +242,53 @@ describe("harvest", () => {
       }),
     });
     expect(r.proposals[0]!.redirectedTo).toBe("https://e.com/");
+  });
+
+  it("carries a norm() boundary line from the SOURCE side, and proposes nothing for it", async () => {
+    // Fix round 1, Important 1 and 2. `norm()` rewrites "(digit) billion" to
+    // "(digit)bn" and `foldWithMap` deliberately does not, so a span whose
+    // left boundary snaps past a DIFFERING digit onto "billion" is absent
+    // from `norm(sourceText)`, which holds "6bn". Assertion 1 fires on a page
+    // that is working perfectly.
+    //
+    // TWO properties in one fixture, both of which were wrong before this
+    // round. First, `bugs` reaches the report at all: an earlier comment in
+    // harvest.ts claimed no fixture could produce a line, and this is that
+    // fixture. Second, the LINE says what it is - it used to read `not found
+    // in the source: "..."`, indistinguishable from a genuine offset-map
+    // fault, which is how a real fault could hide inside a routine boundary
+    // effect.
+    //
+    // The DROP is deliberate and is not what this pins: assertion 1 asks
+    // whether `phraseFound` will find the span, `check()` uses that same
+    // predicate, so proposing it would set the author up for a false
+    // accusation against her own citation.
+    const r = await harvest(parseGfmFootnotes(boundaryMd(DIGIT_SENT)), {
+      fetcher: stub({ "https://e.com/report": { rawBody: page(SIX_SENT), status: 200 } }),
+    });
+    const first = r.proposals[0]!;
+    expect(first.claims).toEqual([]);
+    expect(first.bugs).toEqual([normBoundaryNote(BOUNDARY_SPAN)]);
+    expect(first.bugs[0]).not.toMatch(/^not found in the source/);
+    expect(first.bugs[0]).toContain("NOT A BUG");
+  });
+
+  it("carries the same boundary from the DOCUMENT side, named as the two things it can be", async () => {
+    // Assertion 1's twin, and reachable by fixture for the same reason.
+    // The SOURCE spells the magnitude in words, so nothing is rewritten there
+    // and assertion 1 passes; the DRAFT spells it in digits, so
+    // `norm(docProse)` holds "7bn" and assertion 2 fires. Unlike assertion 1,
+    // assertion 2 CAN also fire on a real bug - a shifted offset map reaches
+    // it before assertion 3 does - so its line names both readings rather
+    // than asserting the wrong one. Fixing only assertion 1 would have left
+    // its twin carrying exactly the defect this round found.
+    const r = await harvest(parseGfmFootnotes(boundaryMd(DIGIT_SENT)), {
+      fetcher: stub({ "https://e.com/report": { rawBody: page(WORD_SENT), status: 200 } }),
+    });
+    const first = r.proposals[0]!;
+    expect(first.claims).toEqual([]);
+    expect(first.bugs).toEqual([documentMismatchNote(BOUNDARY_SPAN)]);
+    expect(first.bugs[0]).toContain("a BUG if");
+    expect(first.bugs[0]).toContain("NOT a bug if");
   });
 });

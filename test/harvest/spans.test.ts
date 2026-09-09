@@ -97,8 +97,8 @@ describe("commonSpans", () => {
     // line is `offset map round trip failed`, and with the repair restored
     // this same fixture emits the span below with no bugs. A fixture whose
     // document does NOT carry the shifted window is caught one assertion
-    // earlier, by `not found in the document`, and pins nothing about
-    // assertion 3.
+    // earlier, by assertion 2 (`documentMismatchNote` since fix round 1), and
+    // pins nothing about assertion 3.
     //
     // TO REPRODUCE THE FAILURE THIS TEST GUARDS, in about a minute: in
     // `src/text/excerpt.ts`, replace foldWithMap's
