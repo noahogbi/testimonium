@@ -23,6 +23,16 @@ export interface SignalInput {
 export interface SignalResult {
   readonly signals: Signals;
   readonly text: string;
+  /** The URL this read was actually classified under, after redirects - what
+   *  the fetcher reported, or the URL asked for when it reported none.
+   *
+   *  REPORTED, NEVER GATING. `verdict()` does not see it and `check()` does
+   *  not compare it with the citation, which is a gate left unbuilt and is
+   *  disclosed as such in the README. `harvest` reports when a readable
+   *  read's path differs from the cited path (spec 8.2 step 2), because a
+   *  redirect to a homepage is the exposure an author has to look at before
+   *  confirming a proposal. */
+  readonly finalUrl: string;
   readonly matchedClaims: readonly string[];
   readonly missedClaims: readonly string[];
   /** Which rule fired, for --explain-fetch. */
@@ -143,6 +153,7 @@ export function computeSignals(input: SignalInput): SignalResult {
 
   return {
     text,
+    finalUrl: input.finalUrl,
     matchedClaims,
     missedClaims,
     firedRule: pathRule ?? sigRule,
