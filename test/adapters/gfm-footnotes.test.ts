@@ -142,12 +142,19 @@ describe("parseGfmFootnotes", () => {
     // Four-tick fence around a three-tick example: the shape the parser's own
     // blankFencedCode exists for. prose uses the same pass, so the two views
     // of the document cannot disagree about what is code.
+    //
+    // The comment line's URL is NOT footnote-definition-shaped ("[^n]:" at
+    // the start of a line), so nothing but blankFencedCode can be removing
+    // it. Without this line the test passed even when blankFencedCode was
+    // skipped entirely, because the [^9]: line is DEFINITION-shaped and the
+    // DEFINITION pass alone strips it - a coincidence, not a discrimination.
     const md = [
       "Real prose the author wrote.",
       "",
       "````markdown",
       "```",
       "[^9]: Not a citation, https://example.com/not-cited",
+      "// see https://example.com/leaked-if-not-blanked",
       "```",
       "````",
       "",
@@ -155,6 +162,7 @@ describe("parseGfmFootnotes", () => {
     const { prose } = parseGfmFootnotes(md);
     expect(prose).toContain("Real prose the author wrote.");
     expect(prose).not.toContain("https://example.com/not-cited");
+    expect(prose).not.toContain("https://example.com/leaked-if-not-blanked");
   });
 
   it("prose keeps a footnote REFERENCE marker's sentence - only definitions go", () => {
