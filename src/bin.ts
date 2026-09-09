@@ -130,8 +130,8 @@ async function main(argv: string[]): Promise<number> {
   }
 
   // --rules <path>: additive-only local override (Task 15). Loaded once, up
-  // front - before the command dispatch below - so it applies to BOTH
-  // `check` and `reachability`, and so a bad local file is reported clearly
+  // front - before the command dispatch below - so it applies to all three
+  // commands, and so a bad local file is reported clearly
   // rather than exploding mid-run on whichever citation happens to trip it
   // first. `reachability` walks the same ladder `check` does; a preflight
   // that ignores a local rule the gate honors is worse than no preflight.
@@ -188,7 +188,7 @@ async function main(argv: string[]): Promise<number> {
     const draftPath = draftPathFor(doc);
     const asJson = flags.has("--json");
     // Checked BEFORE any fetching: refusing after twenty requests wastes the
-    // author's time and the hosts'. Under --json nothing is read or written
+    // author's time and the hosts'. Under --json no draft is read or written
     // on disk, so there is nothing to overwrite and the rule does not apply.
     if (!asJson) {
       const blocked = draftInTheWay(draftPath);

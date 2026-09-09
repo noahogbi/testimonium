@@ -46,8 +46,8 @@ export interface Fetcher {
    * returning `EMPTY_RESPONSE` - or any `RawResponse` with an empty body -
    * exactly as the three bundled rungs do internally.
    *
-   * A throw is caught by the shared reader (fetch/read-source.ts, under both
-   * `check()` and `reachability()`) and degraded to an unread rung with a
+   * A throw is caught by the shared reader (fetch/read-source.ts, under
+   * `check()`, `reachability()`, and `harvest()`) and degraded to an unread rung with a
    * warning, so a misbehaving third-party fetcher cannot abort a run partway
    * through a document. It is warned about rather than swallowed: a rung that
    * silently vanishes is the failure shape this project keeps finding.

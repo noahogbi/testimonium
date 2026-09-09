@@ -137,10 +137,10 @@ describe("harvest", () => {
     // and "harvest proposed nothing" reads to an author exactly like "the
     // sources shared nothing".
     //
-    // The fixture is built to catch that mutation specifically: BOTH cited
-    // URLs serve a page carrying BOTH shared spans, so each URL's own read
-    // contains every span it proposes. Self-exclusion is therefore the only
-    // thing standing between these proposals and a total drop - while the
+    // The fixture is built to catch that mutation specifically: EACH cited
+    // URL serves a page carrying only ITS OWN span, so each URL's own read
+    // contains exactly the span it proposes. Self-exclusion is therefore the
+    // only thing standing between that proposal and a total drop - while the
     // CROSS-source vote is neutralized by giving each URL a span of its own
     // that the other's page does not carry.
     const md = [

@@ -975,8 +975,8 @@ testimonium reachability <doc>   preflight. no claims needed
 ```
 
 Global flags: `--json`, `--rules <path>`. `check` additionally takes
-`--explain-fetch` (not global: `reachability` has no fired-rule provenance to
-print).
+`--explain-fetch` (not global: `reachability` and `harvest` have no fired-rule
+provenance to print).
 
 **Amended 2026-09-07, plan 1:** `--fetcher <id>` above was never shipped as a
 CLI flag. Plan 1 de-scoped it to a programmatic option only -
@@ -1064,10 +1064,11 @@ output is then a **diff** - which `urtext` can review, closing the family loop.
 
 Added 2026-09-07. This section, not the paragraph in section 8, is the
 authority for plan 2. Fable's review of the first design (findings F1 to F18,
-kept in the git-ignored SDD workspace for plan 2) is where each choice below
-was forced. Plan 2 is blocked on plan 1.2 (section 6.6), which supplies the
-reader, the readability predicate and the offset-map repair harvest depends
-on.
+preserved at `docs/superpowers/plans/2026-09-08-plan-2-harvest-fable-design-review.md`,
+alongside the plan review at `2026-09-08-plan-2-harvest-fable-plan-review.md`
+in the same directory) is where each choice below was forced. Plan 2 is
+blocked on plan 1.2 (section 6.6), which supplies the reader, the readability
+predicate and the offset-map repair harvest depends on.
 
 **What it is.** `harvest <doc.md>` fetches every URL the document cites and,
 for each, proposes as candidate claims the spans that appear verbatim in both

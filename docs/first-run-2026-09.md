@@ -173,9 +173,12 @@ the preceding word before `. ; : ! ? % ) ] }` and forward off `( [ {`, on
 **both** sides of the comparison. It only ever deletes, so it can only add
 matches, and an added match can only move a verdict toward `supported` - the
 safe direction. The space *after* terminal punctuation is deliberately left
-alone, so the claim `"1.5"` still cannot match a list rendering `"1. 5
-things"`. `src/text/excerpt.ts` reproduces the same rule inside its index map,
-because a claim rescued by the matcher but unlocatable by the map would return
+alone, so a fragment like `"1.5"` still cannot match a list rendering `"1. 5
+things"` - though as an actual claim `"1.5"` is now refused before matching
+is even attempted: at 3 normalized characters it clears none of the
+16-character claim floor plan 2 added. `src/text/excerpt.ts` reproduces the
+same rule inside its index map, because a claim rescued by the matcher but
+unlocatable by the map would return
 `supported` with a null excerpt - a verdict with no passage behind it.
 `example/sample.claims.json` has been restored to the page's actual words,
 and `check` still exits 0 against the live sources.
