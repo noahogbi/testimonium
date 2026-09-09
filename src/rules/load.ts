@@ -1,4 +1,5 @@
 import { readFileSync, existsSync } from "node:fs";
+import { BOILERPLATE_RULES } from "./boilerplate.js";
 import { CHALLENGE_PATHS, CHALLENGE_SIGNATURES, type Rule } from "./challenge.js";
 import { HOST_RULES, type HostRule } from "./hosts.js";
 
@@ -6,6 +7,11 @@ export interface RuleSet {
   readonly signatures: readonly Rule[];
   readonly paths: readonly Rule[];
   readonly hosts: readonly HostRule[];
+  /** Phrases harvest refuses to propose (spec 8.2 filter 3). Same dated
+   *  `Rule` shape as signatures and paths, because a rule nobody can date is
+   *  a rule nobody can review. Ships empty - see boilerplate.ts. Consulted
+   *  by harvest only; it can never change a verdict. */
+  readonly boilerplate: readonly Rule[];
 }
 
 interface LocalRule {
@@ -64,16 +70,18 @@ function toHostRule(raw: Record<string, unknown>, where: string): HostRule {
  * the file from also being able to delete a bundled protection.
  */
 export function loadRules(path?: string): RuleSet {
-  if (!path) return { signatures: CHALLENGE_SIGNATURES, paths: CHALLENGE_PATHS, hosts: HOST_RULES };
+  if (!path) return { signatures: CHALLENGE_SIGNATURES, paths: CHALLENGE_PATHS, hosts: HOST_RULES, boilerplate: BOILERPLATE_RULES };
   if (!existsSync(path)) throw new Error(`rules file not found: ${path}`);
   const local = JSON.parse(readFileSync(path, "utf8")) as {
     signatures?: LocalRule[];
     paths?: LocalRule[];
     hosts?: Record<string, unknown>[];
+    boilerplate?: LocalRule[];
   };
   return {
     signatures: [...CHALLENGE_SIGNATURES, ...(local.signatures ?? []).map((r, i) => toRule(r, `signatures[${i}]`))],
     paths: [...CHALLENGE_PATHS, ...(local.paths ?? []).map((r, i) => toRule(r, `paths[${i}]`))],
     hosts: [...HOST_RULES, ...(local.hosts ?? []).map((h, i) => toHostRule(h, `hosts[${i}]`))],
+    boilerplate: [...BOILERPLATE_RULES, ...(local.boilerplate ?? []).map((r, i) => toRule(r, `boilerplate[${i}]`))],
   };
 }

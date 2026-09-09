@@ -113,12 +113,15 @@ export const THRESHOLDS = {
    *  `norm(claim).length`. REFUSED, not warned about, at all three entries -
    *  the claims-file loader, `check()`'s front door and harvest's first
    *  filter - with one message naming the claim, its length, the floor and
-   *  the remedy (spec 7.3; 13 Q3). Two of those three doors are shut today:
-   *  the loader and `check()` enforce it from Task 3 (`src/io/claims.ts`).
-   *  Harvest's floor filter is Task 7's and does not exist yet - Task 5 ships
-   *  `commonSpans`, which consumes `harvestSeedChars` below and applies no
-   *  floor of its own. A warning that a claim proves nothing leaves it proving
-   *  nothing while the run still passes.
+   *  the remedy (spec 7.3; 13 Q3). All three doors are shut as of Task 7:
+   *  the loader and `check()` enforce it from Task 3 (`src/io/claims.ts`),
+   *  and harvest's first filter enforces it from Task 7
+   *  (`src/harvest/filters.ts`), applying the same `belowClaimFloor` and
+   *  `claimFloorMessage` to every candidate span before it can be proposed.
+   *  Task 5's `commonSpans`, which consumes `harvestSeedChars` below, applies
+   *  no floor of its own - that gap is what Task 7 closes. A warning that a
+   *  claim proves nothing leaves it proving nothing while the run still
+   *  passes.
    *
    *  It does not change a verdict. It refuses an input before there is a
    *  verdict to change, which is why it is uniform across the three doors: a

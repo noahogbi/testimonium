@@ -695,6 +695,7 @@ describe("check with a local RuleSet (Task 15)", () => {
     signatures: [...CHALLENGE_SIGNATURES, LOCAL_SIGNATURE],
     paths: CHALLENGE_PATHS,
     hosts: HOST_RULES,
+    boilerplate: [], // harvest's list; no bearing on check()
   };
 
   it("a local signature flips a full claim match from supported to unreachable", async () => {
