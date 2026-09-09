@@ -457,32 +457,43 @@ draft 1:
 **The signature list stops being able to mint an accusation from the read it
 vetoes.** N3 vetoes when a signature matches AND the body is under the length
 cap, and that veto stands even where the claims would otherwise have matched in
-full: the vetoed read is never judged on its own, and no `unsupported` is ever
-computed from a wall's signals. What the veto does not withhold is an accusation
-supplied by a LATER read. A vetoed read's matches are excluded from the
-cross-rung union (`src/check.ts`, `locatedBy`), so a claim that only the vetoed
-read carried is named in `missed` when a readable later rung is judged - and the
-veto is then the but-for cause of an `unsupported` that the readable read alone
-would not have produced. Measured 2026-09-08 against the shipped build: a
-signature-carrying body under the cap holding claim A, followed by a readable
-body holding claim B and not A, returns `unsupported` with A missed; the same
-body with the signature phrase removed returns `supported`. This paragraph said
-"Every verdict it decides is a withheld accusation, never a supplied one" until
-2026-09-08. That was false at 3974d27 and at every commit since - the union
-machinery is unchanged from it - and it is the twin of the false status claim the
-N4 paragraph below has now corrected twice. It is corrected here rather than left
-standing, for the reason given there: this document is the authority every ruling
-resolves against, so a sentence in it that has gone quietly false is worse than
-one in the code. Pinned by `test/check.test.ts`, "N3 through the cross-read
-union".
+full: the vetoed read is never judged as a document, and no `unsupported` is
+ever computed from a wall's signals. What no veto withholds is an accusation
+supplied by a LATER read, and the mechanism is not particular to N3: `isBlocked`
+ORs all five vetoes together (N1, N2, N3, N4, N5), and `src/check.ts`'s union
+loop (`locatedBy`) excludes a read on that same check, whichever veto fired it.
+A claim that only the excluded read carried is named in `missed` when a
+readable later rung is judged, and the veto - whichever of the five it was -
+is then the but-for cause of an `unsupported` that the same two responses
+would not have produced without it. Measured 2026-09-08 against the shipped
+build: a signature-carrying body under the cap holding claim A, followed by a
+readable body holding claim B and not A, returns `unsupported` with A missed;
+the same body with the signature phrase removed returns `supported`. The same
+holds for status: a 404 read holding A, paired with the same readable read,
+returns the identical `unsupported`; the same body at 200 returns `supported`
+- the mechanism the N4 paragraph below now names directly, rather than as a
+residual of rule 2 alone. This paragraph said "Every verdict it decides is a
+withheld accusation, never a supplied one" until 2026-09-08. That was false at
+3974d27 and at every commit since - the union machinery is unchanged from it -
+and it is the twin of the false status claim the N4 paragraph below has now
+corrected twice. It is corrected here rather than left standing, for the
+reason given there: this document is the authority every ruling resolves
+against, so a sentence in it that has gone quietly false is worse than one in
+the code. Pinned for the signature case by `test/check.test.ts`, "N3 through
+the cross-read union"; the veto-wide mechanism is measured above.
 
 The rot argument survives, but only below the prose floor, and draft 1 stated it
 without that condition. N3 fires only where `proseVolume` is under
 `maxChallengeChars` (800), which sits far below `minProseChars` (4,500) on the
-same measured quantity. So beneath the floor the list is genuinely rot-tolerant:
-a wall it fails to name falls through to P2 and lands on `unreachable` anyway,
-and an over-broad entry costs an attestation where the vetoed read is the only
-read - a real document that matches it and is short reads `unreachable` where it
+same measured quantity. So beneath the floor rot can never mint an accusation:
+an unnamed wall is not excluded from the cross-rung union, so nothing it fails
+to name can turn a present claim into `missed`. It is not free of cost,
+though - an unvetoed wall that matches every claim, alone or completed through
+a later read, never reaches this floor at all, because `verdict()` returns
+`supported` on a full match before the floor is consulted, quoting the wall's
+own text as evidence (test/check.test.ts:501 pins the union shape). An
+over-broad entry costs an attestation where the vetoed read is the only read -
+a real document that matches it and is short reads `unreachable` where it
 would have read `supported`. Where a later rung produced a readable read the cost
 is larger than an attestation: the vetoed read's matches leave the union, so a
 claim only it carried is named in `missed` and the citation reads `unsupported`.
@@ -537,9 +548,14 @@ reads 404 and 410 as evidence the document is gone and vetoes that read;
 since plan 1.2 the ladder climbs past it (6.6, "Escalation") and the citation
 reads `unreachable` only when no rung produced a readable read and none
 matched in full. A status therefore withholds an accusation from the read
-it vetoes - but by sending the ladder to the next rung it can relocate the
-judgement onto a different document, which is the ACCEPTED EXPOSURE 6.6
-rule 2 and the README both carry. This paragraph previously said the scheme
+it vetoes - but, as 6.3 now states for the veto set generally, it does not
+withhold one from the cross-rung union: a claim that only the N4-vetoed read
+carried is named in `missed` when a readable later rung is judged, and N4 is
+then the but-for cause of an `unsupported` the same two responses would not
+have produced without it (6.3 measures the 404-vs-200 pair). Separately, by
+sending the ladder to the next rung a veto can also relocate the judgement
+onto a different document, which is the ACCEPTED EXPOSURE 6.6 rule 2 and the
+README both carry. This paragraph previously said the scheme
 "consults no status" - true when it was written, and falsified by N4 when
 N4 landed during plan 1. It is corrected here rather than left standing,
 because a spec that has gone quietly false is the failure this tool exists
@@ -789,8 +805,9 @@ contract a stale host rule costs one wasted request - latency, not correctness.
 **Signature and path rules are not under that contract**: they feed N2 and N3,
 which veto a read, so an over-broad entry can cost correctness - 6.3 says what
 that cost is. `src/rules/load.ts`'s own comment has said so since plan 1's
-ruling C13; this sentence had not. Corrected 2026-09-08: it generalised a host
-rule's contract to all three lists, and was false for two of them.
+final fix wave (`e4d9f46`); this sentence had not. Corrected 2026-09-08: it
+generalised a host rule's contract to all three lists, and was false for two
+of them.
 
 The origin module violates this in one place: its Bloomberg comment says "treat
 bloomberg.com as UNREADABLE: source to a carrier instead." That is editorial
@@ -1320,7 +1337,7 @@ Recorded so they are not relitigated without new information.
 | README leads with the argument; AI-drafted prose is a named section, not the headline | 4 |
 | `check()` owns the verdict; primitives sealed behind `exports` | 5.1, 5.3 |
 | Three layers: fetcher, pure classifier, pure ladder reducer | 5 |
-| Burden-of-proof inversion; the signature list withholds an accusation from the read it vetoes, and can supply one from a later readable read through the union | 6, 6.3 |
+| Burden-of-proof inversion; a veto withholds an accusation from the read it vetoes, and can supply one from a later readable read through the union | 6, 6.3 |
 | Accusation requires body-derived proof; head markers never license one | 6.2 |
 | Every N-signal vetoes, including over P1 | 6.2, 13 Q2 |
 | Prose volume, not text-to-markup ratio | 6.5 |

@@ -22,9 +22,15 @@ export interface Rule {
  * citation reads `unreachable` only when no rung produced a readable read
  * and none matched in full (spec 6.6).
  *
- * The list ROTTING - failing to name a wall - changes no outcome a complete
- * list would have prevented: above maxChallengeChars N3 cannot fire at all,
- * and below it everything the list misses still has to clear the prose floor.
+ * The list ROTTING - failing to name a wall - can never mint a false
+ * ACCUSATION: above maxChallengeChars N3 cannot fire at all, and below it an
+ * unnamed wall is not excluded from check()'s cross-rung union, so nothing it
+ * fails to name can turn a present claim into `missed`. It can still mint a
+ * false ATTESTATION: an unvetoed wall that matches every claim - alone, or
+ * completed through a later read's union (`src/check.ts:128-133`) - never
+ * reaches the prose floor at all, because `verdict()` returns `supported` on
+ * a full match before the floor is consulted, quoting the wall's own text as
+ * the evidence (test/check.test.ts:501 pins the union shape).
  * (Spec 6.3 scopes the rot argument the same way, and records that draft 1
  * stated it without the condition. Above the floor neither protection
  * applies - that is 6.3's known gap, and rot does not widen it.) An

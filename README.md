@@ -119,7 +119,7 @@ before you trust a green run to mean more than it does.
   prose - twelve regexes over the normalized extracted text
   (`src/rules/challenge.ts`), and a hit feeds the blocked decision directly.
   The last two are **N5**, and they are independent of each other: either one
-  alone vetoes the read. A vetoed read is never judged on its own; the
+  alone vetoes the read. A vetoed read is never judged as a document; the
   ladder climbs past it, and the citation reads `unreachable` only when no
   rung produced a readable read and none matched in full (spec 6.6 rule 3;
   the ladder is under Measured limits below). A `content-type` outside the
