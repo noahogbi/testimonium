@@ -6,6 +6,61 @@ Initial implementation of plan 1 (`check`, `reachability`). See
 `docs/superpowers/plans/2026-09-06-plan-1-core.md` and
 `docs/superpowers/specs/2026-09-06-testimonium-design.md` for the design.
 
+### Plan 2 (harvest) - changes since the plan-1.2 merge
+
+One new command, one breaking refusal, and three additive fields. All of them
+landed after `ff71ec8` and before this version was released, so none carries a
+deprecation path. Apart from the refusal below, `check` gained no new
+behaviour: `harvest` is a second consumer of the reader plan 1.2 built, not a
+change to the gate, and no verdict moved.
+
+- **BREAKING, and meant to be: a claim shorter than `THRESHOLDS.minClaimChars`
+  (16 characters once normalized) is refused.** It is refused by the
+  claims-file loader, by `check()`'s front door and by `harvest`'s first
+  filter, with one message naming the claim, its length, the floor and the
+  remedy. An existing claims file carrying such a claim now fails to load and
+  `check` exits 2 with the loader's message. That is the intended outcome: a
+  bare number, a year, or a token like "the report" attests nothing about a
+  source, and a match on one is a coincidence this tool cannot tell from
+  evidence - the file asserted something the tool could never have verified.
+  The remedy is to extend the phrase to take in the surrounding words, which
+  `harvest` will also propose. Measured against 208 real claims frozen in
+  `fixtures/claims/`: 18 of them are refused, and the two that matched a page
+  they were not written about are both among them. Landed before 0.1.0 was
+  released, so it carries no deprecation path. See
+  `docs/calibration-2026-09.md` and spec 7.3.
+- **New command: `testimonium harvest <doc.md>`.** It fetches every URL the
+  document cites and proposes, as candidate claims, the spans that appear
+  verbatim in both the document's own prose and a readable read of the
+  source, normalized. It writes `<doc>.claims.draft.json` and **never**
+  `<doc>.claims.json`. No model; phrase matching remains the sole arbiter,
+  and every proposal is afterwards judged by `check` exactly as a
+  hand-written claim is. Exit 0 when the draft was written or printed,
+  including a draft proposing nothing; exit 2 for a refused input, a refused
+  existing claims file, or a draft in the way that the author has edited.
+  There is no exit 1. `--json` prints the draft instead of writing it, the
+  convention `reachability --json` follows.
+- **`RuleSet` gains `boilerplate: readonly Rule[]`,** the same dated
+  `{ pattern, lastConfirmed, note }` shape as `signatures` and `paths`, and a
+  local `--rules` file may add to it. It ships EMPTY and is consulted by
+  `harvest` only: it can never change a verdict. Integrators constructing a
+  `RuleSet` literal must add the field; `loadRules()` callers need no change.
+- **`Document` gains `prose`** - the markdown with fenced code blanked and
+  every footnote definition removed, from the parser's own passes. `body` is
+  unchanged.
+- **`harvest` inherits every exposure `check` has, unreduced, and adds one of
+  its own.** A span common to the draft and a source is by definition one
+  `check` will find in that source, so the heavy-chrome-at-200 route and the
+  redirect route in the README's Measured limits apply to harvest identically.
+  Its own addition is that it proposes what the author COPIED, which is not
+  always what she CLAIMS; the draft's `_note` says so and her confirmation is
+  what makes a proposal a claim. Harvest does report a proposal drawn from a
+  read whose final path differs from the cited path, which `check` does not.
+- **`VERSION` now has one source, `src/version.ts`**, re-exported unchanged
+  from `src/index.ts`. `harvest` stamps it into every draft, so two copies
+  that could drift would put a slightly untrue version on a file the author
+  keeps. No public name changed.
+
 ### Plan 1.2 (reader) - changes since the plan-1.1 merge
 
 Three verdict-moving changes, each confined to the case spec section 6.6

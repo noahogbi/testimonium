@@ -117,4 +117,70 @@ describe("parseGfmFootnotes", () => {
     );
     expect(d.footnotes).toEqual([]);
   });
+
+  it("prose drops a whole footnote definition, continuation lines included", () => {
+    // Fable F17: DEFINITION consumes indented continuation lines. A stripper
+    // that took only the first line would leave the source's own title and
+    // URL in the document's prose, and harvest would propose them back to
+    // the author as claims she had copied.
+    const md = [
+      "The committee reported a rise in spending.[^1]",
+      "",
+      '[^1]: Jane Roe, "The Committee Report", Example Gov, 12 May 2026.',
+      "    https://example.gov/report",
+      "    Quoted: spending rose sharply in the fourth quarter.",
+      "",
+    ].join("\n");
+    const { prose } = parseGfmFootnotes(md);
+    expect(prose).toContain("The committee reported a rise in spending.");
+    expect(prose).not.toContain("Jane Roe");
+    expect(prose).not.toContain("https://example.gov/report");
+    expect(prose).not.toContain("spending rose sharply in the fourth quarter");
+  });
+
+  it("prose blanks fenced code, so a code sample is never proposed as a claim", () => {
+    // Four-tick fence around a three-tick example: the shape the parser's own
+    // blankFencedCode exists for. prose uses the same pass, so the two views
+    // of the document cannot disagree about what is code.
+    //
+    // The comment line's URL is NOT footnote-definition-shaped ("[^n]:" at
+    // the start of a line), so nothing but blankFencedCode can be removing
+    // it. Without this line the test passed even when blankFencedCode was
+    // skipped entirely, because the [^9]: line is DEFINITION-shaped and the
+    // DEFINITION pass alone strips it - a coincidence, not a discrimination.
+    const md = [
+      "Real prose the author wrote.",
+      "",
+      "````markdown",
+      "```",
+      "[^9]: Not a citation, https://example.com/not-cited",
+      "// see https://example.com/leaked-if-not-blanked",
+      "```",
+      "````",
+      "",
+    ].join("\n");
+    const { prose } = parseGfmFootnotes(md);
+    expect(prose).toContain("Real prose the author wrote.");
+    expect(prose).not.toContain("https://example.com/not-cited");
+    expect(prose).not.toContain("https://example.com/leaked-if-not-blanked");
+  });
+
+  it("prose keeps a footnote REFERENCE marker's sentence - only definitions go", () => {
+    const { prose } = parseGfmFootnotes("Spending rose sharply.[^1]\n\n[^1]: https://example.gov/a\n");
+    expect(prose).toContain("Spending rose sharply.");
+    expect(prose).not.toContain("example.gov");
+  });
+
+  it("body stays the original markdown; prose is normalized to LF", () => {
+    // `body` is the contract every existing caller has: the original bytes,
+    // line endings intact. `prose` is derived from the LF-normalized copy the
+    // footnote loop reads, because a JS regex `.` never matches \r and the
+    // two views must be built from one text.
+    const md = "Prose line one.\r\nProse line two.\r\n\r\n[^1]: https://example.gov/a\r\n";
+    const d = parseGfmFootnotes(md);
+    expect(d.body).toBe(md);
+    expect(d.prose).toContain("\n");
+    expect(d.prose).not.toContain("\r");
+    expect(d.prose).not.toContain("example.gov");
+  });
 });

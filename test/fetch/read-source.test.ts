@@ -92,6 +92,30 @@ describe("readSource", () => {
     expect(r.attempted).toEqual([]);
     expect(r.reads).toEqual([]);
   });
+
+  it("carries the finalUrl each read was classified under", async () => {
+    // RawResponse has always carried it and computeSignals has always
+    // received it; nothing could read it back. Harvest needs it to report a
+    // redirect away from the cited path (spec 8.2 step 2). It is REPORTED
+    // and gates nothing - test/check.test.ts's redirect pin asserts that the
+    // verdict is unmoved by it.
+    const body = `<html><body>${"The committee report states that spending rose sharply. ".repeat(120)}</body></html>`;
+    const { reads } = await readSource("https://e.com/a", [], {
+      fetcher: {
+        rungs: ["node", "curl"] as RungId[],
+        async fetch() {
+          return {
+            rawBody: body,
+            status: 200,
+            headers: {},
+            finalUrl: "https://e.com/elsewhere",
+            bytes: 0,
+          };
+        },
+      },
+    });
+    expect(reads[0]!.computed.finalUrl).toBe("https://e.com/elsewhere");
+  });
 });
 
 describe("bestReadable", () => {

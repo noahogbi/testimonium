@@ -3,7 +3,7 @@ import { defaultFetcher } from "./fetch/default-fetcher.js";
 import { bestReadable, readSource, type Read } from "./fetch/read-source.js";
 import type { Fetcher } from "./fetch/types.js";
 import { dedupeEvidence, excerptFor, type Evidence } from "./text/excerpt.js";
-import { norm } from "./text/normalize.js";
+import { belowClaimFloor, claimFloorMessage } from "./io/claims.js";
 import { buildResult, type CitationResult } from "./io/evidence.js";
 import type { RuleSet } from "./rules/load.js";
 
@@ -44,25 +44,28 @@ export async function check(
   claims: readonly string[],
   opts: CheckOptions = {},
 ): Promise<CitationResult> {
-  // An empty or whitespace-only claim matches EVERYTHING ("".includes("") is
-  // true), so it would mint a `supported` verdict with a null excerpt - an
-  // attestation with nothing behind it. The CLI is protected by
-  // parseClaimsFile, but check() is the exported front door and has to defend
-  // itself. Rejected at the door, before any IO, because it is a caller bug
-  // rather than a fetch failure: an empty ARRAY is still fine and reads
-  // `unclaimed`.
+  // Claims are validated at the door, before any IO, because a claim the tool
+  // could never verify is a caller bug rather than a fetch failure. An empty
+  // ARRAY is still fine and reads `unclaimed`.
   //
-  // The predicate is `norm()`, NOT `trim()`, because norm() is what the
-  // matcher runs. Anything norm() folds to "" matches every document exactly
-  // as "" does, and trim() does not see it: "," and ",,," survive trim (norm
-  // deletes commas) and U+200B is not whitespace to JS at all. Testing a
-  // weaker predicate than the matcher uses is how the guard let a false
-  // attestation through.
-  const blank = claims.findIndex((c) => typeof c !== "string" || !norm(c));
-  if (blank !== -1) {
-    throw new TypeError(
-      `check(${url}): claim at index ${blank} is empty or whitespace-only once normalized; an empty claim matches every document`,
-    );
+  // Two refusals, in this order. A non-string is a type error and is checked
+  // first so that norm() is never handed one. Then the floor (spec 7.3),
+  // which SUBSUMES the empty-claim guard that stood here: `""` matches every
+  // document ("".includes("") is true) and would mint `supported` with a null
+  // excerpt, and so do "," and U+200B, both of which survive trim() while norm()
+  // folds them away - the predicate has to be the MATCHER's. All three are 0
+  // normalized characters and all three are under the floor.
+  //
+  // parseClaimsFile refuses the same two things with the same message
+  // builder; check() is the exported front door and defends itself, because
+  // a programmatic caller never passes through the loader.
+  const notString = claims.findIndex((c) => typeof c !== "string");
+  if (notString !== -1) {
+    throw new TypeError(`check(${url}): claim at index ${notString} is not a string`);
+  }
+  const short = claims.findIndex(belowClaimFloor);
+  if (short !== -1) {
+    throw new TypeError(claimFloorMessage(`check(${url}): claim at index ${short}`, claims[short] as string));
   }
 
   // The local `rules.hosts` must reach the default fetcher's UA/identity
@@ -90,9 +93,13 @@ export async function check(
   // A full match is its own proof of a read (verdict.ts), so a rung that
   // reached `supported` settles it. Discarding that read merely because a later
   // rung returned a longer body is how a citation the tool ALREADY verified
-  // becomes an accusation - and the ladder escalates on ANY sub-floor read, so
-  // a short real article followed by a fat block page is the ordinary case,
-  // not an exotic one.
+  // becomes an accusation - and the HTML ladder escalates on ANY sub-floor
+  // read, so a short real article followed by a fat block page is the ordinary
+  // case, not an exotic one. HTML is load-bearing: `nextAction` returns from
+  // its `isPdfUrl` branch before the escalation rule is reached
+  // (fetch/ladder.ts), so a PDF citation gets one rung whatever it read and
+  // this route needs two. The unqualified form of this sentence shipped false
+  // for a PDF URL until 2026-09-09.
   const proven = reads.find((r) => verdict(r.computed.signals) === "supported");
   // Rule 2 (spec 6.6): failing a proof, the READABLE read with the most prose
   // - not the largest read. A fat challenge page over the floor used to

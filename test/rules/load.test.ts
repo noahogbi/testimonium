@@ -87,4 +87,30 @@ describe("loadRules", () => {
       loadRules(withFile(JSON.stringify({ hosts: [{ host: "example.com", lastConfirmed: "2026-09-07" }] }))),
     ).toThrow(/note/);
   });
+
+  it("ships an empty boilerplate list, and a local file adds to it", () => {
+    // Spec 8.2 filter 3. Bundled-empty is deliberate: a bundled rule needs a
+    // lastConfirmed date from a live page, and the phrases plan 2's
+    // calibration found were seen in fixtures.
+    expect(loadRules().boilerplate).toEqual([]);
+    const p = withFile(
+      JSON.stringify({
+        boilerplate: [{ pattern: "all rights reserved", lastConfirmed: "2026-09-08", note: "site footer" }],
+      }),
+    );
+    const r = loadRules(p);
+    expect(r.boilerplate.length).toBe(1);
+    expect(r.boilerplate[0]!.note).toBe("site footer");
+    expect(r.boilerplate[0]!.pattern.test("all rights reserved")).toBe(true);
+  });
+
+  it("holds a local boilerplate rule to the same dated discipline as every other rule", () => {
+    // Fable F9: the draft proposed a bare string[] for these. A rule with no
+    // date and no note is the rot the discipline exists to make visible, and
+    // loadRules already refuses it for signatures, paths and hosts.
+    expect(() => loadRules(withFile(JSON.stringify({ boilerplate: [{ pattern: "x" }] })))).toThrow(/lastConfirmed/);
+    expect(() =>
+      loadRules(withFile(JSON.stringify({ boilerplate: [{ pattern: "x", lastConfirmed: "2026-09-08" }] }))),
+    ).toThrow(/note/);
+  });
 });

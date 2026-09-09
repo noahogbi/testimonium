@@ -38,8 +38,8 @@ type Shape = {
 // matters. Both rows use equal-prose bodies, which is the tie rule 2 decides.
 const SHAPES: readonly Shape[] = [
   { name: "a readable first read", per: { node: { rawBody: DOC, status: 200 } }, claims: ["spending rose sharply"], readable: true },
-  { name: "a walled first read (N1) and a readable second", per: { node: { rawBody: DOC, status: 200, headers: CHALLENGED }, curl: { rawBody: DOC, status: 200 } }, claims: ["spending rose sharply", "revenue fell"], readable: true },
-  { name: "a 404 first read (N4) and a readable second", per: { node: { rawBody: DOC, status: 404 }, curl: { rawBody: DOC, status: 200 } }, claims: ["spending rose sharply", "revenue fell"], readable: true },
+  { name: "a walled first read (N1) and a readable second", per: { node: { rawBody: DOC, status: 200, headers: CHALLENGED }, curl: { rawBody: DOC, status: 200 } }, claims: ["spending rose sharply", "revenue fell in the fourth quarter"], readable: true },
+  { name: "a 404 first read (N4) and a readable second", per: { node: { rawBody: DOC, status: 404 }, curl: { rawBody: DOC, status: 200 } }, claims: ["spending rose sharply", "revenue fell in the fourth quarter"], readable: true },
   { name: "two sub-floor reads whose union carries every claim", per: { node: { rawBody: STUB_1, status: 200 }, curl: { rawBody: STUB_2, status: 200 } }, claims: ["spending rose sharply", "the review is ongoing"], readable: false },
   { name: "two vetoed reads (N1, then N4)", per: { node: { rawBody: DOC, status: 200, headers: CHALLENGED }, curl: { rawBody: DOC, status: 404 } }, claims: ["spending rose sharply"], readable: false },
 ];

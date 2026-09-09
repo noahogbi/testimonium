@@ -10,18 +10,37 @@ export interface Rule {
  * Bot-challenge wording. THIS LIST ROTS, AND THAT IS TOLERATED BY DESIGN.
  *
  * A measured battery found 11 of 17 realistic walls evading a list of this
- * shape. Its COMPLETENESS is not what protects a citation: the prose floor in
- * src/classify/verdict.ts does that, and it holds for walls nobody has written
- * down. A match's main job is triggering an early fall-through to the next
- * rung.
+ * shape. Below the floor, its COMPLETENESS is not what protects a citation
+ * from a false ACCUSATION: the prose floor in src/classify/verdict.ts does
+ * that, and it holds for walls nobody has written down (above the floor
+ * neither protection applies, and the attestation exception is separate -
+ * both covered further down in this comment). A match's main job is
+ * triggering an early fall-through to the next rung.
  *
  * It is NOT true that a match never decides a verdict, and this comment said
- * so until 2026-09-07. A match on a body under THRESHOLDS.maxChallengeChars is
- * N3, which `isBlocked` ORs into the veto set and which forces `unreachable`
- * on its own. The safe reading is the one above: the list rotting costs reach
- * and latency, never a false accusation - because everything it misses still
- * has to clear the floor. The list rotting cannot cost truth; a match can
- * still change an outcome.
+ * so until 2026-09-07. A match on a body under THRESHOLDS.maxChallengeChars
+ * is N3, which `isBlocked` ORs into the veto set. Since plan 1.2 that veto
+ * ends the READ, not the citation: the ladder climbs past it, and the
+ * citation reads `unreachable` only when no rung produced a readable read
+ * and none matched in full (spec 6.6).
+ *
+ * The list ROTTING - failing to name a wall - can never mint a false
+ * ACCUSATION: above maxChallengeChars N3 cannot fire at all, and below it an
+ * unnamed wall is not excluded from check()'s cross-rung union, so nothing it
+ * fails to name can turn a present claim into `missed`. It can still mint a
+ * false ATTESTATION: an unvetoed wall that matches every claim - alone, or
+ * completed through a later read's union (`src/check.ts:128-133`) - never
+ * reaches the prose floor at all, because `verdict()` returns `supported` on
+ * a full match before the floor is consulted, quoting the wall's own text as
+ * the evidence (test/check.test.ts:501 pins the union shape).
+ * (Spec 6.3 scopes the rot argument the same way, and records that draft 1
+ * stated it without the condition. Above the floor neither protection
+ * applies - that is 6.3's known gap, and rot does not widen it.) An
+ * OVER-BROAD entry can cost truth. A signature matching a short REAL read
+ * takes that read's matches out of check()'s cross-rung union, so a claim
+ * only it carried is named in `missed` when a readable later rung is judged -
+ * a false accusation, not a lost attestation (spec 6.3, corrected 2026-09-08;
+ * pinned by test/check.test.ts, "N3 through the cross-read union").
  *
  * Patterns are tested against normalized text, so case, smart quotes and
  * zero-width characters cannot dodge them. Prefer a loose pattern over an

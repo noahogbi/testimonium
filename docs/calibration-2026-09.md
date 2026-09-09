@@ -1,4 +1,7 @@
-# Calibration of `minProseChars`
+# Calibration
+
+Three thresholds, three dated records. `minProseChars` (plan 1) is below;
+`minClaimChars` and `harvestSeedChars` (plan 2) are at the end.
 
 **Date:** 2026-09-07 (round 3, after ruling C7) — supersedes the round-1 and round-2 records.
 Round 3's own baseline numbers were then overtaken twice more, same day: the entity-decoding
@@ -515,3 +518,272 @@ brief. No status was guessed, and none was set to 404 or 410 for convenience.
 
 The gate closes because a signal that could not do its job was removed after being
 measured three times — not because anything was tuned to make it pass.
+
+## Calibration of `minClaimChars` and `harvestSeedChars` (plan 2, 2026-09-09)
+
+### Populations
+
+Four real claims files, frozen into `fixtures/claims/` so these numbers
+reproduce without the origin repo. Three were copied from
+`<origin repo path withheld>`'s WORKING TREE and are uncommitted there, so
+their provenance is an mtime and a size and nothing stronger;
+`source-c-claims.json` is not on that repo's `master` at all and was taken from
+`<pinned origin commit withheld>`, a commit on its `source-c-longform`
+branch. `fixtures/claims/provenance.json` records all four.
+
+That commit was the branch tip on 2026-09-08, when this task was written. On
+2026-09-09, when the freeze was taken, the tip had moved to
+`78d3aa9bbdfcf5a9a8faa71c0b61f5b64973a18f` and the pinned commit is now an
+ancestor of it. The file's blob is `e03e28ff6bf3727810ce52b9fdb05898a13e6171`
+at both, so the freeze is unaffected - but the commit, not the branch, is the
+provenance, and the record says so rather than repeating a tip that has moved.
+
+The three working-tree rows carry a `bytes` field - 5,684 / 1,839 / 3,165,
+verified equal on the origin file and on the frozen copy - so a reader can
+detect divergence from the origin the way `source-c-claims.json`'s blob hash
+already lets them. It is the size ON DISK at freeze time: `source-a` and
+`source-b` arrived CRLF and git stores them LF, so `git cat-file -s` reports
+5,591 and 1,789 for those two. A size is weaker evidence than a commit, and
+this does not change that.
+
+From `npm run build && node scripts/calibrate-claim-floor.mjs`:
+
+```
+  source-a-claims.json: 70 claim strings
+  source-b-claims.json: 20 claim strings
+  source-c-claims.json: 89 claim strings
+  source-d-claims.json: 31 claim strings
+document fixtures: 10, 367390 chars
+claim strings: 210, distinct: 208
+```
+
+The walker counts claim STRINGS only: a key beginning with `_` is a note to a
+human reader and a `{"notApplicable": "<reason>"}` object's reason is prose
+about why a URL is not checkable, and neither is a claim. All four files key by
+footnote number.
+
+All four frozen files are pure ASCII and hold no NUL bytes - measured, not
+assumed: `LC_ALL=C tr -d '\000-\177' < FILE | wc -c` prints `0` for each, and
+`LC_ALL=C tr -cd '\000' < FILE | wc -c` prints `0` for each, with the
+instrument proved able to report non-zero first (`printf 'a\0b' | LC_ALL=C tr
+-cd '\000' | wc -c` prints `1`). A fixture is allowed to carry non-ASCII; these
+happen not to.
+
+Spec 7.3 says "203 distinct real claims" and "18 of the 203". The frozen
+population is 208 distinct: the three working-tree files moved in the origin
+repo between that sentence and this freeze. The refusal count at 16 is what the
+script printed and is unchanged at 18; the denominator is not the spec's.
+
+### The floor
+
+From `node scripts/calibrate-claim-floor.mjs`, same run:
+
+```
+norm length 1-10: 14 claims, 1 matching an unrelated fixture
+norm length 11-20: 12 claims, 1 matching an unrelated fixture
+norm length 21-30: 20 claims, 0 matching an unrelated fixture
+norm length 31-40: 21 claims, 0 matching an unrelated fixture
+norm length 41-60: 59 claims, 0 matching an unrelated fixture
+norm length 61-up: 82 claims, 0 matching an unrelated fixture
+spurious matches (claim | normalized length | unrelated fixtures hit):
+  "SAUDI ARABIA" | 12 | 1
+  "169" | 3 | 1
+CEILING (longest claim matching an unrelated fixture): 12
+FLOOR (THRESHOLDS.minClaimChars): 16, margin 4
+refused at F: 8:7  12:15  16:18  20:26  25:34  30:46  40:65
+```
+
+The licence is a priori and the measurement is its sanity check, not its
+derivation: two spurious events are not a derivation (Fable F6). What the
+measurement establishes is that no claim this corpus holds at or above 16
+normalized characters matches a page it was not written about, and that the
+cost of the floor is 18 of 208 claims (8.7 percent), each a number, a name or a
+fragment that states no proposition. Bound by
+`test/classify/claim-floor.test.ts`, whose six assertions were each shown to
+fail before they were trusted: at `minClaimChars: 12` the spurious-match
+assertion fails naming `'SAUDI ARABIA'` and the margin assertion fails with
+`expected 12 to be less than or equal to 9`; at `60` the cost assertion fails
+with `expected 0.596... to be less than 0.15`; at `harvestSeedChars: 15` the
+seed assertion fails with `expected 15 to be greater than or equal to 16`; and
+with the four `*-claims.json` files moved out of `fixtures/claims/` the vacuity
+guard fails with `expected 0 to be greater than or equal to 200`.
+
+That fourth mutation is the one that matters most, for what else it shows. On
+an empty claims population three of the other five assertions - the
+spurious-match assertion, the margin assertion and the naming assertion - PASS,
+vacuously, having examined nothing at all. The guard is the only thing between
+this file and a check that reports success without running, and it has now been
+watched to fail rather than assumed to work.
+
+### The seed length
+
+From `node scripts/calibrate-harvest-seed.mjs`:
+
+```
+document fixtures: 10, unrelated pairs: 45
+floor (THRESHOLDS.minClaimChars): 16
+L=13  emitted mean 26.6 max 241  |  above floor mean 2.0 max 15
+L=16  emitted mean 7.7 max 66  |  above floor mean 2.2 max 19
+L=20  emitted mean 1.2 max 10  |  above floor mean 1.2 max 9
+L=21  emitted mean 0.9 max 5  |  above floor mean 0.9 max 5
+L=22  emitted mean 0.7 max 4  |  above floor mean 0.7 max 4
+L=23  emitted mean 0.5 max 3  |  above floor mean 0.5 max 3
+L=24  emitted mean 0.4 max 2  |  above floor mean 0.4 max 2
+L=25  emitted mean 0.3 max 2  |  above floor mean 0.3 max 2
+L=30  emitted mean 0.0 max 1  |  above floor mean 0.0 max 1
+```
+
+The rule was stated in the script before the sweep was run: the smallest L in
+20..25 whose MEAN count of emitted above-floor spans per unrelated pair is
+below 1.0. The walk it took: **L=20 was rejected at 1.2**, which misses the
+threshold by 0.2 and is the value spec 8.2's band names first, so a reader
+skimming the plan would have guessed it; **L=21 qualifies at 0.9** and is the
+value shipped. The max matters as much as the mean and is recorded beside it:
+L=20's worst pair emits 9 above-floor spans, L=21's worst emits 5.
+
+Both columns are reported because they answer different questions. `emitted` is
+every maximal common span `commonSpans` would emit from an unrelated pair;
+`above floor` is the subset at or above `minClaimChars`, which is what harvest
+would actually propose. Above L=20 they coincide, because extension past a
+20-character seed almost always clears a 16-character floor.
+
+Spec 8.2 quotes 24.8 / 5.0 / 0.9 / 0.2 at L = 13 / 16 / 20 / 25 from a script
+that was never committed and is in no git history; those figures are superseded
+by this table, and the two measures are not the same quantity - 8.2 describes
+L-gram seed matches, this counts what `commonSpans` emits after extension,
+word-boundary snapping, whitespace collapse and containment dedupe, which is
+what an author actually reviews. That wording discrepancy in 8.2 is recorded
+here rather than edited away.
+
+The script's `spansOf` WAS a REPLICA of the emit rules `src/harvest/spans.ts`
+now ships, written in Task 2 because `commonSpans` did not exist until Task 5.
+Task 5 deleted the replica and imported the shipped function.
+
+**Re-run 2026-09-09 against the shipped `commonSpans`, and every cell of the
+table above reproduces exactly** - as do the 32 distinct above-floor spans at
+L=21 and the 43 at L=20, span for span and pair count for pair count. So
+`harvestSeedChars = 21` is calibrated against the code that runs rather than
+against a replica of it, which is the whole reason the swap was scheduled.
+
+The replica's one known divergence risk, flagged by Task 2's reviewer, was
+`seedIndex` keeping only the FIRST occurrence of each L-gram. It was carried
+into the shipped function DELIBERATELY, and what that costs was measured on
+the same 45 pairs rather than argued: indexing every occurrence and taking
+the longest extension reproduces the counts above EXACTLY at L = 20, 21, 22,
+23, 24, 25 and 30 - the whole 20..25 band the selection rule ranges over - and
+differs only far below it, at L=13 (above-floor mean 2.2 against 2.0, max 20
+against 15) and L=16 (2.3 against 2.2, max 21 against 19), where indexing every
+occurrence finds slightly MORE. So the choice cannot move `harvestSeedChars`,
+and its exposure is a MISS at seed lengths this tool does not ship, never a
+false proposal. `src/harvest/spans.ts` carries that measurement in the
+docstring of the function the choice is made in. Note that it is NOT true in
+general that the containment drop recovers what a later occurrence would add -
+the L=13 row is that claim measured false.
+
+### Every cross-fixture common span, hand-classified
+
+`node scripts/calibrate-harvest-seed.mjs | sed -n '/hand-classification
+population/,$p'` printed **32 distinct above-floor spans at L=21** (43 at
+L=20). Every one is classified below. Spans are shown as the script prints
+them - normalized, so lower-case.
+
+| span | pairs | class | why |
+| --- | --- | --- | --- |
+| `skip to main content` | 6 | boilerplate | The accessibility skip link. On the page because of how it is built. |
+| `accessibility statement` | 3 | boilerplate | Footer legal/accessibility link on ap, bls and gov.uk. |
+| `terms of use privacy policy` | 3 | boilerplate | Two adjacent footer legal links, on ap, openai and theverge. |
+| `relationship between` | 2 | chance | Ordinary English. Body prose on both sides of both pairs. |
+| `all rights reserved.` | 1 | boilerplate | Copyright line: "copyright 2026 the associated press" / "(c) 2026 vm publishing llc". |
+| `are included in the` | 1 | chance | Ordinary English; body prose on both sides (mdn, bls). |
+| `artificial intelligence` | 1 | chance | Furniture on one side only (ap's "tech sections" nav) and article prose on the other (openai). One-sided, so recorded as chance. |
+| `associated with the` | 1 | chance | Ordinary English. |
+| `careers advertise with us` | 1 | boilerplate | Footer nav, ap and mdn - two unrelated sites with the same two link labels adjacent. |
+| `circular references` | 1 | chance | Body prose on both sides (mdn on content negotiation, python docs on json encoding). |
+| `difference between` | 1 | chance | Ordinary English. |
+| `electric toothbrush` | 1 | chance | Body prose on both sides; two unrelated tech sites happened to run a toothbrush story. |
+| `for more information` | 1 | chance | Body prose on both sides (python docs, bls). |
+| `freedom of information` | 1 | boilerplate | Footer link on bls ("freedom of information act") and a nav category on gov.uk ("freedom of information releases"). Furniture on both sides. |
+| `further exploration` | 1 | chance | Ordinary English; body prose on both sides. |
+| `has been successfully` | 1 | chance | Ordinary English; body prose on both sides. |
+| `in addition to the` | 1 | chance | Ordinary English. |
+| `including information` | 1 | chance | Ordinary English; body prose on both sides. |
+| `is available under the` | 1 | boilerplate | The licence footer: Wikipedia's "text is available under the creative commons..." and gov.uk's "all content is available under the open government licence". |
+| `of the united states` | 1 | chance | Furniture on one side only (bls's "an official website of the united states government" banner) and article prose on the other (wikipedia). One-sided, so recorded as chance. |
+| `over the same period` | 1 | chance | Ordinary English; body prose on both sides. |
+| `personal information` | 1 | chance | Furniture on one side only (ap's "do not sell or share my personal information") and article prose on the other (openai on training-data filtering). One-sided, so recorded as chance. |
+| `polski português русский` | 1 | boilerplate | The language switcher, on blog.mozilla and wikipedia. The only non-ASCII span in the population. |
+| `report a problem with this` | 1 | boilerplate | Page-feedback link, mdn and gov.uk. |
+| `the relationship between` | 1 | chance | Ordinary English; the longer form of the 2-pair span above. |
+| `the wikimedia foundation` | 1 | chance | Furniture on one side only (wikipedia's footer trademark notice) and article prose on the other (theverge, on a unionization story). One-sided, so recorded as chance. |
+| `this means that the` | 1 | chance | Ordinary English. |
+| `this page was last` | 1 | boilerplate | The last-modified stamp: mdn's "this page was last modified on" and wikipedia's "this page was last edited on". |
+| `transcription of the` | 1 | chance | Body prose on both sides (wikipedia on diplomatic transcription, openai on audio transcription). |
+| `usually preferred since` | 1 | chance | Body prose on both sides; wikipedia and bls happen to share a four-word construction. |
+| `website privacy notice` | 1 | boilerplate | Mozilla's footer legal link, on both mozilla fixtures. |
+| `your privacy choices` | 1 | boilerplate | Consent/footer legal link, openai and theverge. |
+
+**12 boilerplate, 20 chance.** The rule counted every emitted span, boilerplate
+included, because all of it is noise an author must read. That is load-bearing:
+with the 12 boilerplate rows excluded from the above-floor count, L=20's mean
+falls to 0.7 and L=21's to 0.5, so the rule would pick 20. The split says what
+the noise *is*; it is not an input to the rule.
+
+That variant is not a committed script and is not the shipped measurement. It
+is `scripts/calibrate-harvest-seed.mjs` with the **11 ASCII spans above, plus
+any span containing non-ASCII characters**, removed from the `above` filter,
+run once to answer this question. Its above-floor means are
+1.5 / 1.7 / 0.7 / 0.5 / 0.3 / 0.2 / 0.1 / 0.1 / 0.0 at
+L = 13 / 16 / 20 / 21 / 22 / 23 / 24 / 25 / 30.
+
+The non-ASCII clause is NOT the same as "the 12 rows of the table above", and
+the difference is visible in that list. The table is taken at L=21, where the
+only non-ASCII span is the 24-character language switcher; at L=13 and L=16 the
+population also holds `español français` (1 pair, 16 characters), a second
+switcher fragment the table therefore never lists. Removing only the table's 12
+rows gives **1.8 at L=16** instead of 1.7, and reproduces the other eight
+values exactly. The rule as stated above is the one that produces all nine.
+
+The `boilerplate` rows are what filter 2 (cross-source frequency) exists for,
+and none of them earns a bundled `boilerplate` rule: a bundled rule needs a
+`lastConfirmed` date from a live observation, and a fixture is not one.
+`src/rules/boilerplate.ts` ships empty.
+
+Four spans are furniture on ONE side and article prose on the other -
+`artificial intelligence`, `of the united states`, `personal information`,
+`the wikimedia foundation`. They are recorded as `chance`, the conservative
+direction. The classification cannot move the number - it is not an input to
+the rule, as above - but a chance span filed as boilerplate would understate
+how much of the residual noise is ordinary English, which is the thing a reader
+of this table is trying to judge; and a span that is prose on one side is not
+something a boilerplate rule can be trusted to remove.
+
+One near-exception is worth naming, because it is visible in the table and a
+reader will otherwise think it contradicts the next section. `blog.mozilla.org`
+and `developer.mozilla.org` are different HOSTS, so the corpus still holds no
+host-same pair; they are the same ORGANIZATION, and they share its furniture -
+`website privacy notice` is emitted from exactly that pair. It is the closest
+this corpus comes to the same-outlet population, and one pair is not a
+population.
+
+### What was NOT done
+
+The corpus has no host-same pairs at all - no two document fixtures come from
+the same site - so the "same outlet, different page" population, which is where
+an outlet's own recurring furniture would show up, is empty here and both
+numbers are silent about it. That is the gap the author's own `boilerplate`
+rules exist to cover, and it is disclosed rather than closed.
+
+Filter 2's reprint cost was not measured either, and it is a second and
+separate gap from the one above - that one is in filter 3's domain, this one in
+filter 2's. Spec 8.2 filter 2 said "Plan 2's calibration counts how many real
+claims appear in two cited sources of the same draft, so the reprint cost is a
+number, not a guess". No such count was made. It needs readable reads of these
+four drafts' OWN cited sources; `fixtures/` holds no readable read of any of
+them, and only live network reads could supply one - a network dependency
+inside the task whose whole purpose is that its numbers reproduce from frozen
+fixtures. So how many REAL claims the cross-source frequency filter would eat
+is a guess here, disclosed rather than closed, and spec 8.2's sentence is
+amended in Task 10 to say so instead of promising a number.
+
+No claim was dropped, reworded or reclassified to make a number come out. If
+the ceiling had reached the floor, the plan says to stop and report.

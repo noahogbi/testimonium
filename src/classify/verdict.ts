@@ -83,7 +83,8 @@ export function isBlocked(
 /**
  * Readable: no veto fires AND the prose clears the floor (spec 6.6). THE ONE
  * definition of "we read this document". readSource escalates until a read is
- * readable, reachability() reports a URL readable iff some read is, and
+ * readable, scanSources() (harvest) keeps only readable reads as candidates,
+ * reachability() reports a URL readable iff some read is, and
  * check() prefers a readable read over a larger vetoed one. It is NOT
  * `!isBlocked`: 22 of the 25 challenge fixtures and every paywall stub pass
  * all five vetoes and fail only the floor (docs/calibration-2026-09.md, "Read

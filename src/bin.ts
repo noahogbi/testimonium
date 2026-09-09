@@ -1,13 +1,16 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { check } from "./check.js";
 import { reachability } from "./reachability.js";
+import { harvest } from "./harvest.js";
 import { parseGfmFootnotes } from "./adapters/gfm-footnotes.js";
 import { joinClaims, parseClaimsFile } from "./io/claims.js";
+import { buildDraft, draftInTheWay, writeDraftFile } from "./io/draft.js";
 import { writeEvidenceFile, type CitationResult } from "./io/evidence.js";
 import { loadRules, type RuleSet } from "./rules/load.js";
+import { VERSION } from "./version.js";
 
 export interface RunTally {
   readonly unsupported: number;
@@ -49,6 +52,13 @@ const KNOWN_FLAGS = new Set([
   "--explain-fetch",
 ]);
 
+/** Exported so a test can assert it names every command this build has. A
+ *  command the usage line does not name is a command nobody finds. */
+export const USAGE =
+  "usage: testimonium <check|harvest|reachability> <doc.md> " +
+  "[--json] [--rules <path>] " +
+  "(check only: [--fail-on-unreachable] [--allow-unclaimed] [--explain-fetch])";
+
 /**
  * The first `--flag` in argv this build does not recognize, or null when
  * every one is known.
@@ -66,12 +76,36 @@ export function validateFlags(argv: readonly string[]): string | null {
   return null;
 }
 
-function claimsPathFor(doc: string): string {
+// Exported for the test suite, the way validateFlags is - not for consumers:
+// `./dist/bin.js` is not a subpath export and test/exports.test.ts pins that.
+export function claimsPathFor(doc: string): string {
   return join(dirname(doc), `${basename(doc).replace(/\.[^.]+$/, "")}.claims.json`);
 }
 
-function evidencePathFor(doc: string): string {
+export function evidencePathFor(doc: string): string {
   return join(dirname(doc), `${basename(doc).replace(/\.[^.]+$/, "")}.evidence.json`);
+}
+
+/** `<doc>.claims.draft.json` - harvest's output, and never the claims file
+ *  (spec 8.2 step 6). The author edits its proposals into the claims file
+ *  and deletes it. */
+export function draftPathFor(doc: string): string {
+  return join(dirname(doc), `${basename(doc).replace(/\.[^.]+$/, "")}.claims.draft.json`);
+}
+
+/** The one-line summary printed after harvest writes a draft to disk.
+ *  Exported so a test can pin its grammar - singular "proposal" at exactly
+ *  one - and its qualifier: `readableUrlCount` is `report.proposals.length`,
+ *  one entry per READABLE source whether or not it proposed anything, not
+ *  the number of keys in the draft `buildDraft` just wrote. `buildDraft`
+ *  omits a zero-claim entry, so the two counts differ whenever any readable
+ *  source proposed nothing, and "URLs" alone would read as a count of the
+ *  file the author is about to open, which it is not. */
+export function harvestSummaryLine(draftPath: string, totalProposals: number, readableUrlCount: number): string {
+  return (
+    `\nwrote ${draftPath} - ${totalProposals} proposal${totalProposals === 1 ? "" : "s"} ` +
+    `across ${readableUrlCount} readable URLs`
+  );
 }
 
 async function main(argv: string[]): Promise<number> {
@@ -83,11 +117,7 @@ async function main(argv: string[]): Promise<number> {
   const [command, doc] = argv;
   const flags = new Set(argv.filter((a) => a.startsWith("--")));
   if (!command || !doc) {
-    console.error(
-      "usage: testimonium <check|reachability> <doc.md> " +
-        "[--json] [--rules <path>] " +
-        "(check only: [--fail-on-unreachable] [--allow-unclaimed] [--explain-fetch])",
-    );
+    console.error(USAGE);
     return 2;
   }
 
@@ -100,8 +130,8 @@ async function main(argv: string[]): Promise<number> {
   }
 
   // --rules <path>: additive-only local override (Task 15). Loaded once, up
-  // front - before the command dispatch below - so it applies to BOTH
-  // `check` and `reachability`, and so a bad local file is reported clearly
+  // front - before the command dispatch below - so it applies to all three
+  // commands, and so a bad local file is reported clearly
   // rather than exploding mid-run on whichever citation happens to trip it
   // first. `reachability` walks the same ladder `check` does; a preflight
   // that ignores a local rule the gate honors is worse than no preflight.
@@ -134,6 +164,115 @@ async function main(argv: string[]): Promise<number> {
       console.log(`\n${r.readable.length}/${urls.length} readable (${(r.rate * 100).toFixed(1)}%)`);
       console.log("This is YOUR corpus's number. Do not compare it to anyone else's.");
     }
+    return 0;
+  }
+
+  if (command === "harvest") {
+    // The existing claims file, when there is one. A document with none is
+    // the ordinary case - it is what harvest exists to help write. A file
+    // that EXISTS and the loader refuses is exit 2 with the loader's own
+    // message and no lenient variant: uniform refusal means harvest does not
+    // get a parser `check` does not have. The README's migration note is
+    // written from this: fix the claims `check` names first, then harvest.
+    const claimsPath = claimsPathFor(doc);
+    let claims;
+    if (existsSync(claimsPath)) {
+      try {
+        claims = parseClaimsFile(readFileSync(claimsPath, "utf8"));
+      } catch (e) {
+        console.error(`cannot read claims: ${e instanceof Error ? e.message : String(e)}`);
+        return 2;
+      }
+    }
+
+    const draftPath = draftPathFor(doc);
+    const asJson = flags.has("--json");
+    // Checked BEFORE any fetching: refusing after twenty requests wastes the
+    // author's time and the hosts'. Under --json no draft is read or written
+    // on disk, so there is nothing to overwrite and the rule does not apply.
+    if (!asJson) {
+      const blocked = draftInTheWay(draftPath);
+      if (blocked) {
+        console.error(blocked);
+        return 2;
+      }
+    }
+
+    const report = await harvest(document, { rules, ...(claims ? { claims } : {}) });
+
+    // Under --json, stdout carries the draft and NOTHING else, so
+    // `harvest doc.md --json > draft.json` produces a file `jq` and the
+    // author's editor can both read. The per-URL report is still written -
+    // she needs to know what each filter took - on stderr, where it does not
+    // corrupt the document. (`check --json` mixes the two on stdout; that
+    // inconsistency is plan 1's, and it is left where it is rather than
+    // widened to a third command. Fable F6.)
+    const say = asJson ? console.error : console.log;
+
+    for (const p of report.proposals) {
+      say(
+        `  ${p.url} - ${p.claims.length} proposed via ${p.rungs.join(", ")} ` +
+          `(dropped: ${p.drops.floor} below the floor, ${p.drops.frequency} also in another cited source, ` +
+          `${p.drops.rules} by a boilerplate rule, ${p.drops.claimed} already claimed)`,
+      );
+      if (p.redirectedTo !== null) {
+        say(
+          `        REDIRECTED to ${p.redirectedTo} - a different path from the one you cited. ` +
+            "Read these proposals against the page you actually got.",
+        );
+      }
+      // Each `bugs` line is printed as it comes, with NO blanket `BUG:`
+      // prefix: fix round 1 found that this field carries two distinguishable
+      // causes, a genuine map-integrity defect and a benign norm()-boundary
+      // drop that is explicitly labelled "NOT A BUG" in its own text (see
+      // src/harvest.ts's HarvestProposal.bugs doc comment). A blanket prefix
+      // would relabel the benign ones as defects and bury the real ones among
+      // them.
+      for (const bug of p.bugs) say(`        ${bug}`);
+    }
+    for (const u of report.unreachable) {
+      say(`  ${u.url} - UNREADABLE, nothing proposed (tried: ${u.rungsAttempted.join(", ")})`);
+    }
+    for (const s of report.skipped) {
+      say(`  ${s.url} - not applicable, skipped: ${s.reason}`);
+    }
+    if (report.frequencyVacuous) {
+      say(
+        "Fewer than two of your sources were readable, so the cross-source boilerplate filter " +
+          "had nothing to compare against and dropped nothing.",
+      );
+    }
+
+    // Every readable URL is handed over, including the ones that proposed
+    // nothing; `buildDraft` is the single place that decides an empty entry
+    // is omitted rather than written as `[]`, which is what keeps the draft a
+    // file `parseClaimsFile` accepts on rename (Fable F1). The report line
+    // above already told the author which URLs proposed 0.
+    const draft = buildDraft({
+      entries: report.proposals.map((p) => ({ url: p.url, claims: p.claims })),
+      version: VERSION,
+      date: new Date().toISOString().slice(0, 10),
+    });
+
+    // --json prints instead of writing, the convention `reachability --json`
+    // follows - and, like it, stdout is pure JSON: the report went to stderr
+    // above. `check --json` prints IN ADDITION on stdout, and that
+    // inconsistency is plan 1's, recorded in spec 8.2 rather than resolved
+    // here.
+    if (asJson) {
+      console.log(JSON.stringify(draft, null, 2));
+    } else {
+      writeDraftFile(draftPath, draft);
+      const total = report.proposals.reduce((n, p) => n + p.claims.length, 0);
+      console.log(harvestSummaryLine(draftPath, total, report.proposals.length));
+      console.log(
+        "Every claim in it is unconfirmed: harvest proposes what you COPIED, which is not always " +
+          "what you CLAIM. Read each one against its source, move what you mean into the claims " +
+          "file, and delete the draft.",
+      );
+    }
+    // 0 whether or not anything was proposed. Harvest has no verdict to fail
+    // on, so it has no exit 1 (spec 8.2, "Exit codes").
     return 0;
   }
 
