@@ -526,8 +526,8 @@ measured three times — not because anything was tuned to make it pass.
 Four real claims files, frozen into `fixtures/claims/` so these numbers
 reproduce without the origin repo. Three were copied from
 `<origin repo path withheld>`'s WORKING TREE and are uncommitted there, so
-their provenance is an mtime and nothing stronger; `source-c-claims.json` is not
-on that repo's `master` at all and was taken from
+their provenance is an mtime and a size and nothing stronger;
+`source-c-claims.json` is not on that repo's `master` at all and was taken from
 `<pinned origin commit withheld>`, a commit on its `source-c-longform`
 branch. `fixtures/claims/provenance.json` records all four.
 
@@ -537,6 +537,14 @@ That commit was the branch tip on 2026-09-08, when this task was written. On
 ancestor of it. The file's blob is `e03e28ff6bf3727810ce52b9fdb05898a13e6171`
 at both, so the freeze is unaffected - but the commit, not the branch, is the
 provenance, and the record says so rather than repeating a tip that has moved.
+
+The three working-tree rows carry a `bytes` field - 5,684 / 1,839 / 3,165,
+verified equal on the origin file and on the frozen copy - so a reader can
+detect divergence from the origin the way `source-c-claims.json`'s blob hash
+already lets them. It is the size ON DISK at freeze time: `source-a` and
+`source-b` arrived CRLF and git stores them LF, so `git cat-file -s` reports
+5,591 and 1,789 for those two. A size is weaker evidence than a commit, and
+this does not change that.
 
 From `npm run build && node scripts/calibrate-claim-floor.mjs`:
 
@@ -596,7 +604,16 @@ fail before they were trusted: at `minClaimChars: 12` the spurious-match
 assertion fails naming `'SAUDI ARABIA'` and the margin assertion fails with
 `expected 12 to be less than or equal to 9`; at `60` the cost assertion fails
 with `expected 0.596... to be less than 0.15`; at `harvestSeedChars: 15` the
-seed assertion fails with `expected 15 to be greater than or equal to 16`.
+seed assertion fails with `expected 15 to be greater than or equal to 16`; and
+with the four `*-claims.json` files moved out of `fixtures/claims/` the vacuity
+guard fails with `expected 0 to be greater than or equal to 200`.
+
+That fourth mutation is the one that matters most, for what else it shows. On
+an empty claims population three of the other five assertions - the
+spurious-match assertion, the margin assertion and the naming assertion - PASS,
+vacuously, having examined nothing at all. The guard is the only thing between
+this file and a check that reports success without running, and it has now been
+watched to fail rather than assumed to work.
 
 ### The seed length
 
@@ -685,7 +702,17 @@ them - normalized, so lower-case.
 | `website privacy notice` | 1 | boilerplate | Mozilla's footer legal link, on both mozilla fixtures. |
 | `your privacy choices` | 1 | boilerplate | Consent/footer legal link, openai and theverge. |
 
-**12 boilerplate, 20 chance.** Only the `chance` rows bear on either number.
+**12 boilerplate, 20 chance.** The rule counted every emitted span, boilerplate
+included, because all of it is noise an author must read. That is load-bearing:
+with the 12 boilerplate rows excluded from the above-floor count, L=20's mean
+falls to 0.7 and L=21's to 0.5, so the rule would pick 20. The split says what
+the noise *is*; it is not an input to the rule. (That variant is not a
+committed script and is not the shipped measurement: it is
+`scripts/calibrate-harvest-seed.mjs` with the 12 spans above removed from the
+`above` filter, run once to answer this question. Its above-floor means are
+1.5 / 1.7 / 0.7 / 0.5 / 0.3 / 0.2 / 0.1 / 0.1 / 0.0 at
+L = 13 / 16 / 20 / 21 / 22 / 23 / 24 / 25 / 30.)
+
 The `boilerplate` rows are what filter 2 (cross-source frequency) exists for,
 and none of them earns a bundled `boilerplate` rule: a bundled rule needs a
 `lastConfirmed` date from a live observation, and a fixture is not one.
@@ -694,9 +721,11 @@ and none of them earns a bundled `boilerplate` rule: a bundled rule needs a
 Four spans are furniture on ONE side and article prose on the other -
 `artificial intelligence`, `of the united states`, `personal information`,
 `the wikimedia foundation`. They are recorded as `chance`, the conservative
-direction: a chance span counted as boilerplate would flatter the seed length,
-and a span that is prose on one side is not something a boilerplate rule can be
-trusted to remove.
+direction. The classification cannot move the number - it is not an input to
+the rule, as above - but a chance span filed as boilerplate would understate
+how much of the residual noise is ordinary English, which is the thing a reader
+of this table is trying to judge; and a span that is prose on one side is not
+something a boilerplate rule can be trusted to remove.
 
 One near-exception is worth naming, because it is visible in the table and a
 reader will otherwise think it contradicts the next section. `blog.mozilla.org`

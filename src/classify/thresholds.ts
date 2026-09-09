@@ -113,8 +113,11 @@ export const THRESHOLDS = {
    *  `norm(claim).length`. REFUSED, not warned about, at all three entries -
    *  the claims-file loader, `check()`'s front door and harvest's first
    *  filter - with one message naming the claim, its length, the floor and
-   *  the remedy (spec 7.3; 13 Q3). A warning that a claim proves nothing
-   *  leaves it proving nothing while the run still passes.
+   *  the remedy (spec 7.3; 13 Q3). Enforced from Task 3 (the loader and
+   *  `check()`) and Task 5 (harvest); today this constant has no `src/`
+   *  consumer at all, only `test/classify/claim-floor.test.ts`. A warning that
+   *  a claim proves nothing leaves it proving nothing while the run still
+   *  passes.
    *
    *  It does not change a verdict. It refuses an input before there is a
    *  verdict to change, which is why it is uniform across the three doors: a
@@ -160,8 +163,12 @@ export const THRESHOLDS = {
    *  above the floor: mean 2.0 at L=13, 2.2 at 16, 1.2 at 20, 0.9 at 21, 0.3
    *  at 25. L=20 does not satisfy the rule and L=21 does. The longest
    *  cross-fixture span at every L swept is 27 normalized characters, "terms
-   *  of use privacy policy" - boilerplate, which is filter 2's job, not this
-   *  number's. */
+   *  of use privacy policy" - boilerplate, and COUNTED, because every emitted
+   *  span is noise an author has to read and reject. That is load-bearing:
+   *  with the 12 spans the calibration doc classifies as boilerplate excluded
+   *  from the above-floor count, L=20's mean is 0.7 and the rule would pick 20
+   *  instead. Suppressing boilerplate from what harvest PROPOSES is filter 2's
+   *  job; it is not a filter on what this rule counted. */
   harvestSeedChars: 21,
 } as const;
 
