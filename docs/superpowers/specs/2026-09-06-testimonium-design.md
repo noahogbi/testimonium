@@ -1013,19 +1013,33 @@ what is readable, so a new user gets their own number before investing in a
 claims file at all. This is the antidote to the 96.8% figure being mistaken for a
 general property of the web.
 
-**Archive on success** belongs with `recheck`, not with `check`. When a source
-reads cleanly, push a snapshot to web.archive.org and record the URL. This is not
-a nicety: it is what makes `recheck` interpretable. On a failed re-check, run the
-same pipeline over the archived copy - if the archive still matches, the source
-changed (real drift); if the archive also misses, the extractor changed (a
-`toText` regression, a site redesign). Without stored bytes, every drift alarm is
-confounded with the pipeline's own evolution, and the fetch layer's history
-guarantees it will evolve. Archiving must never fail a run.
+**Archive on success** is what makes `recheck` interpretable. When a source reads
+cleanly, store the bytes that were read. On a failed re-check, run the same
+pipeline over the stored copy - if the live bytes and the stored bytes now judge
+differently, the source changed (real drift); if they agree with each other but
+disagree with what was recorded, the extractor changed (a `toText` regression).
+Without stored bytes, every drift alarm is confounded with the pipeline's own
+evolution, and the fetch layer's history guarantees it will evolve. Archiving must
+never fail a run.
 
-It sits in `check`'s hot path only if it is free, and it is not: web.archive.org's
-save-page-now is authenticated, rate-limited well below "every source on every
-green run," and asynchronous - a job to poll, not a call to make. Its cost is
-carried by the plan that needs it.
+**Amended 2026-09-09, plan 3.** This paragraph said the archive was a snapshot
+pushed to web.archive.org, and that archiving "belongs with `recheck`, not with
+`check`" because "it sits in `check`'s hot path only if it is free, and it is
+not." Both halves are superseded, and the second followed from the first: the cost
+that kept archiving out of `check` was entirely web.archive.org's - authenticated,
+rate-limited well below one call per source per run, and asynchronous. Section 8.3
+replaces the remote snapshot with bytes stored locally and content-addressed,
+which costs a gzip and a file write, so the reason to keep it out of `check` is
+gone and running `check` writes the baseline on `supported` - through the CLI,
+not from inside `check()`, which section 8.3 keeps storage-agnostic. The change
+is not a
+convenience: reading a control arm back through web.archive.org would introduce
+that service's own transformations - URL rewriting, an injected banner, a
+different render - into the one comparison whose entire purpose is to isolate
+changes in *this* pipeline. The remote snapshot confounded what the control arm
+exists to de-confound. What is lost is third-party durability, a credibility
+property rather than a debugging one, and not what this section ever claimed the
+archive was for.
 
 ### 8.1 This spec is three implementation plans, not one
 
@@ -1038,7 +1052,7 @@ them.
 | 1. Core | TS port of the fetch ladder, header/finalUrl capture, pure classifier, verdict reducer, claims and evidence files, one adapter, `check`, `reachability` | Q1, Q2 - both resolved below |
 | 1.2 Reader | `isReadable`; one `readSource` loop under `check` and `reachability`, with section 6.6's escalation and aggregation rules and the tests that pin them; the `foldWithMap` offset-map repair; U+00AD deleted by `norm`; the corrections the header lists | Nothing. Lands before plan 2 |
 | 2. Harvest | `harvest` per section 8.2: calibration of `minClaimChars` and `harvestSeedChars` first, then `Document.prose`, `commonSpans`, the four filters, the draft file | Plan 1.2. Q3, Q5 - both resolved below |
-| 3. Drift | `recheck`, archive-on-success, archive-as-control-arm | Q4 |
+| 3. Drift | `recheck` per section 8.3: the archive `check` writes on `supported`, the replay fetcher, the three-value comparison, archive-as-control-arm | Plan 2. Q4 - resolved below |
 
 `reachability` rides nearly free on plan 1's fetch layer, which is why it stays
 there rather than waiting: it is the command that stops a new user misreading
@@ -1054,11 +1068,19 @@ build on; neither is a fourth command.
 <doc>.claims.json        authored, reviewed with the piece
 <doc>.claims.draft.json  written by harvest; the author folds it into the claims file
 <doc>.evidence.json      written by check and recheck
+<doc>.archive/           written by check on `supported`; the bytes recheck controls against
 ```
 
-The first and last are committed. The draft is transient: the author edits its
-proposals into the claims file and deletes it. A re-check's
-output is then a **diff** - which `urtext` can review, closing the family loop.
+The claims file, the evidence file and the archive are committed. The draft is
+transient: the author edits its proposals into the claims file and deletes it. A
+re-check's output is then a **diff** - which `urtext` can review, closing the
+family loop.
+
+The archive is committed for the same reason the evidence file is: a control arm
+that only exists on the machine that wrote it cannot control anything on a fresh
+clone or in CI, and `recheck` there would degrade to comparing a live answer
+against a number in a file - the confounded alarm this section says is worthless.
+Section 8.3 gives its layout and its cost.
 
 ### 8.2 Harvest
 
@@ -1233,6 +1255,127 @@ number to explain away.
 
 ---
 
+### 8.3 Recheck, and the archive as a control arm
+
+Added 2026-09-09. This section, not the paragraph in section 8, is the authority
+for plan 3, and it resolves Q4. Plan 3 is blocked on nothing: plans 1, 1.1, 1.2
+and 2 have all shipped.
+
+**What it is.** `recheck <doc.md>` re-runs each claim against the live source
+*and* against the bytes stored when that source last read `supported`, and
+reports what changed. It is the instrument, not a policy: no cron, no rot score,
+no staleness badge, because the drift rate is unmeasured (section 12).
+
+**Why an archive at all.** The fetch layer and the extractor evolve - that is
+this project's whole history - so a bare "the verdict changed since last time"
+cannot distinguish a source that was edited from an extractor that was improved.
+The archive supplies the control: the same code, run over the same bytes, must
+still reach the same verdict. Where it does not, the change is ours.
+
+**The comparison is three values, not two.** For each cited URL:
+
+- **L** - `check()` over the live source, with the current claims and the
+  current code.
+- **A** - `check()` over the archived bytes, with the current claims and the
+  current code.
+- **R** - the verdict recorded in the archive at the time it was written.
+
+| L vs A | A vs R | Reported as | Exit |
+|---|---|---|---|
+| same | same | clean | 0 |
+| **differ** | - | **source drift** | **1** |
+| same | **differ** | **pipeline drift** | **2** |
+
+L against A is the primary signal and is stronger than comparing a live answer
+against a recorded one, because both sides run today's code over today's claims:
+the only variable left is the bytes. R is what makes the second row separable
+from the third.
+
+**`claimsHash` disambiguates the third row.** The archive records a hash of that
+URL's claims as they stood when it was written. If they have changed since, `A`
+and `R` may differ for that reason alone, and the report says so rather than
+accusing the extractor of a regression it did not commit.
+
+**Two outcomes carry no verdict at all, and neither fails a run.**
+
+- *Unreachable now.* The live read comes back `unreachable` while the archive
+  reads `supported`. This is **not** source drift. The page may be perfectly
+  intact behind a transient 500, a new wall, or a flaky network, and reporting it
+  as drift the author must fix would be a false accusation of a citation that is
+  probably still good - the error section 6 exists to prevent, arriving through a
+  different door. It is listed, never failed, exactly as `unreachable` is under
+  `check`.
+- *No baseline.* The URL has never read `supported`, so nothing was ever stored
+  and there is nothing to control against. `recheck` reports the live verdict for
+  information and exits 0 even when that verdict is `unsupported`. `check` is the
+  gate; `recheck` detects change. A `recheck` that also gated would let an author
+  skip `check` and receive a worse version of it.
+
+**Archive on success: the core emits, the CLI persists.** Running `check` writes
+the baseline, but `check()` does not write it. Section 11's first coupling makes
+the core storage-agnostic - `(document, claims) -> verdicts + excerpts`, with the
+CLI persisting to files - and `writeEvidenceFile` is already called from
+`bin.ts`, not from `check()`. The archive follows the same seam: `CheckOptions`
+gains an optional sink, called only when a URL reaches `supported`, carrying that
+URL's reads and the verdict they produced. `bin.ts` supplies a sink that writes;
+a programmatic caller that supplies none gets today's behaviour exactly. This
+keeps `check()` pure, keeps raw bodies off `CitationResult` - which section 7.4
+holds to what a reader may see - and avoids a second fetch to recover bytes the
+first one already had.
+
+**Every attempted read is archived, not the winning one.** The verdict is
+computed from a union across every non-vetoed read (section 6.6), and each read's
+veto is decided from its own headers (N1, N5), its `finalUrl` (N2) and its status
+(N4). Replaying one body could not reproduce the original `missed` set, and
+`recheck` would then report pipeline drift on every citation that took more than
+one rung - spuriously, and precisely on the cases the control arm exists to
+diagnose.
+
+`--no-archive` suppresses the write for a read-only invocation; `check` is a
+gate, and a gate must be runnable without side effects.
+
+**Layout**, beside the evidence file:
+
+```
+<doc>.archive/
+  index.json                  url -> what was seen and what it produced
+  blobs/<aa>/<hash>.gz        raw bodies, gzipped, content-addressed
+```
+
+`index.json` records, per URL: `archivedAt`, the verdict those bytes produced,
+`claimsHash`, and one entry per attempted read - `rung`, `status`, `headers`,
+`finalUrl`, and the blob's hash. The archive is **self-contained**: it holds both
+the bytes and the verdict they produced, so `recheck` never reconciles two files
+and the evidence file and the archive cannot drift apart and be compared as a
+mismatched pair. The evidence file keeps its own job - what was concluded, for a
+reader. The archive holds what was seen, for the tool.
+
+Content-addressing is what makes the cost bearable and the write idempotent: the
+`node` and `curl` rungs usually return byte-identical bodies and collapse to one
+blob, and re-running `check` against an unchanged source writes nothing new. The
+repository grows when a source genuinely changes, which is the event worth
+recording.
+
+**`recheck` runs `check()` twice.** Once with the default fetcher and once with a
+fetcher that replays the archive. `CheckOptions.fetcher` already exists for this
+(section 7.1), so no second judgement path is written, and the control arm is
+*provably* the same code as the live arm. That is not an economy: a control that
+ran through different code could not isolate a change in the code.
+
+**Exit codes.** `0` clean, or nothing to compare. `1` source drift - the author
+verifies the page and updates or removes the claim. `2` infrastructure failure,
+**and pipeline drift**. Pipeline drift is a regression in this tool, not a defect
+in the author's document, and failing their build for it would put the cost of
+our limitations onto them - the same error, in a different register, that the
+verdict ladder is built to refuse.
+
+**What the archive cannot tell you.** It detects *change*, never *correctness*. A
+source that was already wrong when it first read `supported` is archived wrong,
+and `recheck` will call it clean for as long as it stays wrong. The README says
+so in those words, beside the exposures section 8.2 discloses for harvest.
+
+---
+
 ## 9. What this does not do
 
 Carried from the origin spec's section 6, because it is already the right README
@@ -1393,12 +1536,21 @@ with their resolutions rather than deleted, so the reasoning survives.**
    claims" and "18 of 203" until then; 7.3 says why the population moved.
    Implemented in plan 2, whose calibration task re-derived the number before
    any code depended on it.
-4. **Archive failures.** web.archive.org's save-page-now is authenticated,
-   rate-limited well below one call per source per run, and asynchronous - a job
-   to poll rather than a request to make. Confirmed: it must never fail a run.
-   Open, and larger than draft 1 assumed: API key configuration, job polling,
-   queueing and backoff. Belongs to plan 3, which is why archive moved out of
-   `check`.
+4. ~~**Archive failures.**~~ **RESOLVED 2026-09-09: local bytes, content-addressed,
+   written by `check`.** The question asked how to survive web.archive.org's
+   authentication, its rate limit well below one call per source per run, its
+   asynchronous save-page-now, and the queueing and backoff those imply. None of
+   that is answered, because none of it is needed: the archive exists to be a
+   control arm, and for that job a remote snapshot is the wrong instrument. It
+   would carry web.archive.org's own transformations into the one comparison
+   built to isolate changes in this pipeline, and the bytes it returns are a
+   near-neighbour of what was actually judged rather than those bytes. Storing
+   them locally costs a gzip and a content-addressed file write, which is why
+   archiving also moves back into `check` (section 8.3) - the cost that kept it
+   out was the remote service's, not the archive's. "It must never fail a run"
+   stands and is now nearly free to honour. Third-party durability is given up
+   deliberately; it is a credibility property, and section 8 never claimed it.
+   Section 8.3 is the authority.
 5. ~~**Harvest boilerplate exclusion.**~~ **RESOLVED 2026-09-07: cross-source
    frequency, primary.** A span found in a readable read of any *other* cited
    source (other by `normalizeUrl`) is boilerplate; a URL's own reads never vote
