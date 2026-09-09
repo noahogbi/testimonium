@@ -107,6 +107,19 @@ export function parseGfmFootnotes(markdown: string): Document {
     n += 1;
     footnotes.push({ n, url: firstExternalUrl(body), label: body });
   }
+  // The document's own words (spec 8.2 step 1). Same `text`, same
+  // `DEFINITION`, same `blankFencedCode` the loop above used, so the two
+  // views of this document cannot disagree about what a footnote is.
+  // Definitions are removed rather than blanked line by line: DEFINITION
+  // already spans a definition's indented continuation lines, and it does
+  // not consume the trailing newline, so every line outside a definition
+  // keeps its position.
+  //
+  // Sharing the regex object is safe in both directions: String.replace with
+  // a /g regex resets lastIndex before and after, and matchAll iterates a
+  // clone and never touches it.
+  const prose = text.replace(DEFINITION, "");
+
   // `body` is the ORIGINAL markdown, line endings intact.
-  return { footnotes, body: markdown };
+  return { footnotes, body: markdown, prose };
 }
