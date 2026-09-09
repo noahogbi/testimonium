@@ -191,15 +191,19 @@ before you trust a green run to mean more than it does.
 These are not bugs. Each one follows directly from the design, and each one
 will eventually surprise a real user if it isn't said here first.
 
-- **A document extracting to fewer than ~4,500 characters of prose can never
-  read as `unsupported`.** Below that floor, a real document is
+- **No read below the ~4,500-character prose floor can itself carry an
+  accusation.** Below that floor, a real document is
   indistinguishable from a bot-challenge shell *by this instrument* - both
   are short - so the tool declines to accuse rather than guess, and a
   one-paragraph official notice whose claim phrase is genuinely missing
-  reports `unreachable` instead of a finding against your prose. The floor
-  bites on **accusation only**: a full match is checked *first* and is its
-  own proof of a read, so a short page whose claims are all present still
-  reports `supported`.
+  reads `unreachable` rather than a finding against your prose. That is a
+  property of the *read*, not of the citation: the ladder climbs on any
+  sub-floor read, so where a later rung returns a readable page the citation
+  is judged from that read and can still report `unsupported` with the claim
+  named - measured, a 302-character notice at `node` plus a readable page at
+  `curl`. The floor bites on **accusation only**: a full match is checked
+  *first* and is its own proof of a read, so a short unvetoed page whose
+  claims are all present still reports `supported`.
 - **A `supported` verdict therefore does not imply a ≥4,500-character
   document.** If you are integrating against the evidence file, do not read
   `supported` as "we retrieved the whole article" - a paywall stub or a
@@ -232,15 +236,18 @@ will eventually surprise a real user if it isn't said here first.
   reached indirectly, accepted for the same reason, and pinned as an
   ACCEPTED EXPOSURE in `test/check.test.ts`.
   The route is not specific to error chrome: any readable read reached after
-  a vetoed one is judged on its own, whatever document it is - a soft-404
-  landing page, the target of a redirect after removal, a mirror's home
-  page - because no signal the classifier gates on distinguishes the same
-  page at 200 from a different document at 200 (the classifier computes slug
-  overlap and the head markers and gates on neither; it also never compares
-  a read's `finalUrl` with the URL it was asked for, so a redirect away from
-  the citation is observable and, today, unobserved - a gate left unbuilt,
-  not a limit of the signals). A wall on the first rung leaves no trace on
-  such a result beyond `rungsAttempted`; `firedRule` is the winning read's.
+  a vetoed or sub-floor one is judged on its own, whatever document it is -
+  a soft-404 landing page, the target of a redirect after removal, a
+  mirror's home page - because no signal the classifier gates on
+  distinguishes the same page at 200 from a different document at 200 (the
+  classifier computes slug overlap and the head markers and gates on
+  neither; it also never compares a read's `finalUrl` with the URL it was
+  asked for, so a redirect away from the citation is observable and, today,
+  unobserved - a gate left unbuilt, not a limit of the signals). A vetoed
+  wall on the first rung leaves no trace on such a result beyond
+  `rungsAttempted`; a sub-floor read leaves one, since its matches still
+  enter the union and drop a claim from `missed`. `firedRule` is the winning
+  read's.
 - **The same false accusation is reachable a second way, and that route has
   no fixture at all.** The signature list only vetoes a *short* body: above
   `THRESHOLDS.maxChallengeChars` (800 extracted characters) it stops firing,
