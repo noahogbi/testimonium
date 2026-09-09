@@ -12,6 +12,15 @@ hyphen in 7.3; corrections to 5.3, 8, 8.1 and 14, which had gone false; Q3 and Q
 resolved. Authorised by `docs/superpowers/plans/2026-09-07-plan-1-2-reader.md`,
 which declares the amendment in its own header. Plan 1.2 implements 6.6 and the
 corrections; plan 2 implements 7.3's floor and 8.2.
+**Amended again:** 2026-09-09, twice, both for plan 3. First, new section 8.3
+(`recheck` and the archive as a control arm), the archive paragraph in 8
+superseded, and Q4 resolved. Second, the same day and before any of it was built,
+Fable's review of 8.3 returned APPROVE WITH CORRECTIONS: 8.3's decision table is
+deleted and replaced by a decision procedure, its `CheckOptions` sink is withdrawn
+for a CLI-side recording fetcher, the PDF ruling and the archive's on-disk format
+are pinned, and 6.2, 6.3, 8, 8.1 and Q4 take the corrections that follow from
+those. Plan 3 implements 8.3 as amended, including the README sentence 8.3 now
+requires rather than asserts.
 **Language:** TypeScript, Node >= 20, npm.
 **Sibling to:** `urtext`. Not a subcommand of it. See section 3.
 
@@ -382,6 +391,12 @@ VETO - overrides everything, including P1
       pairs returned zero solutions with that fixture and 249 without it.
       Body shape cannot see what the status line says plainly.
 
+      Added 2026-09-09: the deferred half is now discharged too. Section
+      8.3 gives recheck its own category for a gone document - "gone since
+      <archivedAt>", reported apart from transient unreachability and
+      failing a run only under --fail-on-gone - so "information recheck
+      will want" names a shipped requirement rather than an intention.
+
   N5  The body is not text at all. Two independent triggers, either one
       sufficient:
         (a) the response `content-type` falls outside the accepted set: any
@@ -615,7 +630,18 @@ where a real document sits under an error status - a misconfigured SPA, a
 mis-routed CMS - are then handled by the same rule as everything else. **One
 caveat to carry into implementation:** a 404 is the one status that distinguishes
 "this document is gone" from "this document was read," which is information
-`recheck` will want even though `check` does not act on it.
+`recheck` will want even though `check` does not act on it. (`check` does act on
+it now: this sentence is draft 2's, kept because it is where the caveat was first
+recorded, and N4 in 6.2 is what became of its first half.)
+
+*Discharged 2026-09-09.* Section 8.3 makes the second half true rather than
+aspirational: a live read vetoed by N4 against a `supported` baseline is reported
+as its own category, "gone since `<archivedAt>`", never folded into transient
+unreachability, and it fails a run only under `--fail-on-gone`. The sentence had
+been a promise since draft 2, and 8.3's first form broke it - its unreachable
+carve-out swallowed the gone case whole, which is what Fable's review of that
+section found. `recheck` reads `documentGone` from the read's signals, not from
+`CitationResult`, which carries no status at all; 8.3 says through what.
 
 ### 6.4 What it costs, stated plainly
 
@@ -970,13 +996,24 @@ A reference renderer lives in `examples/`. No render surface ships in v1.
 ```
 testimonium check <doc>          the gate. exit 0 clean, 1 author-fixable, 2 infra
 testimonium harvest <doc>        propose claims. writes a draft claims file
-testimonium recheck <doc>        drift, against stored evidence and the archive
+testimonium recheck <doc>        drift, against the archive
 testimonium reachability <doc>   preflight. no claims needed
 ```
 
 Global flags: `--json`, `--rules <path>`. `check` additionally takes
 `--explain-fetch` (not global: `reachability` and `harvest` have no fired-rule
 provenance to print).
+
+**Amended 2026-09-09, plan 3.** Two command-scoped flags join them, for the same
+reason `--explain-fetch` is not global - the other commands have nothing to apply
+them to. `check` takes `--no-archive`, which suppresses the baseline write so the
+gate can be run without side effects (section 8.3). `recheck` takes
+`--fail-on-gone`, which turns a source the origin reports deleted into an exit 1;
+without it a gone source is reported and contributes 0, mirroring
+`--fail-on-unreachable`. The `recheck` line in the table above also said "against
+stored evidence and the archive" until this amendment: it is against the archive
+alone, because 8.3 makes the archive self-contained and `recheck` never
+reconciles two files.
 
 **Amended 2026-09-07, plan 1:** `--fetcher <id>` above was never shipped as a
 CLI flag. Plan 1 de-scoped it to a programmatic option only -
@@ -988,7 +1025,9 @@ the programmatic option and the absence of a CLI equivalent. Reintroducing
 added.
 
 **`check`** is the gate. Adapters parse the document; claims join by URL; each
-source goes through `check()`; results write to the evidence file.
+source goes through `check()`; results write to the evidence file. From plan 3 it
+also writes the archive entry for every source that reads `supported`, unless
+`--no-archive` (8.3); `check()` itself still writes nothing.
 
 **`harvest`** attacks the real cost centre without crossing the refusal line. It
 fetches each cited source and proposes, as candidate claims, spans that appear
@@ -1014,13 +1053,21 @@ claims file at all. This is the antidote to the 96.8% figure being mistaken for 
 general property of the web.
 
 **Archive on success** is what makes `recheck` interpretable. When a source reads
-cleanly, store the bytes that were read. On a failed re-check, run the same
-pipeline over the stored copy - if the live bytes and the stored bytes now judge
-differently, the source changed (real drift); if they agree with each other but
-disagree with what was recorded, the extractor changed (a `toText` regression).
-Without stored bytes, every drift alarm is confounded with the pipeline's own
-evolution, and the fetch layer's history guarantees it will evolve. Archiving must
-never fail a run.
+cleanly, store the bytes that were read. On a re-check, run the same pipeline over
+the stored copy: a live read that positively FAILS to find a claim while the
+stored bytes still positively prove it is source drift, and every other
+disagreement is either ours or confounded. Section 8.3 carries the procedure and
+is the authority. Without stored bytes, every drift alarm is confounded with the
+pipeline's own evolution, and the fetch layer's history guarantees it will evolve.
+Archiving must never fail a run.
+
+*Corrected 2026-09-09, with 8.3's decision table:* this paragraph used to say
+that "if the live bytes and the stored bytes now judge differently, the source
+changed (real drift)". That is the same both-directions-alike error 8.3 deletes
+from its own table. It calls a citation the live gate PASSES today source drift
+whenever the stored bytes happen to fail - which is the signature of a change in
+our code, not in the source - and an author told to fix a citation their own
+green build just verified is the false accusation this tool exists to refuse.
 
 **Amended 2026-09-09, plan 3.** This paragraph said the archive was a snapshot
 pushed to web.archive.org, and that archiving "belongs with `recheck`, not with
@@ -1052,7 +1099,7 @@ them.
 | 1. Core | TS port of the fetch ladder, header/finalUrl capture, pure classifier, verdict reducer, claims and evidence files, one adapter, `check`, `reachability` | Q1, Q2 - both resolved below |
 | 1.2 Reader | `isReadable`; one `readSource` loop under `check` and `reachability`, with section 6.6's escalation and aggregation rules and the tests that pin them; the `foldWithMap` offset-map repair; U+00AD deleted by `norm`; the corrections the header lists | Nothing. Lands before plan 2 |
 | 2. Harvest | `harvest` per section 8.2: calibration of `minClaimChars` and `harvestSeedChars` first, then `Document.prose`, `commonSpans`, the four filters, the draft file | Plan 1.2. Q3, Q5 - both resolved below |
-| 3. Drift | `recheck` per section 8.3: the archive `check` writes on `supported`, the replay fetcher, the three-value comparison, archive-as-control-arm | Plan 2. Q4 - resolved below |
+| 3. Drift | `recheck` per section 8.3: the recording fetcher `bin.ts` wraps so `check` writes the archive on `supported`, the replay fetcher, the three-value comparison, archive-as-control-arm, and the README sentence 8.3 requires | Plan 2. Q4 - resolved below |
 
 `reachability` rides nearly free on plan 1's fetch layer, which is why it stays
 there rather than waiting: it is the command that stops a new user misreading
@@ -1067,8 +1114,8 @@ build on; neither is a fourth command.
 ```
 <doc>.claims.json        authored, reviewed with the piece
 <doc>.claims.draft.json  written by harvest; the author folds it into the claims file
-<doc>.evidence.json      written by check and recheck
-<doc>.archive/           written by check on `supported`; the bytes recheck controls against
+<doc>.evidence.json      written by check; rewritten by recheck with its LIVE arm's results
+<doc>.archive/           written by check on `supported`, and by nothing else; the bytes recheck controls against
 ```
 
 The claims file, the evidence file and the archive are committed. The draft is
@@ -1261,6 +1308,21 @@ Added 2026-09-09. This section, not the paragraph in section 8, is the authority
 for plan 3, and it resolves Q4. Plan 3 is blocked on nothing: plans 1, 1.1, 1.2
 and 2 have all shipped.
 
+**Corrected 2026-09-09, the same day it was written and before any of it was
+built.** Fable's review of this section returned APPROVE WITH CORRECTIONS with
+fourteen findings, three of them blocking. Thirteen are folded in below and
+marked where they land; the fourteenth is 7.1's stale `RungId` snippet, which
+predates this section and is parked rather than fixed here. Two of the three
+blockers were present-tense
+claims about shipped code that were false when written: a `CheckOptions` sink
+that cannot be built, because the bytes are discarded before `check()` ever sees
+them, and a stored blob called "raw bodies" that is `pdftotext`'s output for
+every PDF. The third was a decision table that would have minted false
+accusations. Each is corrected in place, with what it claimed left legible,
+because section 0's rule for this document is that a withdrawn claim stays
+visible: this project has now found shipped prose false in each of its last three
+plans, and a silent rewrite is how the next one gets written.
+
 **What it is.** `recheck <doc.md>` re-runs each claim against the live source
 *and* against the bytes stored when that source last read `supported`, and
 reports what changed. It is the instrument, not a policy: no cron, no rot score,
@@ -1280,27 +1342,127 @@ still reach the same verdict. Where it does not, the change is ours.
   current code.
 - **R** - the verdict recorded in the archive at the time it was written.
 
-| L vs A | A vs R | Reported as | Exit |
-|---|---|---|---|
-| same | same | clean | 0 |
-| **differ** | - | **source drift** | **1** |
-| same | **differ** | **pipeline drift** | **2** |
+L against A is the primary signal, and it is stronger than comparing a live
+answer against a recorded one because both sides run today's code over today's
+claims and today's rules. *Corrected 2026-09-09:* this paragraph said "the only
+variable left is the bytes", and that is not true of any rung. What a fetcher
+returns as `rawBody` is already a decoded string - `await r.text()` on the node
+rung, a UTF-8 read of what curl wrote under `--compressed` on the curl rung, and
+`pdftotext -layout`'s output on the PDF rung (`src/fetch/`) - so the archive
+stores what the classifier saw, and every decode upstream of that sits outside
+the comparison in both arms. For the two HTML rungs that residue is small and no
+version is recorded for it: the transform is a standard character decode of a
+byte stream, and a change in it would have to come from the Node runtime or from
+curl itself. For `pdftotext` it is a separate binary doing layout
+reconstruction, it is not stable across builds, and it gets a recorded version
+for exactly that reason - the ruling is below. If an HTML decode ever proves
+unstable in the same way, the same remedy applies to it.
 
-L against A is the primary signal and is stronger than comparing a live answer
-against a recorded one, because both sides run today's code over today's claims:
-the only variable left is the bytes. R is what makes the second row separable
-from the third.
+**R is always `supported`.** The archive is written only when a URL reaches
+`supported`, so `R` has exactly one value and "A differs from R" means precisely
+"A is not `supported`". The invariant is load-bearing and was never stated, and
+stating it is what collapses the comparison into something an implementer can
+code without inventing the missing halves.
 
-**`claimsHash` disambiguates the third row.** The archive records a hash of that
-URL's claims as they stood when it was written. If they have changed since, `A`
-and `R` may differ for that reason alone, and the report says so rather than
-accusing the extractor of a regression it did not commit.
+**Corrected 2026-09-09: the decision table is deleted, not adjusted.** This
+section shipped, for one day, a three-row table keyed on "L vs A: same or differ"
+and "A vs R: same or differ", whose second row read **differ / - / source drift /
+1**. It is recorded here rather than quietly replaced, because it would have
+issued the one thing this tool exists to refuse - a false accusation against
+accurate work - and because a plan drafted from it would have cited it as
+authority.
 
-**Two outcomes carry no verdict at all, and neither fails a run.**
+- **It conditioned on whether the two arms differ without ever saying WHICH
+  WAY.** `L = supported, A = unsupported` - the live gate passing today, the
+  stored bytes failing - is "differ", so the table called it source drift, exit
+  1, and instructed that "the author verifies the page and updates or removes the
+  claim". That combination is the signature of a change in OUR code: a new
+  challenge signature that matches the archived template, a `norm()` change that
+  breaks a phrase the live page no longer carries. The author would have been
+  told to fix a citation their own green `check` had just verified.
+- **`L = unreachable, A = unsupported` is "differ" too**, so the table issued an
+  accusation out of a read that never happened - the thing `verdict()`
+  categorically refuses, since every veto returns `unreachable` and `unsupported`
+  is reachable only through `isReadable` (`src/classify/verdict.ts`).
+- **It contradicted its own carve-out, two paragraphs below itself.** `L =
+  unreachable` against `A = supported` is "differ"; the table said source drift,
+  exit 1, while the prose said "not source drift ... listed, never failed". An
+  implementer coding from the table ships the accusation the prose forbids, and
+  nothing in the section said which of the two won.
 
-- *Unreachable now.* The live read comes back `unreachable` while the archive
-  reads `supported`. This is **not** source drift. The page may be perfectly
-  intact behind a transient 500, a new wall, or a flaky network, and reporting it
+**The decision procedure.** Condition on `L` first. `A` is read only to attribute
+the difference, and `R` is the invariant above.
+
+```
+named confound (claimsHash, pdftotext version,
+                local --rules file)                    -> reported, 0
+no baseline                                            -> reported, 0
+L = unreachable, documentGone                          -> "gone since <archivedAt>", 0
+                                                          (1 under --fail-on-gone)
+L = unreachable, otherwise                             -> listed, never 1
+L = supported,   A = supported                         -> clean, 0
+L = supported,   A != supported                        -> pipeline drift, 2
+L = unsupported, A = supported                         -> SOURCE DRIFT, 1
+L = unsupported, A != supported                        -> pipeline drift / confounded, 2
+```
+
+**Exit 1 iff `L = unsupported` AND `A = supported` AND no named confound**, and
+it is worth saying plainly why that is the only row permitted to accuse.
+`L = unsupported` already carries the keystone's own licence: `check()` cannot
+return `unsupported` from a read it did not judge readable, because every veto
+returns `unreachable` first and the final branch asks `isReadable`
+(`src/classify/verdict.ts`), so the live arm positively read the page and
+positively failed to find the claim there. `A = supported` certifies that today's
+code, today's rules and today's claims still prove that same claim from the
+stored bytes - so nothing on our side of the comparison can account for the
+difference, and what changed is the bytes. Every other combination has an
+explanation available that is not the author's fault, and contributes 0 or 2.
+
+**`claimsHash`, and the named confounds, short-circuit the procedure.** The
+archive records a hash of that URL's claims as they stood when it was written. If
+they have changed since, `A` and `R` may differ for that reason alone, and the
+report says so rather than accusing the extractor of a regression it did not
+commit. **Its exit contribution is 0**, which the section did not say and which
+the ordinary sequence makes load-bearing: the author edits a claim, `check`
+fails, the baseline is therefore NOT refreshed (only `supported` writes it), and
+the author runs `recheck` to ask whether the source moved as well. Answering that
+question with a failing exit code would be answering a question with an
+accusation. The baseline is refreshed by the next `supported` `check`, which is
+the only writer.
+
+Two further **named confounds** are evaluated in the same place, before `L` is
+consulted, and are reported the same way with an exit contribution of 0: a
+`pdftotext` version that differs from the one recorded for a read, and a local
+`--rules` file whose hash differs from the one recorded. Both are specified
+below. A named confound is **not** pipeline drift and must never be reported as
+one: pipeline drift means a regression in THIS tool, and in both of these cases
+what changed is the author's own machine or the author's own data. The mirror of
+that rule matters as much - a change in the BUNDLED rules is ours, stays pipeline
+drift, and is never demoted to a confound.
+
+**Three outcomes carry no accusation, and none of them fails a run by default.**
+
+- *Gone.* **Corrected 2026-09-09.** The live read is `unreachable` because the
+  origin said 404 or 410 (N4), and the baseline is `supported`. The single
+  "unreachable now" carve-out these three bullets replace swallowed this case
+  whole, so a deleted page - the most common real drift there is - reported as a
+  bare "unreachable now", indistinguishable from a flaky network, and never
+  entered the drift number section 12 says this instrument exists to produce. It
+  also left two sentences elsewhere in this spec false: 6.3 carries as a caveat,
+  and 6.2 records as the deferral N4 came out of, that a 404 "distinguishes 'this
+  document is gone' from 'this document was read', which is information `recheck`
+  will want even though `check` does not act on it" - and as written, `recheck`
+  did not want it.
+  A gone source is now its own reported category - **"gone since
+  `<archivedAt>`"** - kept apart from transient unreachability, which is what
+  discharges those two sentences. It **contributes 0 by default and 1 under
+  `--fail-on-gone`**, mirroring `--fail-on-unreachable` in `classifyRun`
+  (`src/bin.ts`). Failing by default would accuse over a transiently misconfigured
+  404, which is the same false accusation in a new costume; a genuinely dead link
+  is nonetheless the author's to fix, which is why the opt-in exists at all and
+  why it contributes 1 rather than 2.
+- *Unreachable otherwise.* A transient 500, a new wall, a flaky network. This is
+  **not** source drift. The page may be perfectly intact, and reporting it
   as drift the author must fix would be a false accusation of a citation that is
   probably still good - the error section 6 exists to prevent, arriving through a
   different door. It is listed, never failed, exactly as `unreachable` is under
@@ -1311,68 +1473,328 @@ accusing the extractor of a regression it did not commit.
   gate; `recheck` detects change. A `recheck` that also gated would let an author
   skip `check` and receive a worse version of it.
 
-**Archive on success: the core emits, the CLI persists.** Running `check` writes
-the baseline, but `check()` does not write it. Section 11's first coupling makes
-the core storage-agnostic - `(document, claims) -> verdicts + excerpts`, with the
-CLI persisting to files - and `writeEvidenceFile` is already called from
-`bin.ts`, not from `check()`. The archive follows the same seam: `CheckOptions`
-gains an optional sink, called only when a URL reaches `supported`, carrying that
-URL's reads and the verdict they produced. `bin.ts` supplies a sink that writes;
-a programmatic caller that supplies none gets today's behaviour exactly. This
-keeps `check()` pure, keeps raw bodies off `CitationResult` - which section 7.4
-holds to what a reader may see - and avoids a second fetch to recover bytes the
-first one already had.
+**Where `recheck` reads "gone" from**, since the obvious place does not have it.
+`CitationResult` carries no status and no signals - by design: section 7.4 keeps
+the schema structurally unable to express an accusation, and it carries only
+`url`, `verdict`, the rung lists, `ladderTruncated`, and the gated
+`missed`/`evidence`/`retrievedAt`/`firedRule` (`src/io/evidence.ts`).
+`documentGone` is a signal on the read (`src/classify/signals.ts`, `status === 404
+|| status === 410`), and the CLI can see the status only because it owns the
+fetcher: the recording wrapper specified below is used on `recheck`'s live arm
+too, for exactly this, and reads nothing the fetcher did not already hand back.
+**Residue, disclosed:** the `pdftotext` rung reports `status: 0` and no headers
+(`src/fetch/pdf.ts`), so N4 can never fire on a PDF URL and a deleted PDF is
+reported as transiently unreachable rather than gone. `--fail-on-gone` is silent
+on PDFs, and that is a property of the rung rather than a policy choice.
+
+**Archive on success: the CLI records, `check()` stays pure.** Running `check`
+writes the baseline, but `check()` does not write it. Section 11's first coupling
+makes the core storage-agnostic - `(document, claims) -> verdicts + excerpts`,
+with the CLI persisting to files - and `writeEvidenceFile` is already called from
+`bin.ts`, not from `check()`. The archive follows the same seam.
+
+**Corrected 2026-09-09: the `CheckOptions` sink is withdrawn.** This section
+first specified that `CheckOptions` "gains an optional sink, called only when a
+URL reaches `supported`, carrying that URL's reads and the verdict they
+produced", and claimed that this "avoids a second fetch to recover bytes the
+first one already had". It cannot be built as described, and it should not be
+built in another form either.
+
+- **The reads do not contain the bytes.** A `Read` is `{ rung, computed }`, and
+  `computed` is a `SignalResult`: the signals, the extracted `text`, `finalUrl`,
+  the matched and missed lists, the fired rule (`src/fetch/read-source.ts`,
+  `src/classify/signals.ts`). No raw body, no headers, no status. Each
+  `RawResponse` is dropped inside `readSource` the moment `computeSignals` has
+  run on it. The fetch had the bytes; `check()` never does. A sink handed "that
+  URL's reads" would receive post-extraction text and none of what the archive
+  needs, and honouring the sentence as written would mean widening `Read` and
+  `SourceReads` to carry every `RawResponse` through the core.
+- **A public sink IS a public raw-reads surface.** Section 6.6 keeps `readSource`
+  off `src/index.ts` "because a consumer holding raw reads can assemble a verdict
+  `verdict()` never issued", and 5.3 seals the primitives structurally rather
+  than by advice. An option on the exported `CheckOptions` that hands a caller
+  per-rung bodies, headers and statuses reopens that door, inside the one options
+  bag every programmatic caller already builds. The withdrawn paragraph never
+  noticed the tension, and cited 7.4 as though keeping bodies off
+  `CitationResult` settled it.
+
+**What plan 3 builds instead: a recording fetcher in `bin.ts`.** The CLI builds
+`defaultFetcher` itself, wraps it in a fetcher that keeps each `(rung,
+RawResponse)` pair it hands back, and passes the wrapper through the
+`CheckOptions.fetcher` option that already exists. When `check()` returns
+`supported`, the CLI writes that URL's archive entry from the tee's buffer plus
+the returned verdict. This is section 7.1 paying off: `Fetcher` is a public
+two-member interface whose output is facts only - there is no `ok` and no
+`http2xx` to get wrong - so a wrapper can neither fabricate a verdict nor lose
+one, and recording is the same shape as the bring-your-own-reader escape hatch
+the interface was designed for.
+
+It reaches every goal the sink was reaching for, at no cost to the core:
+
+- `check()` is untouched and stays pure. A programmatic caller gets today's
+  behaviour exactly, with no new option to misuse and no new way to be handed
+  raw reads.
+- Raw bodies stay off `CitationResult` (section 7.4) and off the public surface
+  entirely. `bin.ts` is inside the package and imports `defaultFetcher` by path,
+  so the exports map stays `.` and `./package.json` alone, as `test/exports.test.ts`
+  pins it (section 5.3).
+- No second fetch: the tee holds what the live fetch already returned.
+- `--no-archive` means "do not wrap", so the unwrapped path is byte-for-byte
+  today's - the strongest form the flag can take.
+- "Archiving must never fail a run" (Q4) becomes one `try`/`catch` around the
+  write in `bin.ts`, warning and continuing. That is a guarantee about ten lines
+  of CLI code rather than about a callback the core invokes mid-run.
+
+**One detail the plan must not drop.** Today `check()` constructs the default
+fetcher when `opts.fetcher` is absent, and it passes the loaded host rules into
+it: `defaultFetcher(opts.rules ? { hosts: opts.rules.hosts } : {})`
+(`src/check.ts`). A CLI that builds its own fetcher and omits that argument
+silently loses local host rules - a `--rules` file that loads, validates and is
+never consulted, which is precisely the silent no-op that unwired `hostRuleFor`
+already cost this project once. The wrapper is built over
+`defaultFetcher({ hosts: rules.hosts })`, and a test pins that a local host rule
+still reaches the fetcher through the CLI path.
 
 **Every attempted read is archived, not the winning one.** The verdict is
 computed from a union across every non-vetoed read (section 6.6), and each read's
 veto is decided from its own headers (N1, N5), its `finalUrl` (N2) and its status
-(N4). Replaying one body could not reproduce the original `missed` set, and
-`recheck` would then report pipeline drift on every citation that took more than
-one rung - spuriously, and precisely on the cases the control arm exists to
-diagnose.
+(N4). A single archived body cannot reproduce that union, so the replay arm would
+be answering a question the live arm was never asked.
+
+*Corrected 2026-09-09:* the rule is right and the sentence justifying it was
+wrong twice. It said `recheck` "would then report pipeline drift on every
+citation that took more than one rung". The symptom is not confined to pipeline
+drift, and is worse than the sentence claims: the ordinary shape is a live arm
+still `supported` against a single-body replay that reads `unsupported`, which is
+`L = supported, A != supported` - and under the deleted table that was L-vs-A
+"differ", **source drift, exit 1**, a false accusation rather than a spurious 2.
+And "every citation that took more than one rung" overstates it: a citation whose
+winning body alone carries every claim and satisfies the ladder replays clean,
+because the union it needs is a subset of that one read.
 
 `--no-archive` suppresses the write for a read-only invocation; `check` is a
 gate, and a gate must be runnable without side effects.
+
+**PDFs: the archived blob is `pdftotext`'s output, and the local poppler build
+sits inside the live arm.** *Corrected 2026-09-09.* This section called the
+stored blobs "raw bodies", which for this rung they have never been, and the
+sentence corrected above - "the only variable left is the bytes" - fails hardest
+here. `pdfFetch` downloads the file with curl, runs `pdftotext -layout` over it,
+and returns the extracted TEXT as `rawBody`, with `status: 0` and no headers
+(`src/fetch/pdf.ts`). What is archived for a PDF is therefore already
+tool-transformed, and the transform is a declared system dependency of whichever
+machine ran it (section 11's third coupling). A poppler upgrade - or, the
+ordinary case, CI's poppler differing from the laptop that wrote the archive -
+changes hyphenation, ligatures and column layout; a claim stops matching; `L =
+unsupported` against `A = supported` is exit 1. The tool's own dependency would
+have failed the author's build over a PDF nobody touched.
+
+**Ruling: record the version, and do NOT archive the downloaded PDF.**
+`index.json` records the `pdftotext` version string for every read taken through
+that rung. A version that differs at recheck time is a **named confound**: the
+report names it, and that citation cannot reach exit 1. Archiving the downloaded
+PDF bytes as a second blob was considered and rejected. Archiving the extracted
+text is exactly what lets the replay arm run on a machine with no `pdftotext` at
+all; requiring poppler to replay would break `recheck` on precisely the CI and
+serverless runners section 7.1 commits this design to serving, and it would put
+the whole PDF into the committed store on top of the text - gzip buys almost
+nothing on a PDF - to purchase an attribution the recorded version already
+names.
+
+**Residue, disclosed.** For a PDF, a genuine source change and a poppler change
+are distinguishable only by the recorded version, and two different poppler
+builds reporting the same version string are not distinguishable at all. The
+version is what `pdftotext -v` prints. `pdftotextAvailable` already spawns that
+exact command and discards its output (`src/fetch/pdf.ts`, `stdio: "ignore"`), so
+capturing it is a small change in a place that already exists - but the plan
+pins it with a fixture rather than assuming, because that function also documents
+a real build (Xpdf's) that exits non-zero on `-v`, and a version probe that
+throws on a working install would silently record nothing.
 
 **Layout**, beside the evidence file:
 
 ```
 <doc>.archive/
-  index.json                  url -> what was seen and what it produced
-  blobs/<aa>/<hash>.gz        raw bodies, gzipped, content-addressed
+  index.json                  version, and per URL what was seen and what it produced
+  blobs/<aa>/<hash>.gz        each read's body AS THE CLASSIFIER SAW IT, gzipped,
+                              content-addressed. For pdftotext that is extracted
+                              text, not the PDF - see the ruling above.
 ```
 
 `index.json` records, per URL: `archivedAt`, the verdict those bytes produced,
-`claimsHash`, and one entry per attempted read - `rung`, `status`, `headers`,
-`finalUrl`, and the blob's hash. The archive is **self-contained**: it holds both
-the bytes and the verdict they produced, so `recheck` never reconciles two files
-and the evidence file and the archive cannot drift apart and be compared as a
-mismatched pair. The evidence file keeps its own job - what was concluded, for a
+`claimsHash`, the provenance pair below, and one entry per attempted read -
+`rung`, `status`, `headers`, `finalUrl`, the blob's hash, and for a `pdftotext`
+read the recorded version string. The archive is **self-contained**: it holds
+both the bytes and the verdict they produced, so `recheck` never reconciles two
+files and the evidence file and the archive cannot drift apart and be compared as
+a mismatched pair. The evidence file keeps its own job - what was concluded, for a
 reader. The archive holds what was seen, for the tool.
 
-Content-addressing is what makes the cost bearable and the write idempotent: the
-`node` and `curl` rungs usually return byte-identical bodies and collapse to one
-blob, and re-running `check` against an unchanged source writes nothing new. The
-repository grows when a source genuinely changes, which is the event worth
-recording.
+**The format is pinned here, not left to the plan**, because these files are
+committed: the archive is a compatibility surface the moment the first one lands
+in someone's repository, and every one of these five was a gap Fable's review
+found in a format the plan would otherwise have chosen by accident.
 
-**`recheck` runs `check()` twice.** Once with the default fetcher and once with a
-fetcher that replays the archive. `CheckOptions.fetcher` already exists for this
-(section 7.1), so no second judgement path is written, and the control arm is
-*provably* the same code as the live arm. That is not an economy: a control that
-ran through different code could not isolate a change in the code.
+- **`version`.** `index.json` carries `"version": 1` at its top level, exactly as
+  `<doc>.evidence.json` already does (`writeEvidenceFile`, `src/io/evidence.ts`).
+  A committed file with no version field cannot be migrated later without
+  guessing what wrote it.
+- **The key is `normalizeUrl(url)`, not the URL as cited.** This one is a trap
+  with a live mechanism: `joinClaims` keys claims by `normalizeUrl(fn.url)` but
+  hands `check()` the AS-CITED spelling, which is what lands on
+  `CitationResult.url` (`src/io/claims.ts`, `src/bin.ts`). An archive keyed off
+  the result would file two spellings of one resource - a trailing slash, a
+  `utm_` parameter - under two entries, and the baseline would be silently
+  missed: `recheck` would report "no baseline" forever and exit 0 while doing
+  nothing at all. The archive key MUST be the join key, and a test pins the two
+  together.
+- **The blob hash is computed BEFORE gzip**, over the UTF-8 encoding of the body
+  being stored. SHA-256, lower case hex; the first two hex characters are the
+  `<aa>` shard. Hashing the `.gz` would make the digest a function of the zlib
+  version and break idempotency across machines for identical content - every CI
+  runner with a different zlib would add a blob for a source nobody edited.
+- **`claimsHash` is SHA-256 over that URL's claims, `norm()`-normalized, sorted,
+  newline-joined.** `norm()` because it is what the MATCHER runs, so the hash
+  tracks exactly the text a verdict depends on and an invisible whitespace edit
+  does not read as a claims change (the same reasoning as 7.3's floor: the
+  predicate has to be the matcher's). Sorted because reordering the claims of one
+  URL changes nothing about what is checked, and an order-sensitive hash would
+  report a confound - and suppress the comparison - for a reordering.
+- **Which headers are stored: all of them EXCEPT `set-cookie`.** Not an
+  allowlist: the header vetoes are dated data that rot and get added to (7.2), so
+  a set frozen today would leave a rule added tomorrow unable to fire on an
+  archived read, and the control arm would answer with a veto the live arm no
+  longer agrees with. `set-cookie` is never stored, in any form, because these
+  files are committed and a session cookie in git is a credential leak. The
+  residual is disclosed rather than solved: any other response header a host
+  chooses to put a secret in is committed with the archive, so an author
+  archiving an authenticated page is publishing whatever that host returns.
+
+**Rules provenance, per index entry**, and the two halves are treated
+differently. Each entry records the tool `VERSION` (`src/version.ts`), which
+identifies the bundled rules because the bundled signatures, paths and host rules
+compile into the package, and the SHA-256 of the `--rules` file's bytes when one
+was passed, or `null` when none was.
+
+- **A changed LOCAL rules file is a named confound**, exit contribution 0. A
+  local signature or path rule feeds N2 and N3 directly and can turn a real
+  document into `unreachable` - or into `unsupported`, when a later rung read it
+  (6.3) - so a changed local file moves `A` against `R` for a reason that is not
+  a regression in this tool. Local rules are the author's own data, and reporting
+  their edit as our defect would name the wrong cause in the one report written
+  to attribute causes.
+- **A changed bundled snapshot is NOT a confound.** It is recorded and named in
+  the report as the likely cause, and the citation is still pipeline drift, exit
+  2, because the bundled rules are ours: a rule we added is exactly the kind of
+  change the control arm exists to catch. Treating a version bump as a confound
+  would suppress the comparison on every citation after every release, which
+  would retire the instrument by upgrading it.
+
+The bundled side is identified by package version rather than by a snapshot date
+because the bundled rules carry one `lastConfirmed` per rule and no single date
+for the set (`src/rules/challenge.ts`).
+
+Content-addressing is what makes the write idempotent across runs: re-running
+`check` against an unchanged source rewrites the same hash and stores no new
+blob. *Corrected 2026-09-09:* this paragraph also said the `node` and `curl`
+rungs "usually return byte-identical bodies and collapse to one blob". They
+usually do not, because the ladder does not usually run both - `nextAction`
+climbs to `curl` only when node's read was NOT readable (`src/fetch/ladder.ts`)
+- so an archived (that is, `supported`) URL with two recorded reads usually holds
+a wall or a stub AND the document: different bytes, two blobs. Two costs the
+paragraph owed and did not pay:
+
+- A page with per-request bytes - a CSRF token, a nonce, a timestamp in the
+  markup - hashes differently on every run and adds a blob on **every `check`**,
+  not "when a source genuinely changes".
+- **Nothing prunes.** Re-archiving a URL at a new hash overwrites its index entry
+  and orphans the old blob, which stays. Growth is monotonic in a committed
+  store. Orphans are GC-able later - every live hash is named in `index.json`, so
+  the set of unreferenced blobs is computable - and no GC ships in plan 3.
+
+**`recheck` runs `check()` twice.** Once with the recording fetcher over the live
+source, and once with a fetcher that replays the archive. `CheckOptions.fetcher`
+already exists for this (section 7.1), so no second judgement path is written,
+and the control arm is *provably* the same code as the live arm. That is not an
+economy: a control that ran through different code could not isolate a change in
+the code.
+
+**The replay fetcher, specified.** The section said only "a fetcher that replays
+the archive", and the natural implementation of that sentence manufactures drift.
+It reads local blobs and needs no binaries at all:
+
+- **Its `rungs` are the rungs recorded in that URL's index entry**, never what
+  the machine can run. `defaultFetcher` probes for `curl` and `pdftotext` and
+  advertises what it finds; a replay fetcher that did the same would make the
+  control arm a fact about the recheck machine. Concretely: a PDF archived where
+  `pdftotext` exists and rechecked where it does not attempts NOTHING in either
+  arm, because `nextAction` stops a PDF URL immediately when the rung is
+  unavailable (`src/fetch/ladder.ts`), giving `L = A = unreachable` against
+  `R = supported` - spurious drift on every PDF citation on every runner without
+  poppler, produced by the instrument built to remove it. Advertising the
+  recorded rungs also keeps `ladderTruncated` honest, since it is computed from
+  `fetcher.rungs` (`isLadderTruncated`, `src/io/evidence.ts`).
+- **It returns each recorded read verbatim**: `rawBody` from the blob, with the
+  recorded `status`, `headers` and `finalUrl` - including a recorded empty
+  `finalUrl`, so that `readSource`'s `response.finalUrl || url` default
+  reproduces what `computeSignals` originally saw rather than substituting a URL
+  the classifier never had.
+- **It returns `EMPTY_RESPONSE` for any rung with no recorded read**, and it
+  never throws, per the `Fetcher` contract (section 7.1): an unread rung is a
+  result, not an error.
+
+**What `recheck` writes.** It writes `<doc>.evidence.json` with the **live** arm's
+results - what is true of the source today, which is the same thing `check`
+writes there and the only arm whose verdicts describe the world. The replay arm's
+verdicts exist to attribute a difference and are report-only; writing them would
+put a verdict computed from bytes on disk into the file a reader's renderer
+consumes. `recheck` **never** writes into the archive and never refreshes a
+baseline: `check` is the only archive writer, so a drifted source cannot silently
+become its own new baseline, and there is no way to "fix" a drift report by
+running `recheck` again. `notApplicable`, `unclaimed` and orphaned claims are
+reported exactly as `check` reports them, from the same `joinClaims` output.
 
 **Exit codes.** `0` clean, or nothing to compare. `1` source drift - the author
 verifies the page and updates or removes the claim. `2` infrastructure failure,
 **and pipeline drift**. Pipeline drift is a regression in this tool, not a defect
-in the author's document, and failing their build for it would put the cost of
-our limitations onto them - the same error, in a different register, that the
-verdict ladder is built to refuse.
+in the author's document.
+
+*Corrected 2026-09-09 (a).* This paragraph went on to say that failing the
+author's build for pipeline drift "would put the cost of our limitations onto
+them". That overclaims, in the section that is plan 3's authority: exit 2 fails
+every naive `set -e` gate exactly as exit 1 does, so the split does not spare
+anyone a red build. What 1-versus-2 delivers is **attribution** - the author is
+never told to fix their document for a defect that is ours, and a pipeline that
+wants to treat the two differently can, because the codes differ. That is worth
+having and it is less than the sentence claimed.
+
+**(b) Precedence at the run level: for `recheck`, 1 dominates 2.** With one URL
+in source drift and another in pipeline drift, the run exits 1. Infrastructure
+failure is still 2 and still dominates both. This deliberately differs from
+`classifyRun`'s precedent, where infrastructure is tested first and 2 wins
+outright (`src/bin.ts`): under `check` a 2 means the tool could not do its job
+and the run is void, so there is nothing author-actionable to preserve. Under
+`recheck` both signals are real results about different citations, and letting
+our own regression mask genuine source drift at the exit code would be this
+tool's defect suppressing the author's news. Both are named in the report either
+way; only the code is forced to choose.
 
 **What the archive cannot tell you.** It detects *change*, never *correctness*. A
 source that was already wrong when it first read `supported` is archived wrong,
-and `recheck` will call it clean for as long as it stays wrong. The README says
-so in those words, beside the exposures section 8.2 discloses for harvest.
+and `recheck` will call it clean for as long as it stays wrong.
+
+*Corrected 2026-09-09 (c).* This paragraph ended: "The README says so in those
+words, beside the exposures section 8.2 discloses for harvest." It does not. The
+README carries no sentence about change versus correctness anywhere, and its only
+mention of `recheck` is under the heading "What's not here", where it says the
+command "is a separate plan, not a missing feature of this one". A present-tense
+factual claim about another document, false when written, in the section built to
+be plan 3's authority - the defect class section 0 exists to catch, committed
+inside the section correcting two others of the same kind. It becomes a
+requirement instead: **plan 3 MUST add that sentence to the README in those
+words**, beside the exposures 8.2 discloses for harvest, and MUST replace the
+"What's not here" paragraph when `recheck` ships. That is a plan task with an
+acceptance check, not a claim about a file.
 
 ---
 
@@ -1550,7 +1972,13 @@ with their resolutions rather than deleted, so the reasoning survives.**
    out was the remote service's, not the archive's. "It must never fail a run"
    stands and is now nearly free to honour. Third-party durability is given up
    deliberately; it is a credibility property, and section 8 never claimed it.
-   Section 8.3 is the authority.
+   One transform survives locally and 8.3 discloses it rather than claiming
+   otherwise: for a PDF the bytes `check` judges are `pdftotext`'s output, not
+   the downloaded file, so the local poppler build sits inside the live arm. The
+   local archive still stores exactly what was judged - which is the thing
+   web.archive.org could not do, and the whole argument above - but for that one
+   rung the transform upstream of it is *recorded*, as a version string, rather
+   than eliminated. Section 8.3 is the authority.
 5. ~~**Harvest boilerplate exclusion.**~~ **RESOLVED 2026-09-07: cross-source
    frequency, primary.** A span found in a readable read of any *other* cited
    source (other by `normalizeUrl`) is boilerplate; a URL's own reads never vote
@@ -1594,6 +2022,9 @@ Recorded so they are not relitigated without new information.
 | Non-`supported` results carry no renderable fields | 7.4 |
 | v1 commands: `check`, `harvest`, `recheck`, `reachability` | 8 |
 | Three implementation plans, not one; archive belongs to plan 3 | 8.1 |
+| `recheck` exits 1 only on `L = unsupported` with `A = supported`; the "the arms differ" table is withdrawn | 8.3 |
+| The archive is written by the CLI through a recording fetcher; `check()` gains no sink and stays pure | 8.3 |
+| The archive stores what the classifier saw, keyed by `normalizeUrl`, hashed before gzip, and never stores `set-cookie` | 8.3 |
 | No GitHub Action in v1 | 13 Q6 |
 | No model in any command | 9 |
 | No renderer, no cron, no storage backend in v1 | 8, 9 |
