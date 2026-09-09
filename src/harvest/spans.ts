@@ -1,19 +1,33 @@
 import { THRESHOLDS } from "../classify/thresholds.js";
 import { foldWithMap } from "../text/excerpt.js";
-import { norm, phraseFound } from "../text/normalize.js";
+import { norm } from "../text/normalize.js";
 
 export interface SpanResult {
   /** Proposals, in source order, cut from the SOURCE's typography. Each is a
-   *  whole-word run with its whitespace collapsed, and none is contained in
-   *  another. */
+   *  whole-word run with its whitespace collapsed, none contained in another,
+   *  and none beginning or ending on half of a surrogate pair. */
   readonly spans: string[];
-  /** Spans dropped by a self-validation assertion, one line each naming the
-   *  assertion that failed. A non-zero count is a BUG SIGNAL, not a filter
-   *  statistic (spec 8.2 step 4; Fable F3c): every one of the three
-   *  assertions is a property the code should hold unconditionally. The
-   *  caller reports these with a `BUG:` label and does not change its exit
-   *  code, and the span is not proposed - a span that cannot be shown to be
-   *  what the source says must not reach the author. */
+  /** Spans dropped by a self-validation failure, one line each naming what
+   *  failed. A non-zero count is a BUG SIGNAL, not a filter statistic (spec
+   *  8.2 step 4; Fable F3c): every entry here is a property the code should
+   *  hold unconditionally. The caller reports these with a `BUG:` label and
+   *  does not change its exit code, and the span is not proposed - a span that
+   *  cannot be shown to be what the source says must not reach the author.
+   *
+   *  Five conditions can land here: spec 8.2 step 4's THREE assertions
+   *  (present in the source, present in the document, and the fold round trip
+   *  that catches a shifted offset map), plus two guards for faults that
+   *  strike BEFORE those assertions can run - an offset map shorter than the
+   *  span, and a slice that collapses to nothing. Those two would otherwise
+   *  `continue` silently, and an unreported drop is indistinguishable from a
+   *  span that was never found, which is the one outcome that would make a bug
+   *  in this file invisible.
+   *
+   *  ONE drop is deliberately NOT reported here: when the word-boundary snap
+   *  consumes the whole match (`e <= s`), because the matched run held no
+   *  whole word in either text. That is the snap working, not failing - the
+   *  ordinary case of a seed landing mid-token - so reporting it would fill
+   *  `bugs` with noise and destroy the signal the rest of this list carries. */
   readonly bugs: string[];
 }
 
@@ -90,6 +104,23 @@ export function commonSpans(
   const src = foldWithMap(sourceText);
   const index = seedIndex(doc.folded, seedChars);
 
+  // Spec 8.2 step 3, last clause: "`norm(text)` is computed once per read and
+  // reused by every filter; it is not recomputed per span." `phraseFound(h, p)`
+  // is `norm(h).includes(norm(p))`, so calling it per candidate re-normalizes
+  // the WHOLE source and the WHOLE document once for every proposal. These two
+  // bindings are that same rule with the haystack side hoisted: a MEMOIZATION
+  // of `phraseFound`, not a second definition of it.
+  //
+  // Inlining a rule is how the fold table drifted from `norm()` three times, so
+  // the equivalence is pinned rather than asserted in a comment:
+  // `test/harvest/spans.test.ts` checks `normSource.includes(norm(span))`
+  // against `phraseFound(sourceText, span)` over case folding, a soft hyphen,
+  // curly quotes, a Unicode dash and the rest of `norm()`'s clauses. A future
+  // change to `phraseFound` or to `norm` breaks a red test instead of silently
+  // diverging from what `check()` will do.
+  const normSource = norm(sourceText);
+  const normDoc = norm(docProse);
+
   let i = 0;
   while (i + seedChars <= src.folded.length) {
     const at = index.get(src.folded.slice(i, i + seedChars));
@@ -137,27 +168,63 @@ export function commonSpans(
       s++;
       cs++;
     }
+    // Drop a HALF of an astral character left at either edge. Two texts can
+    // diverge BETWEEN the halves of a surrogate pair - any two emoji sharing a
+    // lead unit do it, U+1F4C8 against U+1F4C9 - and `wordAt` reads a lone
+    // surrogate as a non-word unit, so the snap above sees a clean boundary
+    // and stops mid-pair. The slice then ends on a bare high surrogate, which
+    // is not a character: it does not survive a UTF-8 round trip, so a claim
+    // confirmed from that proposal can NEVER match the page. A false miss, and
+    // one the author cannot diagnose by looking at it. It also breaks the
+    // "whole-word run" the return contract promises.
+    // A COMPLETE pair inside the span begins on its HIGH half and ends on its
+    // LOW half, so neither loop touches it; only a dangling half matches.
+    // The fix lives here, not in foldWithMap, whose per-UTF-16-unit iteration
+    // is parked by controller ruling P3.
+    while (e > s && /[\uD800-\uDBFF]/.test(src.folded[e - 1] as string)) e--;
+    while (s < e && /[\uDC00-\uDFFF]/.test(src.folded[s] as string)) s++;
+
     while (s < e && src.folded[s] === " ") s++;
     while (e > s && src.folded[e - 1] === " ") e--;
     if (e <= s) continue;
+
+    // NEITHER of the next two guards may drop a span SILENTLY. The contract
+    // above is that a span dropped by a self-validation failure is dropped AND
+    // reported, and an unreported drop is indistinguishable from a span that
+    // was never there - the one outcome that makes a bug in this file
+    // invisible. `src.map` carries one entry per folded unit, so a map shorter
+    // than the span is an offset-map fault of exactly the kind assertion 3
+    // exists to catch; it just strikes EARLIER, where `undefined + 1` is NaN
+    // and `slice(x, NaN)` is "", so assertion 3 would never get to run.
+    const from = src.map[s];
+    const toInclusive = src.map[e - 1];
+    if (from === undefined || toInclusive === undefined) {
+      bugs.push(
+        `offset map shorter than the span: folded [${s}, ${e}) of ` +
+          `${src.folded.length}, map length ${src.map.length}`,
+      );
+      continue;
+    }
 
     // Cut from the SOURCE, through the map. The whitespace collapse is not
     // cosmetic: the map records the offset of the FIRST character of a
     // whitespace run (excerpt.ts), so an uncollapsed slice carries the
     // source's newlines and indentation into a claims file. Collapsing is
     // norm-equivalent, so it cannot change what check() finds.
-    const span = sourceText
-      .slice(src.map[s] as number, (src.map[e - 1] as number) + 1)
-      .replace(/\s+/g, " ")
-      .trim();
-    if (!span) continue;
+    const span = sourceText.slice(from, toInclusive + 1).replace(/\s+/g, " ").trim();
+    if (!span) {
+      bugs.push(`empty slice from source offsets [${from}, ${toInclusive}]`);
+      continue;
+    }
 
     // THE THREE ASSERTIONS (spec 8.2 step 4). Each is a bug if it fails.
-    if (!phraseFound(sourceText, span)) {
+    // `normSource`/`normDoc` are `phraseFound`'s haystack side, hoisted - see
+    // the note where they are bound.
+    if (!normSource.includes(norm(span))) {
       bugs.push(`not found in the source: ${JSON.stringify(span)}`);
       continue;
     }
-    if (!phraseFound(docProse, span)) {
+    if (!normDoc.includes(norm(span))) {
       bugs.push(`not found in the document: ${JSON.stringify(span)}`);
       continue;
     }
