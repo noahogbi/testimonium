@@ -503,13 +503,30 @@ the cost is claimed.
 
 Above the floor neither protection applies. A wall padded past ~4,500 extracted
 characters is vetoed by neither the signature, which only applies below 800, nor
-the floor, which only blocks an accusation on a short body. There the list's
-completeness does bear on truth, and a wall can mint an accusation against an
-author who did nothing wrong. That is the known gap carried as a fixture in
-`fixtures/corpus.json` and measured in `docs/calibration-2026-09.md`, and it is
-why draft 1's "never truth" was wrong rather than merely imprecise. The
-structural half of this needs no measurement; the exposure above the floor has
-been measured, and the thresholds were left alone deliberately.
+the floor, which only blocks an accusation on a short body. There nothing the
+signature list says can bear on the verdict - N3 is gated on `proseVolume <
+maxChallengeChars`, so an entry naming this wall could not fire on it - and a
+wall can mint an accusation against an author who did nothing wrong. Measured
+2026-09-09 against the shipped build: a 5,005-character padded wall carrying a
+bundled signature phrase and its unlisted twin both return `unsupported`, the
+listed one with `challengeSignature` false though its phrase is in the list.
+Membership changes a verdict only below the cap, and the boundary is exact - at
+799 extracted characters the listed wall reads `unreachable` where its unlisted
+twin reads `supported`; at 800 both read `supported`. That is the known gap
+carried as a fixture in `fixtures/corpus.json` and measured in
+`docs/calibration-2026-09.md`. It is NOT why draft 1's "never truth" was
+wrong: a complete list would not have closed this gap either, because no entry
+can fire here at all. What makes "never truth" wrong is the pair of costs
+below the cap, both stated above - an over-broad entry buys a false accusation,
+and rot buys a false attestation. This paragraph asserted the opposite ("there
+the list's completeness does bear on truth") from `551e8da` until 2026-09-09.
+It was false the day it was written: N3's length gate already shipped in
+`75fae68`, a verified ancestor of that commit. It survived four review rounds
+because the tests run against it varied the WALL and held the LIST fixed -
+round 4 did measure the falsifying pair, a listed and an unlisted padded wall
+both returning `unsupported`, and recorded it as confirmation. The structural
+half of this needs no measurement; the exposure above the floor has been
+measured, and the thresholds were left alone deliberately.
 
 Draft 1 called the list "an optimization" that "may rot freely; the cost is
 latency and reach, never truth". N3 made that false. It is the same false claim
@@ -525,7 +542,8 @@ wall.** Every wall in the battery - listed or not, English or not, inflected
 `minProseChars` 4,500). The defence there is a property of what a wall *is*,
 not of what we have written down about it. The converse is not free: a
 complete list can still supply an accusation through the union (above), and
-above the floor completeness does bear on truth (above).
+above the floor a wall can mint an accusation no list entry could have
+prevented (above).
 
 **What is NOT yet established, and must not be claimed until it is.** Draft 1 of
 this spec asserted that all 11 evading walls "degrade to `unreachable`." That was

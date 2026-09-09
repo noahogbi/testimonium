@@ -197,7 +197,7 @@ will eventually surprise a real user if it isn't said here first.
   are short - so the tool declines to accuse rather than guess, and a
   one-paragraph official notice whose claim phrase is genuinely missing
   reads `unreachable` rather than a finding against your prose. That is a
-  property of the *read*, not of the citation: the ladder climbs on any
+  property of the *read*, not of the citation: the HTML ladder climbs on any
   sub-floor read, so where a later rung returns a readable page the citation
   is judged from that read and can still report `unsupported` with the claim
   named - measured, a 302-character notice at `node` plus a readable page at
@@ -245,9 +245,9 @@ will eventually surprise a real user if it isn't said here first.
   asked for, so a redirect away from the citation is observable and, today,
   unobserved - a gate left unbuilt, not a limit of the signals). A vetoed
   wall on the first rung leaves no trace on such a result beyond
-  `rungsAttempted`; a sub-floor read leaves one, since its matches still
-  enter the union and drop a claim from `missed`. `firedRule` is the winning
-  read's.
+  `rungsAttempted`; a sub-floor read leaves one whenever it matched a claim,
+  since its matches still enter the union and drop that claim from `missed`.
+  `firedRule` is the winning read's.
 - **The same false accusation is reachable a second way, and that route has
   no fixture at all.** The signature list only vetoes a *short* body: above
   `THRESHOLDS.maxChallengeChars` (800 extracted characters) it stops firing,
