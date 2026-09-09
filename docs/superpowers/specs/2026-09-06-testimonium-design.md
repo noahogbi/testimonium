@@ -518,11 +518,14 @@ it is corrected here for the same reason: this document is the authority every
 ruling resolves against, so a sentence in it that has gone quietly false is worse
 than one in the code.
 
-**An accusation stops depending on the completeness of a list that provably
-cannot be completed.** Every wall in the battery - listed or not, English or not,
-inflected or padded - fails P2, because a challenge page has no prose volume. The
-defence is a property of what a wall *is*, not of what we have written down
-about it.
+**Below the floor, an accusation stops depending on the list naming a
+wall.** Every wall in the battery - listed or not, English or not, inflected
+- fails P2: none of them clears the floor (measured,
+`fixtures/challenge-battery.mjs`: 23 cases, longest 982 characters, all under
+`minProseChars` 4,500). The defence there is a property of what a wall *is*,
+not of what we have written down about it. The converse is not free: a
+complete list can still supply an accusation through the union (above), and
+above the floor completeness does bear on truth (above).
 
 **What is NOT yet established, and must not be claimed until it is.** Draft 1 of
 this spec asserted that all 11 evading walls "degrade to `unreachable`." That was
