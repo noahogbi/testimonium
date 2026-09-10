@@ -457,6 +457,13 @@ deleted is reported **gone** whatever else changed, with the confound named
 beside it - nothing you can edit locally makes a page 404, so a claims edit
 never hides a dead link or quietly switches off `--fail-on-gone`.
 
+**`--json` carries the same gate as the terminal report.** `recheck --json`
+prints `{ version, results, drift }`, where `drift` is one entry per citation.
+Every entry's `missed` field is emptied unless `category` is `sourceDrift`:
+the schema cannot carry an accusation past the one row licensed to make it,
+so a `confounded` or `noBaseline` entry never carries a live-arm miss list
+even though the underlying result did miss something.
+
 **`recheck` never writes the archive.** Only a `supported` `check` does. A
 drifted source cannot silently become its own new baseline, and there is no way
 to make a drift report go away by running `recheck` again. `recheck` does

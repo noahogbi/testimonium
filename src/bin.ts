@@ -153,12 +153,27 @@ export function renderOutcome(o: CitationOutcome, n: number, rungsAttempted: rea
   // ladder went on to read: a node rung that 404s before a curl rung reads
   // the document is L = supported, and telling that author their source may
   // be gone is a false alarm. With the gone row now above the confounds,
-  // the rows this still reaches are `noBaseline` and mixed-status
-  // `unreachable` - which is exactly its remaining job.
+  // what is left for this flag is the `noBaseline` row (entry absent, or R
+  // violated), where the gone check is never reached.
   if (o.liveGone && o.category !== "gone") {
     lines.push("        the live read was a 404 or 410, so this source may be gone");
   }
   return lines;
+}
+
+/**
+ * `recheck --json`'s accusation gate, twin to `renderOutcome`'s above. `missed`
+ * is present on every `CitationOutcome` (see `RecheckReport.outcomes`'s doc
+ * comment in `src/recheck.ts`) whether or not the row accuses, and the `--json`
+ * payload used to emit `report.outcomes` unfiltered - so a `confounded` row
+ * that prints "not compared" to the terminal still carried a `missed` list in
+ * the JSON. Spec 7.4's doctrine is that the output schema cannot EXPRESS an
+ * accusation, so this gates categorically on `category === "sourceDrift"`,
+ * exactly as `renderOutcome` does - never on an enumeration of what to
+ * exclude - so a `DriftCategory` added later inherits silence by default.
+ */
+export function jsonOutcome(o: CitationOutcome): CitationOutcome {
+  return o.category === "sourceDrift" ? o : { ...o, missed: [] };
 }
 
 /**
@@ -531,7 +546,8 @@ async function main(argv: string[]): Promise<number> {
     // into the archive and never refreshes a baseline.
     writeEvidenceFile(evidencePathFor(doc), report.liveResults);
     if (flags.has("--json")) {
-      console.log(JSON.stringify({ version: 1, results: report.liveResults, drift: report.outcomes }, null, 2));
+      const drift = report.outcomes.map(jsonOutcome);
+      console.log(JSON.stringify({ version: 1, results: report.liveResults, drift }, null, 2));
     }
 
     console.log(`\n${sourceDrift} source drift, ${pipelineDrift} pipeline drift, ${gone} gone since archiving`);

@@ -11,7 +11,7 @@ Initial implementation of plan 1 (`check`, `reachability`). See
 One new command, one breaking refusal, and three additive fields. All of them
 landed after `ff71ec8` and before this version was released, so none carries a
 deprecation path. Apart from the refusal below, `check` gained no new
-behaviour: `harvest` is a second consumer of the reader plan 1.2 built, not a
+behaviour: `harvest` is a third consumer of the reader plan 1.2 built, not a
 change to the gate, and no verdict moved.
 
 - **BREAKING, and meant to be: a claim shorter than `THRESHOLDS.minClaimChars`

@@ -18,6 +18,7 @@ import {
   draftPathFor,
   evidencePathFor,
   harvestSummaryLine,
+  jsonOutcome,
   renderOutcome,
   USAGE,
   validateFlags,
@@ -157,7 +158,7 @@ describe("validateFlags and harvest", () => {
     expect(validateFlags(["harvest", "doc.md", "--json", "--rules", "local.json"])).toBeNull();
   });
 
-  it("CHARACTERIZATION: the command-agnostic gap now covers a third command", () => {
+  it("CHARACTERIZATION: the command-agnostic gap now covers a fourth command", () => {
     // `harvest doc.md --fail-on-unreachable` is accepted and ignored, exactly
     // as `reachability doc.md --fail-on-unreachable` is. Per-command flag
     // tables stay parked - they would change check, recheck and reachability
@@ -378,9 +379,11 @@ describe("renderOutcome and the accusation gate", () => {
   // THE THING THIS GATE EXISTS TO PREVENT: `missed` is present on every
   // CitationOutcome (see RecheckReport.outcomes's doc comment), and only
   // `category === "sourceDrift"` may render it as a MISS: line. A gate
-  // written as `if (o.missed.length > 0)` would pass every one of these with
-  // the suite still green, because every fixture here is built WITH a
-  // non-empty `missed`.
+  // written as `if (o.missed.length > 0)` would FAIL 3 of the 4 tests below:
+  // every fixture here is built WITH a non-empty `missed`, so that broken
+  // gate would wrongly print MISS on pipelineDrift, noBaseline and clean, and
+  // only the sourceDrift case would still pass. The non-empty fixtures are
+  // precisely what catch it.
   it("prints MISS only on sourceDrift", () => {
     const lines = renderOutcome(outcome({ category: "sourceDrift", archived: "supported" }), 1).join("\n");
     expect(lines).toContain('MISS: "spending rose sharply"');
@@ -408,6 +411,42 @@ describe("renderOutcome and the accusation gate", () => {
     const lines = renderOutcome(outcome({ category: "clean", live: "supported", archived: "supported" }), 1).join("\n");
     expect(lines).not.toContain("MISS:");
     expect(lines).not.toContain("SOURCE DRIFT");
+  });
+});
+
+describe("jsonOutcome and the --json accusation gate", () => {
+  // THE MEASURED BUG: `recheck --json` used to emit `report.outcomes`
+  // unfiltered, so a `confounded` citation printed "not compared" to the
+  // terminal while the JSON payload still carried its live arm's full
+  // `missed` list. `jsonOutcome` is the fix, gated categorically on
+  // `category === "sourceDrift"` exactly as `renderOutcome` is above.
+  it("keeps missed on sourceDrift", () => {
+    const o = outcome({ category: "sourceDrift", archived: "supported" });
+    expect(jsonOutcome(o).missed).toEqual(o.missed);
+  });
+
+  it("empties missed on confounded, even though missed is non-empty - the measured leak", () => {
+    const o = outcome({ category: "confounded", confounds: ["the claims for this URL changed"] });
+    expect(jsonOutcome(o).missed).toEqual([]);
+  });
+
+  it("empties missed on every other category, even though missed is non-empty", () => {
+    const others: CitationOutcome["category"][] = [
+      "clean",
+      "pipelineDrift",
+      "gone",
+      "unreachable",
+      "noBaseline",
+      "unclaimed",
+    ];
+    for (const category of others) {
+      expect(jsonOutcome(outcome({ category })).missed, category).toEqual([]);
+    }
+  });
+
+  it("changes nothing else about the outcome", () => {
+    const o = outcome({ category: "gone", archivedAt: "2021-06-01T00:00:00.000Z" });
+    expect(jsonOutcome(o)).toEqual({ ...o, missed: [] });
   });
 });
 
