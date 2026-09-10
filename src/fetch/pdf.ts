@@ -99,20 +99,48 @@ export interface VersionProbe {
 
 export type VersionRunner = () => VersionProbe;
 
-/** `spawnSync`, not `execFileSync`, for two measured reasons: both known
- *  builds print the version to STDERR and `execFileSync` returns only stdout,
- *  and `execFileSync` throws on Xpdf's non-zero exit. `spawnSync` never throws
- *  and returns both streams whatever the status. */
-const probePdftotext: VersionRunner = () => {
-  const r = spawnSync("pdftotext", ["-v"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+/** The subset of `spawnSync`'s return value the ENOENT/non-zero-exit mapping
+ *  depends on, named explicitly so that mapping can be a pure function with
+ *  its own tests instead of living only inside `probePdftotext`, which no
+ *  unit test can reach because every test injects its own `VersionRunner`.
+ *  `stdout`/`stderr` are typed `string | undefined` here - unlike
+ *  `spawnSync`'s own return type, which claims plain `string` even though the
+ *  runtime value is `undefined` on a failed spawn - so that dropping the
+ *  `?? ""` coalesce below is a real type error under this project's
+ *  `exactOptionalPropertyTypes`, not a silent gap `tsc` waves through. */
+export interface SpawnResultLike {
+  readonly status: number | null;
+  readonly error?: Error;
+  readonly stdout: string | undefined;
+  readonly stderr: string | undefined;
+}
+
+/** Maps a raw `spawnSync`-shaped result to a `VersionProbe`. `status` plays
+ *  NO part in `missing`: Xpdf's build exits 99 on `-v` and prints its version
+ *  anyway, the same line `pdftotextAvailable` already draws - only `error`
+ *  (ENOENT) means the binary could not be spawned. Extracted as its own
+ *  function, rather than left inline in `probePdftotext`, specifically
+ *  because a review mutated `missing: r.error !== undefined` to
+ *  `missing: r.status !== 0` and zero unit tests failed: on the real binary
+ *  that mutation makes `pdftotextVersion()` return `null` while
+ *  `pdftotextAvailable()` returns `true`, the exact silent disagreement this
+ *  task exists to prevent, and nothing short of a manual run against the
+ *  real binary caught it. */
+export function toVersionProbe(r: SpawnResultLike): VersionProbe {
   return {
-    // `error` is set only when the process could not be spawned (ENOENT).
     missing: r.error !== undefined,
     // Both are `undefined`, not "", when the spawn itself failed.
     stdout: r.stdout ?? "",
     stderr: r.stderr ?? "",
   };
-};
+}
+
+/** `spawnSync`, not `execFileSync`, for two measured reasons: both known
+ *  builds print the version to STDERR and `execFileSync` returns only stdout,
+ *  and `execFileSync` throws on Xpdf's non-zero exit. `spawnSync` never throws
+ *  and returns both streams whatever the status. */
+const probePdftotext: VersionRunner = () =>
+  toVersionProbe(spawnSync("pdftotext", ["-v"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }));
 
 /**
  * The first line `pdftotext -v` prints, or null when the binary is absent or

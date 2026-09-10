@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { isPdf, pdfRungAvailable, pdftotextVersion, type VersionProbe } from "../../src/fetch/pdf.js";
+import {
+  isPdf,
+  pdfRungAvailable,
+  pdftotextVersion,
+  toVersionProbe,
+  type SpawnResultLike,
+  type VersionProbe,
+} from "../../src/fetch/pdf.js";
 
 describe("isPdf", () => {
   it("matches a .pdf suffix", () => {
@@ -84,17 +91,17 @@ describe("pdftotextVersion", () => {
 
   it("reads the version off stderr, where both known builds print it", () => {
     // THIS IS ALSO WHERE "a non-zero exit is not absence" is pinned, as far as
-    // a test can pin it. Fable's correction 4: this plan carried a second
-    // `it()` named for that property whose input - `probe({ missing: false,
-    // stderr: XPDF_STDERR })` - was character-for-character this one's, since
-    // `missing: false` is the helper's default. It could not go red unless this
-    // test did, so it is deleted rather than left to overclaim a property it
-    // could not check. The enforcement is STRUCTURAL: `VersionProbe` carries no
-    // exit status at all, so `pdftotextVersion` has nothing to consult, and the
-    // one line that could get it wrong - `missing: r.error !== undefined` -
-    // lives in the `probePdftotext` closure, which no test runs because no test
-    // spawns a binary. What covers that line is Step 6's manual run against the
-    // real binary, on a machine whose build was measured to exit 99.
+    // a test AT THIS LEVEL can pin it. Fable's correction 4: this plan carried
+    // a second `it()` named for that property whose input - `probe({ missing:
+    // false, stderr: XPDF_STDERR })` - was character-for-character this one's,
+    // since `missing: false` is the helper's default. It could not go red
+    // unless this test did, so it is deleted rather than left to overclaim a
+    // property it could not check. The enforcement here is STRUCTURAL:
+    // `VersionProbe` carries no exit status at all, so `pdftotextVersion` has
+    // nothing to consult. The line that decides `missing` from a raw status -
+    // `r.error !== undefined`, not `r.status !== 0` - is `toVersionProbe`'s,
+    // below, and has its own tests (fix round 1): no test here reaches it,
+    // because every test above injects its own `VersionRunner`.
     expect(pdftotextVersion(() => probe({ stderr: XPDF_STDERR }))).toBe("pdftotext version 4.00");
   });
 
@@ -128,5 +135,41 @@ describe("pdftotextVersion", () => {
     // Without this, a probe that returned a constant string would pass every
     // test above and stamp a fabricated version into every index entry.
     expect(pdftotextVersion(() => probe({ stdout: "  \n\n", stderr: "" }))).toBeNull();
+  });
+});
+
+describe("toVersionProbe", () => {
+  // Fix round 1: pulled out of `probePdftotext` because no test above
+  // reaches the real spawnSync-to-VersionProbe mapping at all - every one of
+  // them injects its own `VersionRunner`. A prior review mutated
+  // `missing: r.error !== undefined` to `missing: r.status !== 0` and ZERO
+  // unit tests failed; on the real binary that mutation makes
+  // `pdftotextVersion()` return `null` while `pdftotextAvailable()` returns
+  // `true` - the exact silent disagreement this task exists to prevent. That
+  // review also mutated both `?? ""` coalesces away and `tsc` stayed clean,
+  // because `spawnSync`'s own return type claims `stdout`/`stderr` are
+  // `string`, never `undefined`, even though the runtime value is
+  // `undefined` on a failed spawn. `SpawnResultLike` declares them optional
+  // for exactly this reason, so the coalesce is load-bearing at the type
+  // level too: drop it and this file fails to typecheck.
+
+  it("coalesces undefined stdout and stderr to empty strings", () => {
+    // Measured (see the brief): both streams are `undefined`, not `""`, when
+    // the spawn itself fails. Without this, `pdftotextVersion`'s
+    // `stream.split(...)` would throw on `undefined.split(...)`.
+    const raw: SpawnResultLike = { status: null, error: new Error("spawn ENOENT"), stdout: undefined, stderr: undefined };
+    expect(toVersionProbe(raw)).toEqual({ missing: true, stdout: "", stderr: "" });
+  });
+
+  it("a non-zero status with no error is NOT missing - Xpdf's own exit code", () => {
+    // This is the exact case the `r.status !== 0` mutation got wrong: status
+    // 99, no `error`, must read as present, not missing.
+    const raw: SpawnResultLike = { status: 99, stdout: "", stderr: "pdftotext version 4.00\n" };
+    expect(toVersionProbe(raw)).toEqual({ missing: false, stdout: "", stderr: "pdftotext version 4.00\n" });
+  });
+
+  it("an ENOENT error IS missing, regardless of status", () => {
+    const raw: SpawnResultLike = { status: null, error: new Error("spawn ENOENT"), stdout: "", stderr: "" };
+    expect(toVersionProbe(raw).missing).toBe(true);
   });
 });
