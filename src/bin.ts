@@ -6,6 +6,7 @@ import { check } from "./check.js";
 import { reachability } from "./reachability.js";
 import { harvest } from "./harvest.js";
 import { recheck } from "./recheck.js";
+import type { CitationOutcome } from "./archive/compare.js";
 import { parseGfmFootnotes } from "./adapters/gfm-footnotes.js";
 import { joinClaims, parseClaimsFile } from "./io/claims.js";
 import { buildDraft, draftInTheWay, writeDraftFile } from "./io/draft.js";
@@ -87,6 +88,95 @@ export function classifyRecheckRun(t: RecheckTally, opts: { readonly failOnGone?
   if (t.gone > 0 && opts.failOnGone === true) return 1;
   if (t.pipelineDrift > 0) return 2;
   return 0;
+}
+
+/**
+ * The per-outcome report lines for `recheck`, pulled out of `main` so THE
+ * ACCUSATION GATE IS A PURE FUNCTION A TEST CAN DRIVE DIRECTLY, rather than a
+ * branch buried inside an unexported `main()` that only the manual
+ * end-to-end check can reach.
+ *
+ * `missed` is present on EVERY `CitationOutcome`, including rows that do not
+ * accuse (see `RecheckReport.outcomes`'s doc comment in `src/recheck.ts`),
+ * and this is the ONE place that decides whose row gets to print it as a
+ * `MISS:` line: `category === "sourceDrift"`, and nothing else. Gate
+ * categorically on that - never on an enumeration of what to exclude - so a
+ * `DriftCategory` added later inherits silence by default rather than
+ * inheriting an accusation.
+ *
+ * `rungsAttempted` is the one field the `unreachable` row needs that does not
+ * live on `CitationOutcome` itself (`CitationResult` carries no status, so it
+ * comes from the live arm's own result at the same index); omitted, it
+ * renders as "tried: " with nothing named, which is still correct, just
+ * silent about the ladder.
+ */
+export function renderOutcome(o: CitationOutcome, n: number, rungsAttempted: readonly string[] = []): string[] {
+  const lines: string[] = [];
+  // The BUNDLED rules moving is named as a likely cause and changes
+  // nothing: it is never a confound, because treating a version bump as one
+  // would suppress the comparison on every citation after every release and
+  // retire the instrument by upgrading it.
+  const bundled = o.bundledVersionChanged
+    ? ` (the bundled rules moved: archived under ${o.archivedToolVersion}, running ${VERSION})`
+    : "";
+  if (o.category === "sourceDrift") {
+    lines.push(`  [${n}] SOURCE DRIFT - ${o.url}`);
+    lines.push(`        archived ${o.archivedAt}: the stored bytes still prove this claim and the live page does not`);
+    for (const m of o.missed) lines.push(`        MISS: "${m}"`);
+  } else if (o.category === "pipelineDrift") {
+    lines.push(`  [${n}] pipeline drift - ${o.url} (live ${o.live}, archived bytes ${o.archived})${bundled}`);
+    lines.push("        This is a regression in testimonium, not a defect in your document.");
+  } else if (o.category === "gone") {
+    // `archivedAt` is when the baseline was established or last MATERIALLY
+    // changed - the store preserves an entry that changed in nothing
+    // material - so this line reads "gone since at least that date".
+    lines.push(`  [${n}] gone since ${o.archivedAt} - ${o.url}`);
+    // THE ONE ROW THAT CAN CARRY CONFOUNDS. The gone row is evaluated above
+    // the named confounds (spec 8.3 as amended), because no confound can
+    // explain an origin's 404 - so print them here: the reorder changes
+    // which category wins, not what the author is told.
+    for (const c of o.confounds) lines.push(`        ${c}`);
+  } else if (o.category === "unreachable") {
+    lines.push(`  [${n}] unreachable now - ${o.url} (tried: ${rungsAttempted.join(", ")})`);
+  } else if (o.category === "confounded") {
+    lines.push(`  [${n}] not compared - ${o.url}`);
+    for (const c of o.confounds) lines.push(`        ${c}`);
+  } else if (o.category === "noBaseline") {
+    lines.push(`  [${n}] no baseline - ${o.url} (live: ${o.live})`);
+  } else if (o.category === "unclaimed") {
+    lines.push(`  [${n}] NO CLAIMS RECORDED - ${o.url}`);
+  } else {
+    lines.push(`  [${n}] clean - ${o.url}${bundled}`);
+  }
+  // `liveGone` is set only when the live arm came back UNREACHABLE (Fable's
+  // correction 5), so this clause can no longer print under a citation the
+  // ladder went on to read: a node rung that 404s before a curl rung reads
+  // the document is L = supported, and telling that author their source may
+  // be gone is a false alarm. With the gone row now above the confounds,
+  // the rows this still reaches are `noBaseline` and mixed-status
+  // `unreachable` - which is exactly its remaining job.
+  if (o.liveGone && o.category !== "gone") {
+    lines.push("        the live read was a 404 or 410, so this source may be gone");
+  }
+  return lines;
+}
+
+/**
+ * `RecheckReport.archiveUnreadable`, surfaced as its own notice in the
+ * printed report rather than left to `recheck()`'s internal `console.warn`.
+ *
+ * When the archive exists but this build could not read it, every citation
+ * degrades to `noBaseline` and the run exits 0 - which, read on its own,
+ * looks exactly like "you never ran check", a materially different thing to
+ * tell the author than "your archive exists and is corrupt". This function
+ * exists so that distinction reaches the report, not just stderr.
+ */
+export function archiveUnreadableNotice(archiveUnreadable: string | null): string[] {
+  if (archiveUnreadable === null) return [];
+  return [
+    `\nARCHIVE UNREADABLE: ${archiveUnreadable}`,
+    "Every citation below reports \"no baseline\" because of that - not because check was never run.",
+  ];
 }
 
 const KNOWN_FLAGS = new Set([
@@ -413,61 +503,22 @@ async function main(argv: string[]): Promise<number> {
       },
     );
 
+    // Surfaced as its own notice, distinct from the per-citation `noBaseline`
+    // rows an unreadable archive degrades every one of them to: to an author
+    // that degradation reads as "you never ran check", not "your archive
+    // exists and is corrupt" - a materially different thing to be told.
+    for (const line of archiveUnreadableNotice(report.archiveUnreadable)) console.log(line);
+
     let sourceDrift = 0;
     let pipelineDrift = 0;
     let gone = 0;
     // outcomes are 1:1 with the citations handed in, in order.
     for (const [i, o] of report.outcomes.entries()) {
       const n = joined.checkable[i]?.n ?? i + 1;
-      // The BUNDLED rules moving is named as a likely cause and changes
-      // nothing: it is never a confound, because treating a version bump as one
-      // would suppress the comparison on every citation after every release and
-      // retire the instrument by upgrading it.
-      const bundled = o.bundledVersionChanged
-        ? ` (the bundled rules moved: archived under ${o.archivedToolVersion}, running ${VERSION})`
-        : "";
-      if (o.category === "sourceDrift") {
-        sourceDrift++;
-        console.log(`  [${n}] SOURCE DRIFT - ${o.url}`);
-        console.log(`        archived ${o.archivedAt}: the stored bytes still prove this claim and the live page does not`);
-        for (const m of o.missed) console.log(`        MISS: "${m}"`);
-      } else if (o.category === "pipelineDrift") {
-        pipelineDrift++;
-        console.log(`  [${n}] pipeline drift - ${o.url} (live ${o.live}, archived bytes ${o.archived})${bundled}`);
-        console.log("        This is a regression in testimonium, not a defect in your document.");
-      } else if (o.category === "gone") {
-        gone++;
-        // `archivedAt` is when the baseline was established or last MATERIALLY
-        // changed - the store preserves an entry that changed in nothing
-        // material - so this line reads "gone since at least that date".
-        console.log(`  [${n}] gone since ${o.archivedAt} - ${o.url}`);
-        // THE ONE ROW THAT CAN CARRY CONFOUNDS. The gone row is evaluated above
-        // the named confounds (spec 8.3 as amended), because no confound can
-        // explain an origin's 404 - so print them here: the reorder changes
-        // which category wins, not what the author is told.
-        for (const c of o.confounds) console.log(`        ${c}`);
-      } else if (o.category === "unreachable") {
-        console.log(`  [${n}] unreachable now - ${o.url} (tried: ${report.liveResults[i]?.rungsAttempted.join(", ") ?? ""})`);
-      } else if (o.category === "confounded") {
-        console.log(`  [${n}] not compared - ${o.url}`);
-        for (const c of o.confounds) console.log(`        ${c}`);
-      } else if (o.category === "noBaseline") {
-        console.log(`  [${n}] no baseline - ${o.url} (live: ${o.live})`);
-      } else if (o.category === "unclaimed") {
-        console.log(`  [${n}] NO CLAIMS RECORDED - ${o.url}`);
-      } else {
-        console.log(`  [${n}] clean - ${o.url}${bundled}`);
-      }
-      // `liveGone` is set only when the live arm came back UNREACHABLE (Fable's
-      // correction 5), so this clause can no longer print under a citation the
-      // ladder went on to read: a node rung that 404s before a curl rung reads
-      // the document is L = supported, and telling that author their source may
-      // be gone is a false alarm. With the gone row now above the confounds,
-      // the rows this still reaches are `noBaseline` and mixed-status
-      // `unreachable` - which is exactly its remaining job.
-      if (o.liveGone && o.category !== "gone") {
-        console.log("        the live read was a 404 or 410, so this source may be gone");
-      }
+      if (o.category === "sourceDrift") sourceDrift++;
+      else if (o.category === "pipelineDrift") pipelineDrift++;
+      else if (o.category === "gone") gone++;
+      for (const line of renderOutcome(o, n, report.liveResults[i]?.rungsAttempted ?? [])) console.log(line);
     }
 
     // Reported exactly as `check` reports them, from the same joinClaims output.

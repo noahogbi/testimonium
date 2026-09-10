@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { sha256Hex } from "../src/archive/format.js";
+import type { CitationOutcome } from "../src/archive/compare.js";
 import type { FetcherOptions } from "../src/fetch/default-fetcher.js";
 import type { Fetcher } from "../src/fetch/types.js";
 import type { HostRule } from "../src/rules/hosts.js";
@@ -10,12 +11,14 @@ import type { RuleSet } from "../src/rules/load.js";
 import {
   archiveContextFor,
   archivePathFor,
+  archiveUnreadableNotice,
   classifyRecheckRun,
   classifyRun,
   claimsPathFor,
   draftPathFor,
   evidencePathFor,
   harvestSummaryLine,
+  renderOutcome,
   USAGE,
   validateFlags,
 } from "../src/bin.js";
@@ -339,5 +342,75 @@ describe("validateFlags and the recheck flag", () => {
     // The command-agnostic gap, still parked. Fifth instance.
     expect(validateFlags(["check", "doc.md", "--fail-on-gone"])).toBeNull();
     expect(validateFlags(["harvest", "doc.md", "--fail-on-gone"])).toBeNull();
+  });
+});
+
+// A full CitationOutcome fixture, so each test below overrides only what it
+// means to vary. `missed` defaults NON-EMPTY on purpose: the gate under test
+// is which categories are ALLOWED to print it, so every fixture must give
+// them something to wrongly print if the gate fails.
+function outcome(overrides: Partial<CitationOutcome> & { category: CitationOutcome["category"] }): CitationOutcome {
+  return {
+    url: "http://example.com/report",
+    key: "example.com/report",
+    live: "unsupported",
+    archived: null,
+    recorded: null,
+    archivedAt: "2020-01-01T00:00:00.000Z",
+    confounds: [],
+    liveGone: false,
+    bundledVersionChanged: false,
+    archivedToolVersion: null,
+    missed: ["spending rose sharply"],
+    ...overrides,
+  };
+}
+
+describe("renderOutcome and the accusation gate", () => {
+  // THE THING THIS GATE EXISTS TO PREVENT: `missed` is present on every
+  // CitationOutcome (see RecheckReport.outcomes's doc comment), and only
+  // `category === "sourceDrift"` may render it as a MISS: line. A gate
+  // written as `if (o.missed.length > 0)` would pass every one of these with
+  // the suite still green, because every fixture here is built WITH a
+  // non-empty `missed`.
+  it("prints MISS only on sourceDrift", () => {
+    const lines = renderOutcome(outcome({ category: "sourceDrift", archived: "supported" }), 1).join("\n");
+    expect(lines).toContain('MISS: "spending rose sharply"');
+    expect(lines).toContain("SOURCE DRIFT");
+  });
+
+  it("never prints MISS on pipelineDrift, even though missed is non-empty", () => {
+    const lines = renderOutcome(outcome({ category: "pipelineDrift", live: "supported", archived: "unsupported" }), 1).join(
+      "\n",
+    );
+    expect(lines).not.toContain("MISS:");
+    expect(lines).not.toContain("SOURCE DRIFT");
+  });
+
+  it("never prints MISS on noBaseline, even though missed is non-empty", () => {
+    const lines = renderOutcome(outcome({ category: "noBaseline" }), 1).join("\n");
+    expect(lines).not.toContain("MISS:");
+    expect(lines).not.toContain("SOURCE DRIFT");
+  });
+
+  it("never prints MISS on clean, even though missed is non-empty", () => {
+    // clean is the row a `live !== archived`-shaped mistake or a bare
+    // `missed.length > 0` gate would reach too - the row furthest from an
+    // accusation, and the one where printing MISS would be most misleading.
+    const lines = renderOutcome(outcome({ category: "clean", live: "supported", archived: "supported" }), 1).join("\n");
+    expect(lines).not.toContain("MISS:");
+    expect(lines).not.toContain("SOURCE DRIFT");
+  });
+});
+
+describe("archiveUnreadableNotice", () => {
+  it("is silent when the archive read cleanly", () => {
+    expect(archiveUnreadableNotice(null)).toEqual([]);
+  });
+
+  it("names the reason and distinguishes archive corruption from check never having run", () => {
+    const lines = archiveUnreadableNotice("doc.archive/index.json is not valid JSON").join("\n");
+    expect(lines).toContain("doc.archive/index.json is not valid JSON");
+    expect(lines).toContain("not because check was never run");
   });
 });
