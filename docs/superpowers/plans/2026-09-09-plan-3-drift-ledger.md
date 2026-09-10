@@ -1412,3 +1412,94 @@ by inspection, not by a saved-and-diffed comparison, so it is not independently
 checkable from what was recorded. The static equivalence check stands on its own.
 Task 10: complete (commits aa1a455..f60c512, review clean after 1 fix round).
 485 tests. recheck is reachable from the CLI.
+
+---
+
+## Final whole-branch review, fix wave, and close-out
+
+Final whole-branch review (opus) over 84202d3..e4b5a13, 20 commits: READY WITH
+FIXES - 3 Important, 3 Minor, none touching the keystone.
+THE KEYSTONE HOLDS, PROVED END TO END THROUGH THE DELIVERY PATH. The reviewer
+transcribed spec 8.3 into an independent oracle and drove 86,400 combinations
+through the REAL compareCitation -> renderOutcome -> classifyRecheckRun
+pipeline: 0 category mismatches, 0 accusation leaks, exit 1 on exactly the 108
+sourceDrift rows and nothing else; --fail-on-gone adds only the 2,000 gone rows.
+The harness was proved FALSIFIABLE FIRST - reinstating the deleted table gave
+324 mismatches, removing the reporter's gate 648 leaks, disabling the confound
+short-circuit 10,912. Ten source-level mutations, each with a proven anchor
+count, all red.
+
+Its three Important findings, two of them the same defect at new sites:
+(1) src/bin.ts:155-157 REINTRODUCED A SENTENCE ALREADY MEASURED FALSE. The
+liveGone clause was found false by Task 8's reviewer and corrected in
+compare.ts at 56b9e97 - and e039e92 restored it VERBATIM in the reporter two
+commits later, where Task 11's whole-document sweep missed the twin. The
+correction was durable; the phrasing travelled.
+(2) recheck --json WAS AN UNGATED ACCUSATION SURFACE. The terminal reporter was
+gated, tested and mutation-proven so that missed renders only on sourceDrift.
+The JSON emitted the whole outcome list. Measured: a confounded citation printed
+"not compared" to the terminal while the payload carried
+missed: ["committee spending rose sharply during the fourth quarter"]. Spec
+7.4's doctrine is that the schema CANNOT EXPRESS an accusation - structural, not
+promised - and one of its two channels was not structural at all. Same lesson as
+plan 2's BUG:-prefix near-miss: a gate protects one path, and the display layer
+has more than one.
+(3) test/bin.test.ts:381-383 stated its own coverage BACKWARDS, claiming a
+broken gate would pass its tests when that gate in fact fails 3 of the 4 - worse
+than silence, because it invites a reader to "strengthen" tests that work.
+
+Final fix wave (sonnet, single dispatch): commit 844b4ef, all five applied.
+491 tests (487 + 4, reconciled both ways), tsc clean, four files.
+Scoped re-review (opus) over e4b5a13..844b4ef: ALL FINDINGS ADDRESSED, driven
+rather than read. It rebuilt dist/ first and found it WAS stale (bin.js 23:13
+against bin.ts 23:16), so that warning was live. Driving recheck --json over a
+fixture yielding all four categories with non-empty live missed: the fixed build
+emits missed ONLY on sourceDrift, the other three empty, and no claim phrase
+appears anywhere in the payload. Re-driving the same fixture through the pre-fix
+line reproduced the leak exactly. Both --json gate mutations each fail 3 of the
+4 named tests.
+It judged the dated-records boundary carefully rather than accepting it: all six
+.superpowers/ copies are untracked scratch that ship with nobody; the three
+tracked copies in docs/ are all legitimate dated records - a verbatim preserved
+review, the ledger quoting the clause INSIDE ruling T8-R1 which is the record of
+it being found false, and the as-dispatched plan headed with its own correction
+note. NO LIVE DOCUMENT ASSERTS THE FALSE CLAUSE.
+
+Ruling: F3-1 - the re-review's one soft spot is PARKED: plan:83 carries the
+superseded clause as prose in the plan's own voice without an IN-PLACE
+superseding marker, unlike spec 8.3:1383's "Corrected 2026-09-09: the decision
+table is deleted, not adjusted", which is this repo's stronger convention. Not
+fixed, because the plan is an as-dispatched artifact already headed with a
+correction note and citing base facts (HEAD e66ed34, 361 tests) that are
+visibly stale, so a reader knows its era - and the skill allows exactly one fix
+wave. - Cost if wrong: a reader quoting the plan's prose out of context repeats
+a clause the shipped source contradicts.
+
+Ruling: F3-2 - the re-review's observation that `results` still carries `missed`
+on unsupported rows is NOT a finding and needs no change: that is the live arm's
+ordinary `check --json` output, it carries no drift category, and it is
+7.4-compliant (measured: no excerpt, no retrievedAt). `missed` on an
+`unsupported` verdict is the licensed case - it is what unsupported means. -
+Cost if wrong: none identified; the alternative would strip information the
+schema exists to carry.
+
+Close-out at 844b4ef: 21 commits over main @ 84202d3, 491 tests (from 361), tsc
+clean, build clean, tree clean. THE PLAN'S CENTRAL PROMISE VERIFIED BY HASH, not
+by inspection: src/check.ts, src/fetch/read-source.ts, src/io/evidence.ts,
+src/index.ts and test/exports.test.ts are BIT-IDENTICAL to main by blob hash,
+and the whole src/classify tree is identical by tree hash (f349065). Twenty-one
+commits, and the verdict machinery never moved.
+Bytes: the three standing ASCII exceptions unchanged at 57/45/3, README and
+CHANGELOG at 0, the only NUL the deliberate PDF fixture.
+
+THIRTEEN INSTRUMENT FAILURES are now on record across this project, three of
+them hit by the final reviewer inside the review that produced these findings.
+The list, because the variety is the point: a sed pattern with a backslash-u
+escape that matched nothing and reported a passing test against unmutated code;
+a decoded-char byte metric reading 19 where the byte count was 57; git diff over
+an untracked file; a mutation anchor written with LF against a CRLF working
+file; a grep-for-absence defeated by the very comment documenting the absence;
+a verification run against a stale dist/; a negative control that itself
+silently no-opped; and a check whose failure branch was unreachable because its
+success branch always matched. Every one was caught by requiring that a check be
+shown able to fail before its pass is believed.
