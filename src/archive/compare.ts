@@ -37,7 +37,8 @@ export interface CitationOutcome {
    *  it fires on a node rung that 404s before a curl rung that reads the
    *  document, and the report tells the author a page it had just read may be
    *  gone. With the gone row now above the confounds, what is left for this
-   *  flag is the `noBaseline` row and mixed-status `unreachable` rows. */
+   *  flag is the `noBaseline` row (entry absent, or R violated), where the
+   *  gone check is never reached. */
   readonly liveGone: boolean;
   /** The BUNDLED rules moved. Named in the report as a likely cause, and
    *  nothing else: never a confound, never a promotion. */
