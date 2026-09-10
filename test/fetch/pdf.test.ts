@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isPdf, pdfRungAvailable } from "../../src/fetch/pdf.js";
+import { isPdf, pdfRungAvailable, pdftotextVersion, type VersionProbe } from "../../src/fetch/pdf.js";
 
 describe("isPdf", () => {
   it("matches a .pdf suffix", () => {
@@ -68,5 +68,65 @@ describe("pdfRungAvailable", () => {
 
   it("is unavailable when both are missing", () => {
     expect(pdfRungAvailable(() => false, () => false)).toBe(false);
+  });
+});
+
+describe("pdftotextVersion", () => {
+  // Measured on this machine 2026-09-09 with
+  //   spawnSync("pdftotext", ["-v"], { encoding: "utf8", stdio: ["ignore","pipe","pipe"] })
+  // which returned status 99, no error, an empty stdout, and this on stderr.
+  // Xpdf's build exits NON-ZERO on -v and still prints its version, which is
+  // why the probe must not treat a non-zero exit as absence: doing so records
+  // nothing on a working install, silently, for exactly the rung whose version
+  // is the only thing standing between a poppler upgrade and an exit 1.
+  const XPDF_STDERR = "pdftotext version 4.00\r\nCopyright 1996-2017 Glyph & Cog, LLC\r\n";
+  const probe = (p: Partial<VersionProbe>): VersionProbe => ({ missing: false, stdout: "", stderr: "", ...p });
+
+  it("reads the version off stderr, where both known builds print it", () => {
+    // THIS IS ALSO WHERE "a non-zero exit is not absence" is pinned, as far as
+    // a test can pin it. Fable's correction 4: this plan carried a second
+    // `it()` named for that property whose input - `probe({ missing: false,
+    // stderr: XPDF_STDERR })` - was character-for-character this one's, since
+    // `missing: false` is the helper's default. It could not go red unless this
+    // test did, so it is deleted rather than left to overclaim a property it
+    // could not check. The enforcement is STRUCTURAL: `VersionProbe` carries no
+    // exit status at all, so `pdftotextVersion` has nothing to consult, and the
+    // one line that could get it wrong - `missing: r.error !== undefined` -
+    // lives in the `probePdftotext` closure, which no test runs because no test
+    // spawns a binary. What covers that line is Step 6's manual run against the
+    // real binary, on a machine whose build was measured to exit 99.
+    expect(pdftotextVersion(() => probe({ stderr: XPDF_STDERR }))).toBe("pdftotext version 4.00");
+  });
+
+  it("returns only the FIRST non-empty line, not the copyright line under it", () => {
+    // The mutation this catches: returning the whole stream trimmed. A
+    // multi-line version string would be written into every index entry and
+    // compared as one, so a copyright year change would read as a confound.
+    const v = pdftotextVersion(() => probe({ stderr: XPDF_STDERR }));
+    expect(v).not.toContain("Copyright");
+    expect(v).not.toContain("\n");
+  });
+
+  it("returns null when the binary could not be spawned at all", () => {
+    expect(pdftotextVersion(() => probe({ missing: true }))).toBeNull();
+  });
+
+  it("falls back to stdout for a build that prints there instead", () => {
+    // SHAPE, not a measurement: no build was observed printing to stdout on
+    // this machine. The fallback exists because the stream is a property of
+    // the build and this probe must not depend on which one is installed.
+    expect(pdftotextVersion(() => probe({ stdout: "pdftotext version 0.0.0-test\n" }))).toBe(
+      "pdftotext version 0.0.0-test",
+    );
+  });
+
+  it("prefers stderr when a build writes to both", () => {
+    expect(pdftotextVersion(() => probe({ stdout: "from stdout", stderr: "from stderr" }))).toBe("from stderr");
+  });
+
+  it("NEGATIVE CONTROL: a binary that ran and printed nothing records nothing", () => {
+    // Without this, a probe that returned a constant string would pass every
+    // test above and stamp a fabricated version into every index entry.
+    expect(pdftotextVersion(() => probe({ stdout: "  \n\n", stderr: "" }))).toBeNull();
   });
 });

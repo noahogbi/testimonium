@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -85,4 +85,58 @@ export function pdfRungAvailable(
   hasPdftotext: () => boolean = pdftotextAvailable,
 ): boolean {
   return hasCurl() && hasPdftotext();
+}
+
+/** Both streams of a `pdftotext -v` probe, plus whether the binary could be
+ *  spawned at all. A NON-ZERO EXIT IS NOT `missing`: Xpdf's build exits 99 on
+ *  `-v` and prints its version anyway, which is the same line
+ *  `pdftotextAvailable` already draws. */
+export interface VersionProbe {
+  readonly missing: boolean;
+  readonly stdout: string;
+  readonly stderr: string;
+}
+
+export type VersionRunner = () => VersionProbe;
+
+/** `spawnSync`, not `execFileSync`, for two measured reasons: both known
+ *  builds print the version to STDERR and `execFileSync` returns only stdout,
+ *  and `execFileSync` throws on Xpdf's non-zero exit. `spawnSync` never throws
+ *  and returns both streams whatever the status. */
+const probePdftotext: VersionRunner = () => {
+  const r = spawnSync("pdftotext", ["-v"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  return {
+    // `error` is set only when the process could not be spawned (ENOENT).
+    missing: r.error !== undefined,
+    // Both are `undefined`, not "", when the spawn itself failed.
+    stdout: r.stdout ?? "",
+    stderr: r.stderr ?? "",
+  };
+};
+
+/**
+ * The first line `pdftotext -v` prints, or null when the binary is absent or
+ * printed nothing.
+ *
+ * PROVENANCE FOR THE ARCHIVE (spec 8.3). `pdfFetch` returns `pdftotext
+ * -layout`'s output as `rawBody`, so what is archived for a PDF is already
+ * tool-transformed and the local poppler build sits inside the live arm and
+ * outside the archive. Recording the version is what lets `recheck` name a
+ * poppler difference as a named confound instead of failing the author's build
+ * over a PDF nobody touched.
+ *
+ * RESIDUE, DISCLOSED: two different builds reporting the same version string
+ * are not distinguishable at all.
+ *
+ * The runner is injectable so no test spawns a binary, exactly as
+ * `pdfRungAvailable` takes its two predicates.
+ */
+export function pdftotextVersion(run: VersionRunner = probePdftotext): string | null {
+  const probe = run();
+  if (probe.missing) return null;
+  for (const stream of [probe.stderr, probe.stdout]) {
+    const line = stream.split(/\r?\n/).map((s) => s.trim()).find((s) => s.length > 0);
+    if (line !== undefined) return line;
+  }
+  return null;
 }
