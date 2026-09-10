@@ -15,7 +15,9 @@ corrections; plan 2 implements 7.3's floor and 8.2.
 **Amended again:** 2026-09-09, twice, both for plan 3. First, new section 8.3
 (`recheck` and the archive as a control arm), the archive paragraph in 8
 superseded, and Q4 resolved. Second, the same day and before any of it was built,
-Fable's review of 8.3 returned APPROVE WITH CORRECTIONS: 8.3's decision table is
+Fable's review of 8.3 (preserved at
+`docs/superpowers/plans/2026-09-09-plan-3-drift-fable-spec-review.md`) returned
+APPROVE WITH CORRECTIONS: 8.3's decision table is
 deleted and replaced by a decision procedure, its `CheckOptions` sink is withdrawn
 for a CLI-side recording fetcher, the PDF ruling and the archive's on-disk format
 are pinned, and 6.2, 6.3, 8, 8.1 and Q4 take the corrections that follow from
@@ -1309,7 +1311,9 @@ for plan 3, and it resolves Q4. Plan 3 is blocked on nothing: plans 1, 1.1, 1.2
 and 2 have all shipped.
 
 **Corrected 2026-09-09, the same day it was written and before any of it was
-built.** Fable's review of this section returned APPROVE WITH CORRECTIONS with
+built.** Fable's review of this section - preserved at
+`docs/superpowers/plans/2026-09-09-plan-3-drift-fable-spec-review.md`, which owns
+its own correction numbers 1-14 - returned APPROVE WITH CORRECTIONS with
 fourteen findings, three of them blocking. Thirteen are folded in below and
 marked where they land; the fourteenth is 7.1's stale `RungId` snippet, which
 predates this section and is parked rather than fixed here.
