@@ -1009,7 +1009,7 @@ provenance to print).
 **Amended 2026-09-09, plan 3.** Two command-scoped flags join them, for the same
 reason `--explain-fetch` is not global - the other commands have nothing to apply
 them to. `check` takes `--no-archive`, which suppresses the baseline write so the
-gate can be run without side effects (section 8.3). `recheck` takes
+gate can be run without adding a new output (section 8.3). `recheck` takes
 `--fail-on-gone`, which turns a source the origin reports deleted into an exit 1;
 without it a gone source is reported and contributes 0, mirroring
 `--fail-on-unreachable`. The `recheck` line in the table above also said "against
@@ -1101,7 +1101,7 @@ them.
 | 1. Core | TS port of the fetch ladder, header/finalUrl capture, pure classifier, verdict reducer, claims and evidence files, one adapter, `check`, `reachability` | Q1, Q2 - both resolved below |
 | 1.2 Reader | `isReadable`; one `readSource` loop under `check` and `reachability`, with section 6.6's escalation and aggregation rules and the tests that pin them; the `foldWithMap` offset-map repair; U+00AD deleted by `norm`; the corrections the header lists | Nothing. Lands before plan 2 |
 | 2. Harvest | `harvest` per section 8.2: calibration of `minClaimChars` and `harvestSeedChars` first, then `Document.prose`, `commonSpans`, the four filters, the draft file | Plan 1.2. Q3, Q5 - both resolved below |
-| 3. Drift | `recheck` per section 8.3: the recording fetcher `bin.ts` wraps so `check` writes the archive on `supported`, the replay fetcher, the three-value comparison, archive-as-control-arm, and the README sentence 8.3 requires | Plan 2. Q4 - resolved below |
+| 3. Drift | `recheck` per section 8.3: the recording fetcher `bin.ts` wraps so `check` writes the archive on `supported`, the replay fetcher, the three-value comparison, archive-as-control-arm, and the README sentence 8.3 requires | Nothing. Plan 2 shipped; Q4 resolved below |
 
 `reachability` rides nearly free on plan 1's fetch layer, which is why it stays
 there rather than waiting: it is the command that stops a new user misreading
@@ -1618,6 +1618,17 @@ because the union it needs is a subset of that one read.
 `--no-archive` suppresses the write for a read-only invocation; `check` is a
 gate, and a gate must be runnable without side effects.
 
+*Corrected 2026-09-09, plan 3 Task 11.* "Read-only invocation" and "without side
+effects" are both too strong, and were when this section was written: `check`
+writes `<doc>.evidence.json` unconditionally from `bin.ts`, `--no-archive` or
+not. Measured on this machine - `check <doc> --no-archive` over a citation at a
+closed port left no `<doc>.archive/` and wrote `<doc>.evidence.json` all the
+same. What the flag actually guarantees is narrower and is what section 8.3
+needs: it does not wrap the fetcher, so the run adds no output plan 3 did not
+have, and the invocation is byte-for-byte the pre-plan-3 one. A gate that must
+be runnable without touching the archive is the true claim; a gate that writes
+nothing has never been this tool.
+
 **PDFs: the archived blob is `pdftotext`'s output, and the local poppler build
 sits inside the live arm.** *Corrected 2026-09-09.* This section called the
 stored blobs "raw bodies", which for this rung they have never been, and the
@@ -1851,7 +1862,10 @@ and `recheck` will call it clean for as long as it stays wrong.
 words, beside the exposures section 8.2 discloses for harvest." It does not. The
 README carries no sentence about change versus correctness anywhere, and its only
 mention of `recheck` is under the heading "What's not here", where it says the
-command "is a separate plan, not a missing feature of this one". A present-tense
+command "is a separate plan, not a missing feature of this one". (It carries both
+now - see the discharge below. This sentence is kept in the present tense it was
+written in, because it is the evidence that forced the requirement, and rewriting
+it would erase the record of the defect.) A present-tense
 factual claim about another document, false when written, in the section built to
 be plan 3's authority - the defect class section 0 exists to catch, committed
 inside the section correcting two others of the same kind. It becomes a
@@ -1859,6 +1873,17 @@ requirement instead: **plan 3 MUST add that sentence to the README in those
 words**, beside the exposures 8.2 discloses for harvest, and MUST replace the
 "What's not here" paragraph when `recheck` ships. That is a plan task with an
 acceptance check, not a claim about a file.
+
+*Discharged 2026-09-09, plan 3.* The README now carries the sentence, in those
+words, in its own `Recheck` section beside the harvest exposures, and the
+"What's not here" paragraph no longer says `recheck` is a separate plan.
+`test/readme.test.ts` pins the sentence itself, and pins that the README names
+every command `USAGE` names - so the half of this requirement that a future
+edit is most likely to delete is structural rather than promised. The replaced
+paragraph is **not** separately pinned: measured, restoring "`recheck` is a
+separate plan" to "What's not here" leaves both tests green. That half rests on
+review, and this sentence says so rather than claiming a coverage it does not
+have - which is the whole reason correction (c) exists.
 
 ---
 

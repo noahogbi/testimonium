@@ -325,7 +325,7 @@ async function main(argv: string[]): Promise<number> {
   }
 
   // --rules <path>: additive-only local override (Task 15). Loaded once, up
-  // front - before the command dispatch below - so it applies to all three
+  // front - before the command dispatch below - so it applies to all four
   // commands, and so a bad local file is reported clearly
   // rather than exploding mid-run on whichever citation happens to trip it
   // first. `reachability` walks the same ladder `check` does; a preflight

@@ -108,8 +108,11 @@ describe("validateFlags", () => {
     // doc.md --fail-on-unreachable` is accepted and ignored. Plan 2 did not
     // close either: it re-parked them and added a third command to the same
     // gap, characterized below in "the command-agnostic gap now covers a third
-    // command". Closing them would change check and reachability too, and spec
-    // 8.2 licenses no such change. This test exists
+    // command". Plan 3 re-parked them a second time and added a FOURTH command
+    // plus two more command-scoped flags (`--no-archive` on check,
+    // `--fail-on-gone` on recheck), so the gap now spans check, harvest,
+    // recheck and reachability. Closing them would change all four, and
+    // neither spec 8.2 nor 8.3 licenses such a change. This test exists
     // so the limit is written down where the behaviour lives, and so closing
     // it later is a deliberate edit to a red test rather than a silent
     // widening. It replaces a case that was byte-for-byte identical to
@@ -124,7 +127,9 @@ describe("draftPathFor", () => {
     // Spec 8.2, "CLI": bin.ts gains draftPathFor beside claimsPathFor and
     // evidencePathFor. All three replace the document's extension, so the
     // three files sit together and a versioned prose directory stays
-    // readable.
+    // readable. Plan 3 added a fourth helper on the same rule,
+    // `archivePathFor` (`<doc>.archive/`) - a directory rather than a file,
+    // which is why this block still asserts over three.
     expect(draftPathFor("essay.md").endsWith("essay.claims.draft.json")).toBe(true);
     expect(claimsPathFor("essay.md").endsWith("essay.claims.json")).toBe(true);
     expect(evidencePathFor("essay.md").endsWith("essay.evidence.json")).toBe(true);
@@ -155,9 +160,12 @@ describe("validateFlags and harvest", () => {
   it("CHARACTERIZATION: the command-agnostic gap now covers a third command", () => {
     // `harvest doc.md --fail-on-unreachable` is accepted and ignored, exactly
     // as `reachability doc.md --fail-on-unreachable` is. Per-command flag
-    // tables stay parked - they would change check and reachability too, and
-    // spec 8.2 licenses no such change - and this test is what makes closing
-    // the gap later a deliberate edit to a red test.
+    // tables stay parked - they would change check, recheck and reachability
+    // too, and neither spec 8.2 nor 8.3 licenses such a change - and this test
+    // is what makes closing the gap later a deliberate edit to a red test. Its
+    // plan-3 twins are the two --no-archive / --fail-on-gone CHARACTERIZATION
+    // cases below; this case and those two are one parked gap and move
+    // together.
     expect(validateFlags(["harvest", "doc.md", "--fail-on-unreachable"])).toBeNull();
     expect(validateFlags(["harvest", "doc.md", "--explain-fetch"])).toBeNull();
   });
