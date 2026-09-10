@@ -1,10 +1,25 @@
 import { describe, expect, it } from "vitest";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { tmpdir } from "node:os";
+import { sha256Hex } from "../src/archive/format.js";
+import type { CitationOutcome } from "../src/archive/compare.js";
+import type { FetcherOptions } from "../src/fetch/default-fetcher.js";
+import type { Fetcher } from "../src/fetch/types.js";
+import type { HostRule } from "../src/rules/hosts.js";
+import type { RuleSet } from "../src/rules/load.js";
 import {
+  archiveContextFor,
+  archivePathFor,
+  archiveUnreadableNotice,
+  classifyRecheckRun,
   classifyRun,
   claimsPathFor,
   draftPathFor,
   evidencePathFor,
   harvestSummaryLine,
+  jsonOutcome,
+  renderOutcome,
   USAGE,
   validateFlags,
 } from "../src/bin.js";
@@ -94,8 +109,11 @@ describe("validateFlags", () => {
     // doc.md --fail-on-unreachable` is accepted and ignored. Plan 2 did not
     // close either: it re-parked them and added a third command to the same
     // gap, characterized below in "the command-agnostic gap now covers a third
-    // command". Closing them would change check and reachability too, and spec
-    // 8.2 licenses no such change. This test exists
+    // command". Plan 3 re-parked them a second time and added a FOURTH command
+    // plus two more command-scoped flags (`--no-archive` on check,
+    // `--fail-on-gone` on recheck), so the gap now spans check, harvest,
+    // recheck and reachability. Closing them would change all four, and
+    // neither spec 8.2 nor 8.3 licenses such a change. This test exists
     // so the limit is written down where the behaviour lives, and so closing
     // it later is a deliberate edit to a red test rather than a silent
     // widening. It replaces a case that was byte-for-byte identical to
@@ -110,7 +128,9 @@ describe("draftPathFor", () => {
     // Spec 8.2, "CLI": bin.ts gains draftPathFor beside claimsPathFor and
     // evidencePathFor. All three replace the document's extension, so the
     // three files sit together and a versioned prose directory stays
-    // readable.
+    // readable. Plan 3 added a fourth helper on the same rule,
+    // `archivePathFor` (`<doc>.archive/`) - a directory rather than a file,
+    // which is why this block still asserts over three.
     expect(draftPathFor("essay.md").endsWith("essay.claims.draft.json")).toBe(true);
     expect(claimsPathFor("essay.md").endsWith("essay.claims.json")).toBe(true);
     expect(evidencePathFor("essay.md").endsWith("essay.evidence.json")).toBe(true);
@@ -125,9 +145,9 @@ describe("draftPathFor", () => {
 });
 
 describe("the usage string", () => {
-  it("names all three commands", () => {
+  it("names all four commands", () => {
     // A command the usage line does not name is a command nobody finds.
-    for (const command of ["check", "harvest", "reachability"]) {
+    for (const command of ["check", "harvest", "recheck", "reachability"]) {
       expect(USAGE, command).toContain(command);
     }
   });
@@ -138,12 +158,15 @@ describe("validateFlags and harvest", () => {
     expect(validateFlags(["harvest", "doc.md", "--json", "--rules", "local.json"])).toBeNull();
   });
 
-  it("CHARACTERIZATION: the command-agnostic gap now covers a third command", () => {
+  it("CHARACTERIZATION: the command-agnostic gap now covers a fourth command", () => {
     // `harvest doc.md --fail-on-unreachable` is accepted and ignored, exactly
     // as `reachability doc.md --fail-on-unreachable` is. Per-command flag
-    // tables stay parked - they would change check and reachability too, and
-    // spec 8.2 licenses no such change - and this test is what makes closing
-    // the gap later a deliberate edit to a red test.
+    // tables stay parked - they would change check, recheck and reachability
+    // too, and neither spec 8.2 nor 8.3 licenses such a change - and this test
+    // is what makes closing the gap later a deliberate edit to a red test. Its
+    // plan-3 twins are the two --no-archive / --fail-on-gone CHARACTERIZATION
+    // cases below; this case and those two are one parked gap and move
+    // together.
     expect(validateFlags(["harvest", "doc.md", "--fail-on-unreachable"])).toBeNull();
     expect(validateFlags(["harvest", "doc.md", "--explain-fetch"])).toBeNull();
   });
@@ -171,5 +194,270 @@ describe("harvestSummaryLine", () => {
     // "readable" is the word doing the work above; without it "3 URLs" would
     // misdescribe the one-key draft this run just wrote.
     expect(line).not.toContain("across 3 URLs");
+  });
+});
+
+describe("archivePathFor", () => {
+  it("puts <doc>.archive beside the evidence file", () => {
+    expect(archivePathFor("essay.md")).toBe(evidencePathFor("essay.md").replace(".evidence.json", ".archive"));
+  });
+
+  it("keeps the document's directory and strips its extension, as the other path helpers do", () => {
+    expect(archivePathFor("docs/drafts/essay.markdown")).toContain("drafts");
+    expect(archivePathFor("docs/drafts/essay.markdown").endsWith("essay.archive")).toBe(true);
+  });
+});
+
+describe("archiveContextFor", () => {
+  const RULE: HostRule = { host: "sec.gov", requiresIdentity: true, lastConfirmed: "2026-09-01", note: "a local host rule" };
+  const rules = (hosts: readonly HostRule[] = []): RuleSet => ({ signatures: [], paths: [], boilerplate: [], hosts });
+  const fetcher = (rungs: string[]): Fetcher => ({
+    rungs,
+    async fetch() {
+      throw new Error("archiveContextFor must not fetch");
+    },
+  });
+
+  it("passes the loaded host rules into the fetcher it builds", () => {
+    // A CLI that builds its own fetcher and omits `{ hosts }` gives the author
+    // a --rules file that loads, validates and is never consulted. The
+    // mutation this catches: `make({})`.
+    let seen: FetcherOptions | undefined;
+    const ctx = archiveContextFor(rules([RULE]), undefined, {
+      make: (o) => { seen = o; return fetcher(["node"]); },
+      version: () => null,
+    });
+    expect(ctx).not.toBeNull();
+    // NEGATIVE CONTROL: without this, a factory that was never called would
+    // leave `seen` undefined and the assertion below would be vacuous.
+    expect(seen).toBeDefined();
+    expect(seen?.hosts).toEqual([RULE]);
+  });
+
+  it("probes the pdftotext version only when the fetcher advertises that rung", () => {
+    let probes = 0;
+    const withRung = archiveContextFor(rules(), undefined, {
+      make: () => fetcher(["node", "curl", "pdftotext"]),
+      version: () => { probes++; return "pdftotext version 4.00"; },
+    });
+    expect(withRung?.pdftotextVersion).toBe("pdftotext version 4.00");
+    expect(probes).toBe(1);
+  });
+
+  it("does not spawn a probe on a machine whose ladder has no pdftotext rung", () => {
+    let probes = 0;
+    const withoutRung = archiveContextFor(rules(), undefined, {
+      make: () => fetcher(["node"]),
+      version: () => { probes++; return "should not be reached"; },
+    });
+    expect(withoutRung?.pdftotextVersion).toBeNull();
+    expect(probes).toBe(0);
+  });
+
+  it("hashes the --rules file's bytes when one was passed", () => {
+    const f = join(mkdtempSync(join(tmpdir(), "testimonium-rules-")), "local.json");
+    writeFileSync(f, '{"signatures":[]}', "utf8");
+    const ctx = archiveContextFor(rules(), f, { make: () => fetcher(["node"]), version: () => null });
+    expect(ctx?.localRulesHash).toBe(sha256Hex(readFileSync(f)));
+    rmSync(dirname(f), { recursive: true, force: true });
+  });
+
+  it("records null, not a hash, when no --rules file was passed", () => {
+    const ctx = archiveContextFor(rules(), undefined, { make: () => fetcher(["node"]), version: () => null });
+    expect(ctx?.localRulesHash).toBeNull();
+  });
+
+  it("declines to archive at all rather than record a wrong localRulesHash", () => {
+    // An entry recording `null` when a --rules file WAS passed would be a
+    // baseline that mis-reports the local-rules confound forever. Archiving
+    // must never fail a run, so the answer is to skip archiving, not to throw
+    // and not to guess.
+    const ctx = archiveContextFor(rules(), "no/such/rules.json", { make: () => fetcher(["node"]), version: () => null });
+    expect(ctx).toBeNull();
+  });
+});
+
+describe("validateFlags and the archive flag", () => {
+  it("accepts --no-archive", () => {
+    expect(validateFlags(["check", "doc.md", "--no-archive"])).toBeNull();
+  });
+
+  it("names --no-archive in the usage string", () => {
+    // A flag the usage line does not name is a flag nobody finds - and
+    // validateFlags exits 2 on any --flag KNOWN_FLAGS does not carry, so the
+    // two must move together.
+    expect(USAGE).toContain("--no-archive");
+  });
+
+  it("CHARACTERIZATION: --no-archive is accepted and ignored on the other commands too", () => {
+    // The command-agnostic gap, parked since plan 2 (ruling T9-R1 and the
+    // per-command flag tables item): closing it would change every command and
+    // no spec section licenses that. This test is what makes closing it later a
+    // deliberate edit to a red test, and it now covers a fourth instance.
+    expect(validateFlags(["harvest", "doc.md", "--no-archive"])).toBeNull();
+    expect(validateFlags(["reachability", "doc.md", "--no-archive"])).toBeNull();
+  });
+});
+
+describe("recheck exit codes", () => {
+  it("exits 0 when nothing drifted", () => {
+    expect(classifyRecheckRun({ sourceDrift: 0, pipelineDrift: 0, gone: 0 }, {})).toBe(0);
+  });
+
+  it("exits 1 on source drift - the author verifies the page and updates or removes the claim", () => {
+    expect(classifyRecheckRun({ sourceDrift: 1, pipelineDrift: 0, gone: 0 }, {})).toBe(1);
+  });
+
+  it("exits 2 on pipeline drift - a regression in this tool, not a defect in the document", () => {
+    expect(classifyRecheckRun({ sourceDrift: 0, pipelineDrift: 3, gone: 0 }, {})).toBe(2);
+  });
+
+  it("1 DOMINATES 2 for recheck, deliberately unlike classifyRun", () => {
+    // Under `check`, a 2 means the tool could not do its job and the run is
+    // void, so classifyRun tests infrastructure first and 2 wins outright.
+    // Under `recheck` both signals are real results about different citations,
+    // and letting our own regression mask genuine source drift at the exit code
+    // would be this tool's defect suppressing the author's news. The two
+    // policies are asserted side by side so the difference is deliberate rather
+    // than accidental.
+    expect(classifyRecheckRun({ sourceDrift: 1, pipelineDrift: 1, gone: 0 }, {})).toBe(1);
+    expect(classifyRun({ unsupported: 1, unclaimed: 0, unreachable: 0, orphaned: 0, infrastructure: true }, {})).toBe(2);
+  });
+
+  it("exits 0 on a gone source by default", () => {
+    // Failing by default would accuse over a transiently misconfigured 404,
+    // which is the same false accusation in a new costume.
+    expect(classifyRecheckRun({ sourceDrift: 0, pipelineDrift: 0, gone: 2 }, {})).toBe(0);
+  });
+
+  it("exits 1 on a gone source when the author opted in, mirroring --fail-on-unreachable", () => {
+    // A genuinely dead link is the author's to fix, which is why the opt-in
+    // exists at all and why it contributes 1 rather than 2.
+    expect(classifyRecheckRun({ sourceDrift: 0, pipelineDrift: 0, gone: 1 }, { failOnGone: true })).toBe(1);
+  });
+
+  it("a gone source the author opted into still dominates pipeline drift", () => {
+    expect(classifyRecheckRun({ sourceDrift: 0, pipelineDrift: 5, gone: 1 }, { failOnGone: true })).toBe(1);
+  });
+});
+
+describe("validateFlags and the recheck flag", () => {
+  it("accepts --fail-on-gone and names it in the usage string", () => {
+    expect(validateFlags(["recheck", "doc.md", "--fail-on-gone"])).toBeNull();
+    expect(USAGE).toContain("--fail-on-gone");
+  });
+
+  it("CHARACTERIZATION: --fail-on-gone is accepted and ignored on the other commands too", () => {
+    // The command-agnostic gap, still parked. Fifth instance.
+    expect(validateFlags(["check", "doc.md", "--fail-on-gone"])).toBeNull();
+    expect(validateFlags(["harvest", "doc.md", "--fail-on-gone"])).toBeNull();
+  });
+});
+
+// A full CitationOutcome fixture, so each test below overrides only what it
+// means to vary. `missed` defaults NON-EMPTY on purpose: the gate under test
+// is which categories are ALLOWED to print it, so every fixture must give
+// them something to wrongly print if the gate fails.
+function outcome(overrides: Partial<CitationOutcome> & { category: CitationOutcome["category"] }): CitationOutcome {
+  return {
+    url: "http://example.com/report",
+    key: "example.com/report",
+    live: "unsupported",
+    archived: null,
+    recorded: null,
+    archivedAt: "2020-01-01T00:00:00.000Z",
+    confounds: [],
+    liveGone: false,
+    bundledVersionChanged: false,
+    archivedToolVersion: null,
+    missed: ["spending rose sharply"],
+    ...overrides,
+  };
+}
+
+describe("renderOutcome and the accusation gate", () => {
+  // THE THING THIS GATE EXISTS TO PREVENT: `missed` is present on every
+  // CitationOutcome (see RecheckReport.outcomes's doc comment), and only
+  // `category === "sourceDrift"` may render it as a MISS: line. A gate
+  // written as `if (o.missed.length > 0)` would FAIL 3 of the 4 tests below:
+  // every fixture here is built WITH a non-empty `missed`, so that broken
+  // gate would wrongly print MISS on pipelineDrift, noBaseline and clean, and
+  // only the sourceDrift case would still pass. The non-empty fixtures are
+  // precisely what catch it.
+  it("prints MISS only on sourceDrift", () => {
+    const lines = renderOutcome(outcome({ category: "sourceDrift", archived: "supported" }), 1).join("\n");
+    expect(lines).toContain('MISS: "spending rose sharply"');
+    expect(lines).toContain("SOURCE DRIFT");
+  });
+
+  it("never prints MISS on pipelineDrift, even though missed is non-empty", () => {
+    const lines = renderOutcome(outcome({ category: "pipelineDrift", live: "supported", archived: "unsupported" }), 1).join(
+      "\n",
+    );
+    expect(lines).not.toContain("MISS:");
+    expect(lines).not.toContain("SOURCE DRIFT");
+  });
+
+  it("never prints MISS on noBaseline, even though missed is non-empty", () => {
+    const lines = renderOutcome(outcome({ category: "noBaseline" }), 1).join("\n");
+    expect(lines).not.toContain("MISS:");
+    expect(lines).not.toContain("SOURCE DRIFT");
+  });
+
+  it("never prints MISS on clean, even though missed is non-empty", () => {
+    // clean is the row a `live !== archived`-shaped mistake or a bare
+    // `missed.length > 0` gate would reach too - the row furthest from an
+    // accusation, and the one where printing MISS would be most misleading.
+    const lines = renderOutcome(outcome({ category: "clean", live: "supported", archived: "supported" }), 1).join("\n");
+    expect(lines).not.toContain("MISS:");
+    expect(lines).not.toContain("SOURCE DRIFT");
+  });
+});
+
+describe("jsonOutcome and the --json accusation gate", () => {
+  // THE MEASURED BUG: `recheck --json` used to emit `report.outcomes`
+  // unfiltered, so a `confounded` citation printed "not compared" to the
+  // terminal while the JSON payload still carried its live arm's full
+  // `missed` list. `jsonOutcome` is the fix, gated categorically on
+  // `category === "sourceDrift"` exactly as `renderOutcome` is above.
+  it("keeps missed on sourceDrift", () => {
+    const o = outcome({ category: "sourceDrift", archived: "supported" });
+    expect(jsonOutcome(o).missed).toEqual(o.missed);
+  });
+
+  it("empties missed on confounded, even though missed is non-empty - the measured leak", () => {
+    const o = outcome({ category: "confounded", confounds: ["the claims for this URL changed"] });
+    expect(jsonOutcome(o).missed).toEqual([]);
+  });
+
+  it("empties missed on every other category, even though missed is non-empty", () => {
+    const others: CitationOutcome["category"][] = [
+      "clean",
+      "pipelineDrift",
+      "gone",
+      "unreachable",
+      "noBaseline",
+      "unclaimed",
+    ];
+    for (const category of others) {
+      expect(jsonOutcome(outcome({ category })).missed, category).toEqual([]);
+    }
+  });
+
+  it("changes nothing else about the outcome", () => {
+    const o = outcome({ category: "gone", archivedAt: "2021-06-01T00:00:00.000Z" });
+    expect(jsonOutcome(o)).toEqual({ ...o, missed: [] });
+  });
+});
+
+describe("archiveUnreadableNotice", () => {
+  it("is silent when the archive read cleanly", () => {
+    expect(archiveUnreadableNotice(null)).toEqual([]);
+  });
+
+  it("names the reason and distinguishes archive corruption from check never having run", () => {
+    const lines = archiveUnreadableNotice("doc.archive/index.json is not valid JSON").join("\n");
+    expect(lines).toContain("doc.archive/index.json is not valid JSON");
+    expect(lines).toContain("not because check was never run");
   });
 });

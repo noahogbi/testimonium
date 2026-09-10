@@ -11,7 +11,7 @@ Initial implementation of plan 1 (`check`, `reachability`). See
 One new command, one breaking refusal, and three additive fields. All of them
 landed after `ff71ec8` and before this version was released, so none carries a
 deprecation path. Apart from the refusal below, `check` gained no new
-behaviour: `harvest` is a second consumer of the reader plan 1.2 built, not a
+behaviour: `harvest` is a third consumer of the reader plan 1.2 built, not a
 change to the gate, and no verdict moved.
 
 - **BREAKING, and meant to be: a claim shorter than `THRESHOLDS.minClaimChars`
@@ -60,6 +60,46 @@ change to the gate, and no verdict moved.
   from `src/index.ts`. `harvest` stamps it into every draft, so two copies
   that could drift would put a slightly untrue version on a file the author
   keeps. No public name changed.
+
+### Plan 3 (drift) - changes since the plan-2 merge
+
+One new command and one new side effect on an existing one. Both landed before
+this version was released, so neither carries a deprecation path. **No verdict
+moved**: `check()` is not modified by this plan at all, and `recheck` runs both
+of its arms through it.
+
+- **New: `check` writes `<doc>.archive/` for every citation that reads
+  `supported`.** It holds the bytes the classifier saw - gzipped,
+  content-addressed, hashed before gzip - and the verdict they produced, so a
+  later `recheck` can control against them. It is written by the CLI through a
+  recording fetcher, never from inside `check()`, which stays storage-agnostic
+  and gains no option. `set-cookie` is never stored, in any form. Pass
+  `--no-archive` to run the gate without writing the archive; that path is
+  byte-for-byte the pre-plan-3 one, because the flag means "do not wrap", and
+  `<doc>.evidence.json` is still written, as it has been since plan 1.
+  Commit the archive: a control arm that exists only on the machine that wrote
+  it cannot control anything in CI. An entry that changed in nothing material
+  is preserved byte for byte, so a green run over an unchanged corpus leaves no
+  diff, and an `archivedAt` is the date that baseline was established or last
+  materially changed. It grows and nothing prunes it - see the README's
+  `Recheck` section for the cost, in full.
+- **New command: `testimonium recheck <doc.md>`.** It re-runs each claim
+  against the live source AND against the archived bytes and reports what
+  changed. **Exit 1 comes from exactly one outcome:** a live read that
+  positively failed to find a claim the stored bytes still positively prove.
+  Pipeline drift - the gate passing live while the stored bytes no longer do -
+  is exit 2 and is a regression in this tool, not a defect in your document. A
+  source the origin reports deleted is "gone since <date>", exit 0 unless
+  `--fail-on-gone`. Changed claims, a changed `pdftotext` version and a changed
+  local `--rules` file are named confounds and suppress the comparison at exit
+  0 - except on a source the origin reports deleted, which is reported gone
+  whatever else changed, with the confound named beside it, because nothing you
+  can edit locally makes a page 404. At the run level 1 dominates 2,
+  deliberately unlike `check`. `recheck` rewrites `<doc>.evidence.json` with
+  the live arm's results and never writes the archive.
+- **New flags:** `--no-archive` on `check`, `--fail-on-gone` on `recheck`.
+  Neither is global, and neither is rejected on the other commands -
+  `validateFlags` stays command-agnostic, as it has since plan 1.
 
 ### Plan 1.2 (reader) - changes since the plan-1.1 merge
 

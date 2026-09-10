@@ -5,12 +5,20 @@ import { pathToFileURL } from "node:url";
 import { check } from "./check.js";
 import { reachability } from "./reachability.js";
 import { harvest } from "./harvest.js";
+import { recheck } from "./recheck.js";
+import type { CitationOutcome } from "./archive/compare.js";
 import { parseGfmFootnotes } from "./adapters/gfm-footnotes.js";
 import { joinClaims, parseClaimsFile } from "./io/claims.js";
 import { buildDraft, draftInTheWay, writeDraftFile } from "./io/draft.js";
 import { writeEvidenceFile, type CitationResult } from "./io/evidence.js";
 import { loadRules, type RuleSet } from "./rules/load.js";
 import { VERSION } from "./version.js";
+import { archiveKeyFor, sha256Hex } from "./archive/format.js";
+import { buildArchiveEntry, recordingFetcher, type StagedEntry } from "./archive/record.js";
+import { writeArchive } from "./archive/store.js";
+import { defaultFetcher, type FetcherOptions } from "./fetch/default-fetcher.js";
+import { pdftotextVersion } from "./fetch/pdf.js";
+import type { Fetcher } from "./fetch/types.js";
 
 export interface RunTally {
   readonly unsupported: number;
@@ -44,20 +52,165 @@ export function classifyRun(t: RunTally, failOn: FailOn): 0 | 1 | 2 {
   return fail ? 1 : 0;
 }
 
+export interface RecheckTally {
+  readonly sourceDrift: number;
+  readonly pipelineDrift: number;
+  readonly gone: number;
+}
+
+/**
+ * `recheck`'s exit policy. **For `recheck`, 1 DOMINATES 2** - deliberately
+ * unlike `classifyRun` above.
+ *
+ * Under `check` a 2 means the tool could not do its job and the run is void, so
+ * infrastructure is tested first and wins outright: there is nothing
+ * author-actionable to preserve. Under `recheck` both signals are real results
+ * about different citations, and letting our own regression mask genuine source
+ * drift at the exit code would be this tool's defect suppressing the author's
+ * news. Both are named in the report either way; only the code is forced to
+ * choose.
+ *
+ * There is deliberately NO `infrastructure` member here. In `recheck` an
+ * infrastructure failure is a PRE-COMPARISON one - an unreadable document, an
+ * unreadable claims file, unloadable rules - and `main` returns 2 for it before
+ * any tally exists. A member this function could only ever be handed `false`
+ * would be an option it ignores, which is worse than no option.
+ *
+ * What 1-versus-2 delivers is ATTRIBUTION, not a passing build: exit 2 fails
+ * every naive `set -e` gate exactly as exit 1 does. The author is never told to
+ * fix their document for a defect that is ours.
+ */
+export function classifyRecheckRun(t: RecheckTally, opts: { readonly failOnGone?: boolean }): 0 | 1 | 2 {
+  if (t.sourceDrift > 0) return 1;
+  // A genuinely dead link is the author's to fix, which is why the opt-in
+  // exists - and why it contributes 1 rather than 2. Failing by default would
+  // accuse over a transiently misconfigured 404.
+  if (t.gone > 0 && opts.failOnGone === true) return 1;
+  if (t.pipelineDrift > 0) return 2;
+  return 0;
+}
+
+/**
+ * The per-outcome report lines for `recheck`, pulled out of `main` so THE
+ * ACCUSATION GATE IS A PURE FUNCTION A TEST CAN DRIVE DIRECTLY, rather than a
+ * branch buried inside an unexported `main()` that only the manual
+ * end-to-end check can reach.
+ *
+ * `missed` is present on EVERY `CitationOutcome`, including rows that do not
+ * accuse (see `RecheckReport.outcomes`'s doc comment in `src/recheck.ts`),
+ * and this is the ONE place that decides whose row gets to print it as a
+ * `MISS:` line: `category === "sourceDrift"`, and nothing else. Gate
+ * categorically on that - never on an enumeration of what to exclude - so a
+ * `DriftCategory` added later inherits silence by default rather than
+ * inheriting an accusation.
+ *
+ * `rungsAttempted` is the one field the `unreachable` row needs that does not
+ * live on `CitationOutcome` itself (`CitationResult` carries no status, so it
+ * comes from the live arm's own result at the same index); omitted, it
+ * renders as "tried: " with nothing named, which is still correct, just
+ * silent about the ladder.
+ */
+export function renderOutcome(o: CitationOutcome, n: number, rungsAttempted: readonly string[] = []): string[] {
+  const lines: string[] = [];
+  // The BUNDLED rules moving is named as a likely cause and changes
+  // nothing: it is never a confound, because treating a version bump as one
+  // would suppress the comparison on every citation after every release and
+  // retire the instrument by upgrading it.
+  const bundled = o.bundledVersionChanged
+    ? ` (the bundled rules moved: archived under ${o.archivedToolVersion}, running ${VERSION})`
+    : "";
+  if (o.category === "sourceDrift") {
+    lines.push(`  [${n}] SOURCE DRIFT - ${o.url}`);
+    lines.push(`        archived ${o.archivedAt}: the stored bytes still prove this claim and the live page does not`);
+    for (const m of o.missed) lines.push(`        MISS: "${m}"`);
+  } else if (o.category === "pipelineDrift") {
+    lines.push(`  [${n}] pipeline drift - ${o.url} (live ${o.live}, archived bytes ${o.archived})${bundled}`);
+    lines.push("        This is a regression in testimonium, not a defect in your document.");
+  } else if (o.category === "gone") {
+    // `archivedAt` is when the baseline was established or last MATERIALLY
+    // changed - the store preserves an entry that changed in nothing
+    // material - so this line reads "gone since at least that date".
+    lines.push(`  [${n}] gone since ${o.archivedAt} - ${o.url}`);
+    // THE ONE ROW THAT CAN CARRY CONFOUNDS. The gone row is evaluated above
+    // the named confounds (spec 8.3 as amended), because no confound can
+    // explain an origin's 404 - so print them here: the reorder changes
+    // which category wins, not what the author is told.
+    for (const c of o.confounds) lines.push(`        ${c}`);
+  } else if (o.category === "unreachable") {
+    lines.push(`  [${n}] unreachable now - ${o.url} (tried: ${rungsAttempted.join(", ")})`);
+  } else if (o.category === "confounded") {
+    lines.push(`  [${n}] not compared - ${o.url}`);
+    for (const c of o.confounds) lines.push(`        ${c}`);
+  } else if (o.category === "noBaseline") {
+    lines.push(`  [${n}] no baseline - ${o.url} (live: ${o.live})`);
+  } else if (o.category === "unclaimed") {
+    lines.push(`  [${n}] NO CLAIMS RECORDED - ${o.url}`);
+  } else {
+    lines.push(`  [${n}] clean - ${o.url}${bundled}`);
+  }
+  // `liveGone` is set only when the live arm came back UNREACHABLE (Fable's
+  // correction 5), so this clause can no longer print under a citation the
+  // ladder went on to read: a node rung that 404s before a curl rung reads
+  // the document is L = supported, and telling that author their source may
+  // be gone is a false alarm. With the gone row now above the confounds,
+  // what is left for this flag is the `noBaseline` row (entry absent, or R
+  // violated), where the gone check is never reached.
+  if (o.liveGone && o.category !== "gone") {
+    lines.push("        the live read was a 404 or 410, so this source may be gone");
+  }
+  return lines;
+}
+
+/**
+ * `recheck --json`'s accusation gate, twin to `renderOutcome`'s above. `missed`
+ * is present on every `CitationOutcome` (see `RecheckReport.outcomes`'s doc
+ * comment in `src/recheck.ts`) whether or not the row accuses, and the `--json`
+ * payload used to emit `report.outcomes` unfiltered - so a `confounded` row
+ * that prints "not compared" to the terminal still carried a `missed` list in
+ * the JSON. Spec 7.4's doctrine is that the output schema cannot EXPRESS an
+ * accusation, so this gates categorically on `category === "sourceDrift"`,
+ * exactly as `renderOutcome` does - never on an enumeration of what to
+ * exclude - so a `DriftCategory` added later inherits silence by default.
+ */
+export function jsonOutcome(o: CitationOutcome): CitationOutcome {
+  return o.category === "sourceDrift" ? o : { ...o, missed: [] };
+}
+
+/**
+ * `RecheckReport.archiveUnreadable`, surfaced as its own notice in the
+ * printed report rather than left to `recheck()`'s internal `console.warn`.
+ *
+ * When the archive exists but this build could not read it, every citation
+ * degrades to `noBaseline` and the run exits 0 - which, read on its own,
+ * looks exactly like "you never ran check", a materially different thing to
+ * tell the author than "your archive exists and is corrupt". This function
+ * exists so that distinction reaches the report, not just stderr.
+ */
+export function archiveUnreadableNotice(archiveUnreadable: string | null): string[] {
+  if (archiveUnreadable === null) return [];
+  return [
+    `\nARCHIVE UNREADABLE: ${archiveUnreadable}`,
+    "Every citation below reports \"no baseline\" because of that - not because check was never run.",
+  ];
+}
+
 const KNOWN_FLAGS = new Set([
   "--json",
   "--rules",
   "--fail-on-unreachable",
   "--allow-unclaimed",
   "--explain-fetch",
+  "--no-archive",
+  "--fail-on-gone",
 ]);
 
 /** Exported so a test can assert it names every command this build has. A
  *  command the usage line does not name is a command nobody finds. */
 export const USAGE =
-  "usage: testimonium <check|harvest|reachability> <doc.md> " +
+  "usage: testimonium <check|harvest|recheck|reachability> <doc.md> " +
   "[--json] [--rules <path>] " +
-  "(check only: [--fail-on-unreachable] [--allow-unclaimed] [--explain-fetch])";
+  "(check only: [--fail-on-unreachable] [--allow-unclaimed] [--explain-fetch] [--no-archive]) " +
+  "(recheck only: [--fail-on-gone])";
 
 /**
  * The first `--flag` in argv this build does not recognize, or null when
@@ -93,6 +246,13 @@ export function draftPathFor(doc: string): string {
   return join(dirname(doc), `${basename(doc).replace(/\.[^.]+$/, "")}.claims.draft.json`);
 }
 
+/** `<doc>.archive/` - the bytes `recheck` controls against, beside the
+ *  evidence file. Written by `check` on `supported` and by nothing else
+ *  (spec 8.1's file list). */
+export function archivePathFor(doc: string): string {
+  return join(dirname(doc), `${basename(doc).replace(/\.[^.]+$/, "")}.archive`);
+}
+
 /** The one-line summary printed after harvest writes a draft to disk.
  *  Exported so a test can pin its grammar - singular "proposal" at exactly
  *  one - and its qualifier: `readableUrlCount` is `report.proposals.length`,
@@ -106,6 +266,56 @@ export function harvestSummaryLine(draftPath: string, totalProposals: number, re
     `\nwrote ${draftPath} - ${totalProposals} proposal${totalProposals === 1 ? "" : "s"} ` +
     `across ${readableUrlCount} readable URLs`
   );
+}
+
+export interface ArchiveContext {
+  /** The LIVE fetcher, before recording. `check` wraps it per citation. */
+  readonly fetcher: Fetcher;
+  readonly pdftotextVersion: string | null;
+  readonly localRulesHash: string | null;
+}
+
+/** Injected only so a test never spawns a binary and never builds a real
+ *  fetcher, the same way `pdfRungAvailable` takes its two predicates. */
+export interface ArchiveDeps {
+  readonly make?: (opts: FetcherOptions) => Fetcher;
+  readonly version?: () => string | null;
+}
+
+/**
+ * Everything the archive write needs, built once per run - or null when this
+ * run must not archive.
+ *
+ * THE `{ hosts }` ARGUMENT IS LOAD-BEARING. `check()` builds its own fetcher as
+ * `defaultFetcher(opts.rules ? { hosts: opts.rules.hosts } : {})`, and a CLI
+ * that builds its own and omits it gives the author a `--rules` file that
+ * loads, validates and is never consulted - the silent no-op an unwired
+ * `hostRuleFor` already cost this project once.
+ *
+ * Returns null when a provenance fact cannot be established. Archiving must
+ * never fail a run (13 Q4), and an entry recording `localRulesHash: null` when
+ * a `--rules` file WAS passed would be a baseline that mis-reports the
+ * local-rules confound for as long as it survives.
+ */
+export function archiveContextFor(rules: RuleSet, rulesPath: string | undefined, deps: ArchiveDeps = {}): ArchiveContext | null {
+  let localRulesHash: string | null = null;
+  if (rulesPath !== undefined) {
+    try {
+      localRulesHash = sha256Hex(readFileSync(rulesPath));
+    } catch (e) {
+      console.warn(`warn not archiving: could not hash ${rulesPath}: ${e instanceof Error ? e.message : String(e)}`);
+      return null;
+    }
+  }
+  const fetcher = (deps.make ?? defaultFetcher)({ hosts: rules.hosts });
+  const probe = deps.version ?? pdftotextVersion;
+  return {
+    fetcher,
+    // Only probe when the rung exists: the probe spawns a process, and a
+    // machine with no pdftotext has no read to stamp a version on anyway.
+    pdftotextVersion: fetcher.rungs.includes("pdftotext") ? probe() : null,
+    localRulesHash,
+  };
 }
 
 async function main(argv: string[]): Promise<number> {
@@ -130,7 +340,7 @@ async function main(argv: string[]): Promise<number> {
   }
 
   // --rules <path>: additive-only local override (Task 15). Loaded once, up
-  // front - before the command dispatch below - so it applies to all three
+  // front - before the command dispatch below - so it applies to all four
   // commands, and so a bad local file is reported clearly
   // rather than exploding mid-run on whichever citation happens to trip it
   // first. `reachability` walks the same ladder `check` does; a preflight
@@ -276,6 +486,77 @@ async function main(argv: string[]): Promise<number> {
     return 0;
   }
 
+  if (command === "recheck") {
+    let joined;
+    try {
+      joined = joinClaims(document.footnotes, parseClaimsFile(readFileSync(claimsPathFor(doc), "utf8")));
+    } catch (e) {
+      console.error(`cannot read claims: ${e instanceof Error ? e.message : String(e)}`);
+      return 2;
+    }
+
+    // The live fetcher plus the two provenance facts the comparison needs.
+    // Unlike `check`, a null context here is an INFRASTRUCTURE FAILURE rather
+    // than "do not archive": `recheck` writes nothing, but a localRulesHash it
+    // could not compute would feed the local-rules confound a wrong answer, and
+    // a wrong confound input is one of the few ways this command could mint an
+    // exit 1 it has no licence for.
+    const ctx = archiveContextFor(rules, rulesPath);
+    if (ctx === null) {
+      console.error("cannot establish rules provenance, so the comparison would be unsound");
+      return 2;
+    }
+
+    const report = await recheck(
+      joined.checkable.map((c) => ({ url: c.url, label: c.label, claims: c.claims })),
+      {
+        archiveDir: archivePathFor(doc),
+        rules,
+        fetcher: ctx.fetcher,
+        localRulesHash: ctx.localRulesHash,
+        pdftotextVersion: ctx.pdftotextVersion,
+      },
+    );
+
+    // Surfaced as its own notice, distinct from the per-citation `noBaseline`
+    // rows an unreadable archive degrades every one of them to: to an author
+    // that degradation reads as "you never ran check", not "your archive
+    // exists and is corrupt" - a materially different thing to be told.
+    for (const line of archiveUnreadableNotice(report.archiveUnreadable)) console.log(line);
+
+    let sourceDrift = 0;
+    let pipelineDrift = 0;
+    let gone = 0;
+    // outcomes are 1:1 with the citations handed in, in order.
+    for (const [i, o] of report.outcomes.entries()) {
+      const n = joined.checkable[i]?.n ?? i + 1;
+      if (o.category === "sourceDrift") sourceDrift++;
+      else if (o.category === "pipelineDrift") pipelineDrift++;
+      else if (o.category === "gone") gone++;
+      for (const line of renderOutcome(o, n, report.liveResults[i]?.rungsAttempted ?? [])) console.log(line);
+    }
+
+    // Reported exactly as `check` reports them, from the same joinClaims output.
+    for (const na of joined.notApplicable) console.log(`  [${na.n}] not applicable - ${na.reason}`);
+    for (const u of joined.unclaimed) console.log(`  [${u.n}] NO CLAIMS RECORDED - ${u.url}`);
+    for (const o of joined.orphanedClaims) console.log(`  warn claimed but no longer cited: ${o}`);
+
+    // The LIVE arm's results, which is the same thing `check` writes there and
+    // the only arm whose verdicts describe the world. `recheck` writes nothing
+    // into the archive and never refreshes a baseline.
+    writeEvidenceFile(evidencePathFor(doc), report.liveResults);
+    if (flags.has("--json")) {
+      const drift = report.outcomes.map(jsonOutcome);
+      console.log(JSON.stringify({ version: 1, results: report.liveResults, drift }, null, 2));
+    }
+
+    console.log(`\n${sourceDrift} source drift, ${pipelineDrift} pipeline drift, ${gone} gone since archiving`);
+    console.log(
+      "recheck detects change, never correctness: a source that was already wrong when it was archived is archived wrong.",
+    );
+    return classifyRecheckRun({ sourceDrift, pipelineDrift, gone }, { failOnGone: flags.has("--fail-on-gone") });
+  }
+
   if (command !== "check") {
     console.error(`unknown command ${command}`);
     return 2;
@@ -292,10 +573,44 @@ async function main(argv: string[]): Promise<number> {
   const results: CitationResult[] = [];
   let unsupported = 0;
   let unreachable = 0;
+  // THE ARCHIVE IS WRITTEN HERE, NOT IN check(). `readSource` drops every
+  // RawResponse the moment computeSignals has run on it and `SignalResult`
+  // carries no rawBody, so the bytes exist only inside the fetcher (spec 8.3).
+  // `--no-archive` means DO NOT WRAP, so the unwrapped path is byte-for-byte
+  // what it was before this flag existed: check() builds its own fetcher.
+  const archive = flags.has("--no-archive") ? null : archiveContextFor(rules, rulesPath);
+  const staged = new Map<string, StagedEntry>();
   for (const c of joined.checkable) {
+    const recorder = archive ? recordingFetcher(archive.fetcher) : null;
     // The label feeds C1's content-word pool, which is what gives a PDF at a
     // hashed URL something to correlate against.
-    const r = await check(c.url, c.claims, { sourceLabel: c.label, rules });
+    const r = await check(c.url, c.claims, {
+      sourceLabel: c.label,
+      rules,
+      ...(recorder ? { fetcher: recorder.fetcher } : {}),
+    });
+    // ONLY `supported` writes a baseline. A failing check leaves the previous
+    // one standing, which is what lets the author then ask `recheck` whether
+    // the source moved as well (spec 8.3).
+    if (archive && recorder && r.verdict === "supported") {
+      staged.set(
+        archiveKeyFor(c.url),
+        buildArchiveEntry({
+          verdict: r.verdict,
+          claims: c.claims,
+          reads: recorder.reads,
+          toolVersion: VERSION,
+          localRulesHash: archive.localRulesHash,
+          pdftotextVersion: archive.pdftotextVersion,
+          // A fresh stamp on every run, deliberately: `writeArchive` keeps the
+          // EXISTING entry when nothing material changed (Task 5), so this
+          // does not churn the committed index, and when something material
+          // DID change this is the date it changed. That is what makes
+          // `archivedAt` mean "established or last materially changed".
+          archivedAt: new Date().toISOString(),
+        }),
+      );
+    }
     results.push(r);
     if (r.verdict === "unsupported") {
       unsupported++;
@@ -322,6 +637,16 @@ async function main(argv: string[]): Promise<number> {
   }
   for (const u of joined.unclaimed) console.log(`  [${u.n}] NO CLAIMS RECORDED - ${u.url}`);
   for (const o of joined.orphanedClaims) console.log(`  warn claimed but no longer cited: ${o}`);
+
+  // "Archiving must never fail a run" (13 Q4): one try/catch around one write,
+  // in the CLI, rather than a guarantee about a callback the core invokes
+  // mid-run. A refusal here - an index this build cannot parse, an unwritable
+  // path - warns and leaves the run's own exit code alone.
+  try {
+    writeArchive(archivePathFor(doc), staged);
+  } catch (e) {
+    console.warn(`warn archive not written: ${e instanceof Error ? e.message : String(e)}`);
+  }
 
   writeEvidenceFile(evidencePathFor(doc), results);
   if (flags.has("--json")) console.log(JSON.stringify({ version: 1, results }, null, 2));

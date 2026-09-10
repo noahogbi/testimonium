@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -85,4 +85,86 @@ export function pdfRungAvailable(
   hasPdftotext: () => boolean = pdftotextAvailable,
 ): boolean {
   return hasCurl() && hasPdftotext();
+}
+
+/** Both streams of a `pdftotext -v` probe, plus whether the binary could be
+ *  spawned at all. A NON-ZERO EXIT IS NOT `missing`: Xpdf's build exits 99 on
+ *  `-v` and prints its version anyway, which is the same line
+ *  `pdftotextAvailable` already draws. */
+export interface VersionProbe {
+  readonly missing: boolean;
+  readonly stdout: string;
+  readonly stderr: string;
+}
+
+export type VersionRunner = () => VersionProbe;
+
+/** The subset of `spawnSync`'s return value the ENOENT/non-zero-exit mapping
+ *  depends on, named explicitly so that mapping can be a pure function with
+ *  its own tests instead of living only inside `probePdftotext`, which no
+ *  unit test can reach because every test injects its own `VersionRunner`.
+ *  `stdout`/`stderr` are typed `string | undefined` here - unlike
+ *  `spawnSync`'s own return type, which claims plain `string` even though the
+ *  runtime value is `undefined` on a failed spawn - so that dropping the
+ *  `?? ""` coalesce below is a real type error under this project's
+ *  `exactOptionalPropertyTypes`, not a silent gap `tsc` waves through. */
+export interface SpawnResultLike {
+  readonly status: number | null;
+  readonly error?: Error;
+  readonly stdout: string | undefined;
+  readonly stderr: string | undefined;
+}
+
+/** Maps a raw `spawnSync`-shaped result to a `VersionProbe`. `status` plays
+ *  NO part in `missing`: Xpdf's build exits 99 on `-v` and prints its version
+ *  anyway, the same line `pdftotextAvailable` already draws - only `error`
+ *  (ENOENT) means the binary could not be spawned. Extracted as its own
+ *  function, rather than left inline in `probePdftotext`, specifically
+ *  because a review mutated `missing: r.error !== undefined` to
+ *  `missing: r.status !== 0` and zero unit tests failed: on the real binary
+ *  that mutation makes `pdftotextVersion()` return `null` while
+ *  `pdftotextAvailable()` returns `true`, the exact silent disagreement this
+ *  task exists to prevent, and nothing short of a manual run against the
+ *  real binary caught it. */
+export function toVersionProbe(r: SpawnResultLike): VersionProbe {
+  return {
+    missing: r.error !== undefined,
+    // Both are `undefined`, not "", when the spawn itself failed.
+    stdout: r.stdout ?? "",
+    stderr: r.stderr ?? "",
+  };
+}
+
+/** `spawnSync`, not `execFileSync`, for two measured reasons: both known
+ *  builds print the version to STDERR and `execFileSync` returns only stdout,
+ *  and `execFileSync` throws on Xpdf's non-zero exit. `spawnSync` never throws
+ *  and returns both streams whatever the status. */
+const probePdftotext: VersionRunner = () =>
+  toVersionProbe(spawnSync("pdftotext", ["-v"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }));
+
+/**
+ * The first line `pdftotext -v` prints, or null when the binary is absent or
+ * printed nothing.
+ *
+ * PROVENANCE FOR THE ARCHIVE (spec 8.3). `pdfFetch` returns `pdftotext
+ * -layout`'s output as `rawBody`, so what is archived for a PDF is already
+ * tool-transformed and the local poppler build sits inside the live arm and
+ * outside the archive. Recording the version is what lets `recheck` name a
+ * poppler difference as a named confound instead of failing the author's build
+ * over a PDF nobody touched.
+ *
+ * RESIDUE, DISCLOSED: two different builds reporting the same version string
+ * are not distinguishable at all.
+ *
+ * The runner is injectable so no test spawns a binary, exactly as
+ * `pdfRungAvailable` takes its two predicates.
+ */
+export function pdftotextVersion(run: VersionRunner = probePdftotext): string | null {
+  const probe = run();
+  if (probe.missing) return null;
+  for (const stream of [probe.stderr, probe.stdout]) {
+    const line = stream.split(/\r?\n/).map((s) => s.trim()).find((s) => s.length > 0);
+    if (line !== undefined) return line;
+  }
+  return null;
 }

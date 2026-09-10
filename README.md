@@ -76,13 +76,14 @@ the phrase, fix the citation, or mark the footnote `{"notApplicable":
 outlet.
 
 Global flags: `--json`, `--rules <path>`. `check` additionally takes
-`--allow-unclaimed`, `--fail-on-unreachable`, and `--explain-fetch`, and none
-of the three is **global** - but the flag validator does not know that. It is
+`--allow-unclaimed`, `--fail-on-unreachable`, `--explain-fetch` and
+`--no-archive`, and `recheck` takes `--fail-on-gone`; none of the five is
+**global** - but the flag validator does not know that. It is
 command-agnostic, so `harvest essay.md --fail-on-unreachable` and
 `reachability essay.md --explain-fetch` are accepted and then silently
 ignored: neither command consults them, and neither result type carries
 fired-rule provenance to print. That gap is characterized by a test rather
-than closed, because per-command flag tables would change all three commands
+than closed, because per-command flag tables would change all four commands
 and nothing here yet requires them. There is no `--fetcher` flag - swapping the
 fetcher (a headless browser, a paid proxy) is a programmatic option
 (`CheckOptions.fetcher`), not a CLI one, because a CLI plugin registry is a
@@ -219,7 +220,7 @@ will eventually surprise a real user if it isn't said here first.
   `curl`. The floor bites on **accusation only**: a full match is checked
   *first* and is its own proof of a read, so a short unvetoed page whose
   claims are all present still reports `supported`.
-- **A `supported` verdict therefore does not imply a ≥4,500-character
+- **A `supported` verdict therefore does not imply a 4,500-character-or-longer
   document.** If you are integrating against the evidence file, do not read
   `supported` as "we retrieved the whole article" - a paywall stub or a
   syndication teaser that happens to carry the quoted paragraph yields
@@ -338,12 +339,17 @@ will eventually surprise a real user if it isn't said here first.
 ```
 testimonium check <doc.md>          the gate. exit 0 clean, 1 author-fixable, 2 infra
 testimonium harvest <doc.md>        propose claims. writes a draft, never the claims file
+testimonium recheck <doc.md>        drift. re-runs each claim against the live source and the archive
 testimonium reachability <doc.md>   preflight. no claims file needed
 ```
 
-All three read `<doc>` as GitHub-Flavored Markdown footnotes. `check` reads
-`<doc>.claims.json` beside it and writes `<doc>.evidence.json` - commit both;
-a later re-check's output is then a diff. `reachability` needs neither.
+All four read `<doc>` as GitHub-Flavored Markdown footnotes. `check` reads
+`<doc>.claims.json` beside it, writes `<doc>.evidence.json`, and - for every
+citation that reads `supported` - writes the bytes it read into
+`<doc>.archive/`. Commit all three: the evidence file so a later re-check's
+output is a diff, and the archive because a control arm that only exists on
+the machine that wrote it cannot control anything on a fresh clone or in CI.
+`reachability` needs none of them.
 `harvest` reads `<doc>.claims.json` if it is there - to skip what you have
 marked not applicable and to leave what you have already claimed alone - and
 writes `<doc>.claims.draft.json`, which is not the claims file and never
@@ -409,13 +415,89 @@ including a draft that proposes nothing, and 2 for an input it could not read
 or a draft in the way that you had edited. There is no exit 1, because
 harvest has no verdict to fail on.
 
+## Recheck: what changed, and whose fault it is
+
+`check` stores what it read. Every citation that comes back `supported` leaves
+its bytes in `<doc>.archive/`, gzipped and content-addressed, beside the
+verdict they produced. `recheck` then runs your claims twice: once against the
+live source, and once against those stored bytes, through the same code both
+times.
+
+```
+node dist/bin.js recheck essay.md
+node dist/bin.js check essay.md --no-archive   # gate the document, write no archive
+```
+
+`--no-archive` suppresses the archive write and nothing else: `check` still
+rewrites `<doc>.evidence.json`, exactly as it has since plan 1, so the flag
+buys you a gate with no *new* output rather than a gate with no output.
+
+**Two arms, because one is not enough to attribute anything.** The fetch layer
+and the extractor evolve - that is this project's whole history - so a bare
+"the verdict changed since last time" cannot tell a source that was edited from
+an extractor that was improved. The stored bytes supply the control: the same
+code, run over the same bytes, must still reach the same verdict. Where it does
+not, the change is ours.
+
+**Only one outcome is your problem, and `recheck` says so.** A live read that
+positively failed to find a claim the stored bytes still positively prove is
+**source drift**: the page changed under your citation, and exit 1 asks you to
+verify it and update or remove the claim. Everything else exits 0 or 2. If the
+gate still passes live and the stored bytes no longer do, that is **pipeline
+drift** - a regression in this tool, exit 2, and not something to fix in your
+document. If the source is unreachable now, it is listed and never failed: the
+page may be perfectly intact. If the origin says 404 or 410 it is reported as
+**gone since** the date that baseline was established, which exits 0 unless you
+pass `--fail-on-gone`. And if you edited that URL's claims, upgraded
+`pdftotext`, or changed your own `--rules` file since it was archived, the
+comparison says so and compares nothing: those are **named confounds**, and
+answering "did my source change?" with an accusation because you edited a claim
+would be answering a question with an accusation. A source the origin reports
+deleted is reported **gone** whatever else changed, with the confound named
+beside it - nothing you can edit locally makes a page 404, so a claims edit
+never hides a dead link or quietly switches off `--fail-on-gone`.
+
+**`--json` carries the same gate as the terminal report.** `recheck --json`
+prints `{ version, results, drift }`, where `drift` is one entry per citation.
+Every entry's `missed` field is emptied unless `category` is `sourceDrift`:
+the schema cannot carry an accusation past the one row licensed to make it,
+so a `confounded` or `noBaseline` entry never carries a live-arm miss list
+even though the underlying result did miss something.
+
+**`recheck` never writes the archive.** Only a `supported` `check` does. A
+drifted source cannot silently become its own new baseline, and there is no way
+to make a drift report go away by running `recheck` again. `recheck` does
+rewrite `<doc>.evidence.json`, with the live arm's results - what is true of
+the source today.
+
+**It detects change, never correctness.** A source that was already wrong when
+it first read `supported` is archived wrong, and `recheck` will call it clean
+for as long as it stays wrong. This is the same limit `check` has, moved
+forward in time: it tells you the page still says what it said, not that what
+it says is true.
+
+**What the archive costs you.** A green `check` over an unchanged source is
+free of diffs: an entry that changed in nothing material is kept exactly as it
+was, so a fresh timestamp or a fresh `date` header never churns the committed
+`index.json`, and `archived` dates mean "established or last materially
+changed". What it does cost: it grows and nothing prunes it - re-archiving a
+URL at new bytes overwrites its index entry and leaves the old blob behind, and
+a page with per-request bytes - a CSRF token, a nonce, a timestamp in the
+markup - hashes differently on every run and adds a blob on every `check`.
+Every header the source sent is committed with it except `set-cookie`, which is
+never stored in any form; if you archive an authenticated page you are
+committing whatever else that host chose to return. And for a PDF what is
+stored is `pdftotext`'s extracted text, not the PDF, so the archive records
+which `pdftotext` produced it and treats a different one as a confound rather
+than as your problem.
+
 ## What's not here
 
-`check`, `reachability` and `harvest` are here. `recheck` - re-running the
-claims against the live source and an archived copy, to tell real drift from
-a pipeline regression - is a separate plan, not a missing feature of this
-one. There is also no renderer and no GitHub Action bundled here - `check`'s
-exit code is the integration point.
+There is no renderer and no GitHub Action bundled here - `check`'s exit code is
+the integration point. There is no cron, no rot score and no staleness badge
+either: `recheck` is the instrument, and the drift rate across real corpora is
+unmeasured, so shipping a policy on top of it would be shipping an answer this
+project has not measured.
 
 ## The real cost
 
