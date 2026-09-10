@@ -1413,6 +1413,63 @@ checkable from what was recorded. The static equivalence check stands on its own
 Task 10: complete (commits aa1a455..f60c512, review clean after 1 fix round).
 485 tests. recheck is reachable from the CLI.
 
+Task 11: dispatched (opus) at BASE f60c512; DONE at e4b5a13. 487 tests (485 + 2,
+reconciled BOTH ways per ruling T10-R1 - brief count 2 and git diff +2/-0 - and
+both tests watched to fail first), tsc clean, build clean, 7 files, tree clean.
+Closed 13 sweep items: the brief's 9 plus 4 the sweep found on its own,
+including a TWIN PAIR of flag-gap comments in test/bin.test.ts. Ledger preserved
+at docs/superpowers/plans/2026-09-09-plan-3-drift-ledger.md, 1414 lines, 0
+non-ASCII, with Task 6's step 8g and Task 10's five transcripts intact and their
+fidelity proven against a negative control.
+
+TASK 11 CAUGHT A FALSE CLAIM THAT I AUTHORED AND PROPAGATED. I wrote "check is a
+gate, and a gate must be runnable without side effects" into Task 6's brief. It
+is false, and was false when written: `check --no-archive` still writes
+<doc>.evidence.json unconditionally from bin.ts:532. The sentence propagated into
+FOUR plan-3-authored sites - README, CHANGELOG, spec 8 and spec 8.3 - and
+survived five tasks and five reviews, because it reads as a design principle
+rather than as a factual claim about what the flag does. Measured and fixed as a
+set. The controller verified the one surviving instance at spec :1619 is the
+ORIGINAL preserved above its own correction, in the same house style 8.3 used
+for the deleted decision table - not a missed twin.
+Second deviation, equally good: the brief's discharge text claimed
+test/readme.test.ts "pins both" halves of 8.3's correction (c). Mutation-tested
+- both tests stay green with "recheck is a separate plan" restored - so the spec
+now NAMES what is pinned and what is not rather than adding a 488th test to make
+a false sentence true. "The test pins it" is the assertion this repo has been
+wrong about most often.
+Ruling: T11-R3 (the implementer's, adopted): README is brought to 0 non-ASCII,
+reversing plan 2's ruling to leave its U+2265 - because plan 3's Step 11
+requires README at 0 and a constraint that exempts one character is a constraint
+nobody can check mechanically. - Cost if wrong: a mathematical symbol becomes
+">=" in prose.
+
+Task 11: review (sonnet) - spec PASS, quality APPROVED, one Minor (a label in
+the ledger: the report's "87" is git's INSERTION count, not total changed lines,
+which are 99). Both deviations verified SOUND by independent reproduction: the
+no-side-effects claim confirmed false in code (bin.ts:635 calls
+writeEvidenceFile unconditionally, OUTSIDE the --no-archive branch at :565), all
+four sites fixed, and the surviving spec :1618-1619 sentence confirmed to be the
+ORIGINAL preserved above its dated correction in 8.3's own house style. The
+"pins both" claim re-mutation-tested: restoring "is a separate plan" to the
+README leaves BOTH readme tests green, so the paragraph is genuinely unpinned and
+the spec's discharge note is now accurate rather than over-claiming.
+The required sentence is present at README:466 verbatim and its pin PROVEN ABLE
+TO FAIL (mutating "correctness" to "accuracy" fails 1 of 2).
+Comment-only confirmed independently: 0 of 22 changed lines in src/bin.ts and
+test/bin.test.ts are non-comment, with the filter proven able to detect a real
+code change.
+Ledger fidelity proven by a method that can fail: 0 differing lines across the
+shared 755, with the only divergence being 31 trailing lines progress.md gained
+AFTER the snapshot - this controller's own wrap-up for Task 11, unavoidable and
+matching every prior task's pattern. Task 6's 8g and Task 10's five transcripts
+verified present.
+Independent sweep found NOTHING the implementer missed. Both parked items
+confirmed untouched and carried forward with argument.
+Task 11: complete (commits f60c512..e4b5a13, review clean). 487 tests.
+
+ALL ELEVEN TASKS COMPLETE. Final whole-branch review dispatched.
+
 ---
 
 ## Final whole-branch review, fix wave, and close-out
