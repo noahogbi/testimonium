@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { tmpdir } from "node:os";
+import { sha256Hex } from "../src/archive/format.js";
+import type { FetcherOptions } from "../src/fetch/default-fetcher.js";
+import type { Fetcher } from "../src/fetch/types.js";
+import type { HostRule } from "../src/rules/hosts.js";
+import type { RuleSet } from "../src/rules/load.js";
 import {
+  archiveContextFor,
+  archivePathFor,
   classifyRun,
   claimsPathFor,
   draftPathFor,
@@ -171,5 +181,107 @@ describe("harvestSummaryLine", () => {
     // "readable" is the word doing the work above; without it "3 URLs" would
     // misdescribe the one-key draft this run just wrote.
     expect(line).not.toContain("across 3 URLs");
+  });
+});
+
+describe("archivePathFor", () => {
+  it("puts <doc>.archive beside the evidence file", () => {
+    expect(archivePathFor("essay.md")).toBe(evidencePathFor("essay.md").replace(".evidence.json", ".archive"));
+  });
+
+  it("keeps the document's directory and strips its extension, as the other path helpers do", () => {
+    expect(archivePathFor("docs/drafts/essay.markdown")).toContain("drafts");
+    expect(archivePathFor("docs/drafts/essay.markdown").endsWith("essay.archive")).toBe(true);
+  });
+});
+
+describe("archiveContextFor", () => {
+  const RULE: HostRule = { host: "sec.gov", requiresIdentity: true, lastConfirmed: "2026-09-01", note: "a local host rule" };
+  const rules = (hosts: readonly HostRule[] = []): RuleSet => ({ signatures: [], paths: [], boilerplate: [], hosts });
+  const fetcher = (rungs: string[]): Fetcher => ({
+    rungs,
+    async fetch() {
+      throw new Error("archiveContextFor must not fetch");
+    },
+  });
+
+  it("passes the loaded host rules into the fetcher it builds", () => {
+    // A CLI that builds its own fetcher and omits `{ hosts }` gives the author
+    // a --rules file that loads, validates and is never consulted. The
+    // mutation this catches: `make({})`.
+    let seen: FetcherOptions | undefined;
+    const ctx = archiveContextFor(rules([RULE]), undefined, {
+      make: (o) => { seen = o; return fetcher(["node"]); },
+      version: () => null,
+    });
+    expect(ctx).not.toBeNull();
+    // NEGATIVE CONTROL: without this, a factory that was never called would
+    // leave `seen` undefined and the assertion below would be vacuous.
+    expect(seen).toBeDefined();
+    expect(seen?.hosts).toEqual([RULE]);
+  });
+
+  it("probes the pdftotext version only when the fetcher advertises that rung", () => {
+    let probes = 0;
+    const withRung = archiveContextFor(rules(), undefined, {
+      make: () => fetcher(["node", "curl", "pdftotext"]),
+      version: () => { probes++; return "pdftotext version 4.00"; },
+    });
+    expect(withRung?.pdftotextVersion).toBe("pdftotext version 4.00");
+    expect(probes).toBe(1);
+  });
+
+  it("does not spawn a probe on a machine whose ladder has no pdftotext rung", () => {
+    let probes = 0;
+    const withoutRung = archiveContextFor(rules(), undefined, {
+      make: () => fetcher(["node"]),
+      version: () => { probes++; return "should not be reached"; },
+    });
+    expect(withoutRung?.pdftotextVersion).toBeNull();
+    expect(probes).toBe(0);
+  });
+
+  it("hashes the --rules file's bytes when one was passed", () => {
+    const f = join(mkdtempSync(join(tmpdir(), "testimonium-rules-")), "local.json");
+    writeFileSync(f, '{"signatures":[]}', "utf8");
+    const ctx = archiveContextFor(rules(), f, { make: () => fetcher(["node"]), version: () => null });
+    expect(ctx?.localRulesHash).toBe(sha256Hex(readFileSync(f)));
+    rmSync(dirname(f), { recursive: true, force: true });
+  });
+
+  it("records null, not a hash, when no --rules file was passed", () => {
+    const ctx = archiveContextFor(rules(), undefined, { make: () => fetcher(["node"]), version: () => null });
+    expect(ctx?.localRulesHash).toBeNull();
+  });
+
+  it("declines to archive at all rather than record a wrong localRulesHash", () => {
+    // An entry recording `null` when a --rules file WAS passed would be a
+    // baseline that mis-reports the local-rules confound forever. Archiving
+    // must never fail a run, so the answer is to skip archiving, not to throw
+    // and not to guess.
+    const ctx = archiveContextFor(rules(), "no/such/rules.json", { make: () => fetcher(["node"]), version: () => null });
+    expect(ctx).toBeNull();
+  });
+});
+
+describe("validateFlags and the archive flag", () => {
+  it("accepts --no-archive", () => {
+    expect(validateFlags(["check", "doc.md", "--no-archive"])).toBeNull();
+  });
+
+  it("names --no-archive in the usage string", () => {
+    // A flag the usage line does not name is a flag nobody finds - and
+    // validateFlags exits 2 on any --flag KNOWN_FLAGS does not carry, so the
+    // two must move together.
+    expect(USAGE).toContain("--no-archive");
+  });
+
+  it("CHARACTERIZATION: --no-archive is accepted and ignored on the other commands too", () => {
+    // The command-agnostic gap, parked since plan 2 (ruling T9-R1 and the
+    // per-command flag tables item): closing it would change every command and
+    // no spec section licenses that. This test is what makes closing it later a
+    // deliberate edit to a red test, and it now covers a fourth instance.
+    expect(validateFlags(["harvest", "doc.md", "--no-archive"])).toBeNull();
+    expect(validateFlags(["reachability", "doc.md", "--no-archive"])).toBeNull();
   });
 });

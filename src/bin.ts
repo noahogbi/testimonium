@@ -11,6 +11,12 @@ import { buildDraft, draftInTheWay, writeDraftFile } from "./io/draft.js";
 import { writeEvidenceFile, type CitationResult } from "./io/evidence.js";
 import { loadRules, type RuleSet } from "./rules/load.js";
 import { VERSION } from "./version.js";
+import { archiveKeyFor, sha256Hex } from "./archive/format.js";
+import { buildArchiveEntry, recordingFetcher, type StagedEntry } from "./archive/record.js";
+import { writeArchive } from "./archive/store.js";
+import { defaultFetcher, type FetcherOptions } from "./fetch/default-fetcher.js";
+import { pdftotextVersion } from "./fetch/pdf.js";
+import type { Fetcher } from "./fetch/types.js";
 
 export interface RunTally {
   readonly unsupported: number;
@@ -50,6 +56,7 @@ const KNOWN_FLAGS = new Set([
   "--fail-on-unreachable",
   "--allow-unclaimed",
   "--explain-fetch",
+  "--no-archive",
 ]);
 
 /** Exported so a test can assert it names every command this build has. A
@@ -57,7 +64,7 @@ const KNOWN_FLAGS = new Set([
 export const USAGE =
   "usage: testimonium <check|harvest|reachability> <doc.md> " +
   "[--json] [--rules <path>] " +
-  "(check only: [--fail-on-unreachable] [--allow-unclaimed] [--explain-fetch])";
+  "(check only: [--fail-on-unreachable] [--allow-unclaimed] [--explain-fetch] [--no-archive])";
 
 /**
  * The first `--flag` in argv this build does not recognize, or null when
@@ -93,6 +100,13 @@ export function draftPathFor(doc: string): string {
   return join(dirname(doc), `${basename(doc).replace(/\.[^.]+$/, "")}.claims.draft.json`);
 }
 
+/** `<doc>.archive/` - the bytes `recheck` controls against, beside the
+ *  evidence file. Written by `check` on `supported` and by nothing else
+ *  (spec 8.1's file list). */
+export function archivePathFor(doc: string): string {
+  return join(dirname(doc), `${basename(doc).replace(/\.[^.]+$/, "")}.archive`);
+}
+
 /** The one-line summary printed after harvest writes a draft to disk.
  *  Exported so a test can pin its grammar - singular "proposal" at exactly
  *  one - and its qualifier: `readableUrlCount` is `report.proposals.length`,
@@ -106,6 +120,56 @@ export function harvestSummaryLine(draftPath: string, totalProposals: number, re
     `\nwrote ${draftPath} - ${totalProposals} proposal${totalProposals === 1 ? "" : "s"} ` +
     `across ${readableUrlCount} readable URLs`
   );
+}
+
+export interface ArchiveContext {
+  /** The LIVE fetcher, before recording. `check` wraps it per citation. */
+  readonly fetcher: Fetcher;
+  readonly pdftotextVersion: string | null;
+  readonly localRulesHash: string | null;
+}
+
+/** Injected only so a test never spawns a binary and never builds a real
+ *  fetcher, the same way `pdfRungAvailable` takes its two predicates. */
+export interface ArchiveDeps {
+  readonly make?: (opts: FetcherOptions) => Fetcher;
+  readonly version?: () => string | null;
+}
+
+/**
+ * Everything the archive write needs, built once per run - or null when this
+ * run must not archive.
+ *
+ * THE `{ hosts }` ARGUMENT IS LOAD-BEARING. `check()` builds its own fetcher as
+ * `defaultFetcher(opts.rules ? { hosts: opts.rules.hosts } : {})`, and a CLI
+ * that builds its own and omits it gives the author a `--rules` file that
+ * loads, validates and is never consulted - the silent no-op an unwired
+ * `hostRuleFor` already cost this project once.
+ *
+ * Returns null when a provenance fact cannot be established. Archiving must
+ * never fail a run (13 Q4), and an entry recording `localRulesHash: null` when
+ * a `--rules` file WAS passed would be a baseline that mis-reports the
+ * local-rules confound for as long as it survives.
+ */
+export function archiveContextFor(rules: RuleSet, rulesPath: string | undefined, deps: ArchiveDeps = {}): ArchiveContext | null {
+  let localRulesHash: string | null = null;
+  if (rulesPath !== undefined) {
+    try {
+      localRulesHash = sha256Hex(readFileSync(rulesPath));
+    } catch (e) {
+      console.warn(`warn not archiving: could not hash ${rulesPath}: ${e instanceof Error ? e.message : String(e)}`);
+      return null;
+    }
+  }
+  const fetcher = (deps.make ?? defaultFetcher)({ hosts: rules.hosts });
+  const probe = deps.version ?? pdftotextVersion;
+  return {
+    fetcher,
+    // Only probe when the rung exists: the probe spawns a process, and a
+    // machine with no pdftotext has no read to stamp a version on anyway.
+    pdftotextVersion: fetcher.rungs.includes("pdftotext") ? probe() : null,
+    localRulesHash,
+  };
 }
 
 async function main(argv: string[]): Promise<number> {
@@ -292,10 +356,44 @@ async function main(argv: string[]): Promise<number> {
   const results: CitationResult[] = [];
   let unsupported = 0;
   let unreachable = 0;
+  // THE ARCHIVE IS WRITTEN HERE, NOT IN check(). `readSource` drops every
+  // RawResponse the moment computeSignals has run on it and `SignalResult`
+  // carries no rawBody, so the bytes exist only inside the fetcher (spec 8.3).
+  // `--no-archive` means DO NOT WRAP, so the unwrapped path is byte-for-byte
+  // what it was before this flag existed: check() builds its own fetcher.
+  const archive = flags.has("--no-archive") ? null : archiveContextFor(rules, rulesPath);
+  const staged = new Map<string, StagedEntry>();
   for (const c of joined.checkable) {
+    const recorder = archive ? recordingFetcher(archive.fetcher) : null;
     // The label feeds C1's content-word pool, which is what gives a PDF at a
     // hashed URL something to correlate against.
-    const r = await check(c.url, c.claims, { sourceLabel: c.label, rules });
+    const r = await check(c.url, c.claims, {
+      sourceLabel: c.label,
+      rules,
+      ...(recorder ? { fetcher: recorder.fetcher } : {}),
+    });
+    // ONLY `supported` writes a baseline. A failing check leaves the previous
+    // one standing, which is what lets the author then ask `recheck` whether
+    // the source moved as well (spec 8.3).
+    if (archive && recorder && r.verdict === "supported") {
+      staged.set(
+        archiveKeyFor(c.url),
+        buildArchiveEntry({
+          verdict: r.verdict,
+          claims: c.claims,
+          reads: recorder.reads,
+          toolVersion: VERSION,
+          localRulesHash: archive.localRulesHash,
+          pdftotextVersion: archive.pdftotextVersion,
+          // A fresh stamp on every run, deliberately: `writeArchive` keeps the
+          // EXISTING entry when nothing material changed (Task 5), so this
+          // does not churn the committed index, and when something material
+          // DID change this is the date it changed. That is what makes
+          // `archivedAt` mean "established or last materially changed".
+          archivedAt: new Date().toISOString(),
+        }),
+      );
+    }
     results.push(r);
     if (r.verdict === "unsupported") {
       unsupported++;
@@ -322,6 +420,16 @@ async function main(argv: string[]): Promise<number> {
   }
   for (const u of joined.unclaimed) console.log(`  [${u.n}] NO CLAIMS RECORDED - ${u.url}`);
   for (const o of joined.orphanedClaims) console.log(`  warn claimed but no longer cited: ${o}`);
+
+  // "Archiving must never fail a run" (13 Q4): one try/catch around one write,
+  // in the CLI, rather than a guarantee about a callback the core invokes
+  // mid-run. A refusal here - an index this build cannot parse, an unwritable
+  // path - warns and leaves the run's own exit code alone.
+  try {
+    writeArchive(archivePathFor(doc), staged);
+  } catch (e) {
+    console.warn(`warn archive not written: ${e instanceof Error ? e.message : String(e)}`);
+  }
 
   writeEvidenceFile(evidencePathFor(doc), results);
   if (flags.has("--json")) console.log(JSON.stringify({ version: 1, results }, null, 2));
