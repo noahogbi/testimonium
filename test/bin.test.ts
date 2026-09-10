@@ -10,6 +10,7 @@ import type { RuleSet } from "../src/rules/load.js";
 import {
   archiveContextFor,
   archivePathFor,
+  classifyRecheckRun,
   classifyRun,
   claimsPathFor,
   draftPathFor,
@@ -135,9 +136,9 @@ describe("draftPathFor", () => {
 });
 
 describe("the usage string", () => {
-  it("names all three commands", () => {
+  it("names all four commands", () => {
     // A command the usage line does not name is a command nobody finds.
-    for (const command of ["check", "harvest", "reachability"]) {
+    for (const command of ["check", "harvest", "recheck", "reachability"]) {
       expect(USAGE, command).toContain(command);
     }
   });
@@ -283,5 +284,60 @@ describe("validateFlags and the archive flag", () => {
     // deliberate edit to a red test, and it now covers a fourth instance.
     expect(validateFlags(["harvest", "doc.md", "--no-archive"])).toBeNull();
     expect(validateFlags(["reachability", "doc.md", "--no-archive"])).toBeNull();
+  });
+});
+
+describe("recheck exit codes", () => {
+  it("exits 0 when nothing drifted", () => {
+    expect(classifyRecheckRun({ sourceDrift: 0, pipelineDrift: 0, gone: 0 }, {})).toBe(0);
+  });
+
+  it("exits 1 on source drift - the author verifies the page and updates or removes the claim", () => {
+    expect(classifyRecheckRun({ sourceDrift: 1, pipelineDrift: 0, gone: 0 }, {})).toBe(1);
+  });
+
+  it("exits 2 on pipeline drift - a regression in this tool, not a defect in the document", () => {
+    expect(classifyRecheckRun({ sourceDrift: 0, pipelineDrift: 3, gone: 0 }, {})).toBe(2);
+  });
+
+  it("1 DOMINATES 2 for recheck, deliberately unlike classifyRun", () => {
+    // Under `check`, a 2 means the tool could not do its job and the run is
+    // void, so classifyRun tests infrastructure first and 2 wins outright.
+    // Under `recheck` both signals are real results about different citations,
+    // and letting our own regression mask genuine source drift at the exit code
+    // would be this tool's defect suppressing the author's news. The two
+    // policies are asserted side by side so the difference is deliberate rather
+    // than accidental.
+    expect(classifyRecheckRun({ sourceDrift: 1, pipelineDrift: 1, gone: 0 }, {})).toBe(1);
+    expect(classifyRun({ unsupported: 1, unclaimed: 0, unreachable: 0, orphaned: 0, infrastructure: true }, {})).toBe(2);
+  });
+
+  it("exits 0 on a gone source by default", () => {
+    // Failing by default would accuse over a transiently misconfigured 404,
+    // which is the same false accusation in a new costume.
+    expect(classifyRecheckRun({ sourceDrift: 0, pipelineDrift: 0, gone: 2 }, {})).toBe(0);
+  });
+
+  it("exits 1 on a gone source when the author opted in, mirroring --fail-on-unreachable", () => {
+    // A genuinely dead link is the author's to fix, which is why the opt-in
+    // exists at all and why it contributes 1 rather than 2.
+    expect(classifyRecheckRun({ sourceDrift: 0, pipelineDrift: 0, gone: 1 }, { failOnGone: true })).toBe(1);
+  });
+
+  it("a gone source the author opted into still dominates pipeline drift", () => {
+    expect(classifyRecheckRun({ sourceDrift: 0, pipelineDrift: 5, gone: 1 }, { failOnGone: true })).toBe(1);
+  });
+});
+
+describe("validateFlags and the recheck flag", () => {
+  it("accepts --fail-on-gone and names it in the usage string", () => {
+    expect(validateFlags(["recheck", "doc.md", "--fail-on-gone"])).toBeNull();
+    expect(USAGE).toContain("--fail-on-gone");
+  });
+
+  it("CHARACTERIZATION: --fail-on-gone is accepted and ignored on the other commands too", () => {
+    // The command-agnostic gap, still parked. Fifth instance.
+    expect(validateFlags(["check", "doc.md", "--fail-on-gone"])).toBeNull();
+    expect(validateFlags(["harvest", "doc.md", "--fail-on-gone"])).toBeNull();
   });
 });

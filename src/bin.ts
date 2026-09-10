@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 import { check } from "./check.js";
 import { reachability } from "./reachability.js";
 import { harvest } from "./harvest.js";
+import { recheck } from "./recheck.js";
 import { parseGfmFootnotes } from "./adapters/gfm-footnotes.js";
 import { joinClaims, parseClaimsFile } from "./io/claims.js";
 import { buildDraft, draftInTheWay, writeDraftFile } from "./io/draft.js";
@@ -50,6 +51,44 @@ export function classifyRun(t: RunTally, failOn: FailOn): 0 | 1 | 2 {
   return fail ? 1 : 0;
 }
 
+export interface RecheckTally {
+  readonly sourceDrift: number;
+  readonly pipelineDrift: number;
+  readonly gone: number;
+}
+
+/**
+ * `recheck`'s exit policy. **For `recheck`, 1 DOMINATES 2** - deliberately
+ * unlike `classifyRun` above.
+ *
+ * Under `check` a 2 means the tool could not do its job and the run is void, so
+ * infrastructure is tested first and wins outright: there is nothing
+ * author-actionable to preserve. Under `recheck` both signals are real results
+ * about different citations, and letting our own regression mask genuine source
+ * drift at the exit code would be this tool's defect suppressing the author's
+ * news. Both are named in the report either way; only the code is forced to
+ * choose.
+ *
+ * There is deliberately NO `infrastructure` member here. In `recheck` an
+ * infrastructure failure is a PRE-COMPARISON one - an unreadable document, an
+ * unreadable claims file, unloadable rules - and `main` returns 2 for it before
+ * any tally exists. A member this function could only ever be handed `false`
+ * would be an option it ignores, which is worse than no option.
+ *
+ * What 1-versus-2 delivers is ATTRIBUTION, not a passing build: exit 2 fails
+ * every naive `set -e` gate exactly as exit 1 does. The author is never told to
+ * fix their document for a defect that is ours.
+ */
+export function classifyRecheckRun(t: RecheckTally, opts: { readonly failOnGone?: boolean }): 0 | 1 | 2 {
+  if (t.sourceDrift > 0) return 1;
+  // A genuinely dead link is the author's to fix, which is why the opt-in
+  // exists - and why it contributes 1 rather than 2. Failing by default would
+  // accuse over a transiently misconfigured 404.
+  if (t.gone > 0 && opts.failOnGone === true) return 1;
+  if (t.pipelineDrift > 0) return 2;
+  return 0;
+}
+
 const KNOWN_FLAGS = new Set([
   "--json",
   "--rules",
@@ -57,14 +96,16 @@ const KNOWN_FLAGS = new Set([
   "--allow-unclaimed",
   "--explain-fetch",
   "--no-archive",
+  "--fail-on-gone",
 ]);
 
 /** Exported so a test can assert it names every command this build has. A
  *  command the usage line does not name is a command nobody finds. */
 export const USAGE =
-  "usage: testimonium <check|harvest|reachability> <doc.md> " +
+  "usage: testimonium <check|harvest|recheck|reachability> <doc.md> " +
   "[--json] [--rules <path>] " +
-  "(check only: [--fail-on-unreachable] [--allow-unclaimed] [--explain-fetch] [--no-archive])";
+  "(check only: [--fail-on-unreachable] [--allow-unclaimed] [--explain-fetch] [--no-archive]) " +
+  "(recheck only: [--fail-on-gone])";
 
 /**
  * The first `--flag` in argv this build does not recognize, or null when
@@ -338,6 +379,115 @@ async function main(argv: string[]): Promise<number> {
     // 0 whether or not anything was proposed. Harvest has no verdict to fail
     // on, so it has no exit 1 (spec 8.2, "Exit codes").
     return 0;
+  }
+
+  if (command === "recheck") {
+    let joined;
+    try {
+      joined = joinClaims(document.footnotes, parseClaimsFile(readFileSync(claimsPathFor(doc), "utf8")));
+    } catch (e) {
+      console.error(`cannot read claims: ${e instanceof Error ? e.message : String(e)}`);
+      return 2;
+    }
+
+    // The live fetcher plus the two provenance facts the comparison needs.
+    // Unlike `check`, a null context here is an INFRASTRUCTURE FAILURE rather
+    // than "do not archive": `recheck` writes nothing, but a localRulesHash it
+    // could not compute would feed the local-rules confound a wrong answer, and
+    // a wrong confound input is one of the few ways this command could mint an
+    // exit 1 it has no licence for.
+    const ctx = archiveContextFor(rules, rulesPath);
+    if (ctx === null) {
+      console.error("cannot establish rules provenance, so the comparison would be unsound");
+      return 2;
+    }
+
+    const report = await recheck(
+      joined.checkable.map((c) => ({ url: c.url, label: c.label, claims: c.claims })),
+      {
+        archiveDir: archivePathFor(doc),
+        rules,
+        fetcher: ctx.fetcher,
+        localRulesHash: ctx.localRulesHash,
+        pdftotextVersion: ctx.pdftotextVersion,
+      },
+    );
+
+    let sourceDrift = 0;
+    let pipelineDrift = 0;
+    let gone = 0;
+    // outcomes are 1:1 with the citations handed in, in order.
+    for (const [i, o] of report.outcomes.entries()) {
+      const n = joined.checkable[i]?.n ?? i + 1;
+      // The BUNDLED rules moving is named as a likely cause and changes
+      // nothing: it is never a confound, because treating a version bump as one
+      // would suppress the comparison on every citation after every release and
+      // retire the instrument by upgrading it.
+      const bundled = o.bundledVersionChanged
+        ? ` (the bundled rules moved: archived under ${o.archivedToolVersion}, running ${VERSION})`
+        : "";
+      if (o.category === "sourceDrift") {
+        sourceDrift++;
+        console.log(`  [${n}] SOURCE DRIFT - ${o.url}`);
+        console.log(`        archived ${o.archivedAt}: the stored bytes still prove this claim and the live page does not`);
+        for (const m of o.missed) console.log(`        MISS: "${m}"`);
+      } else if (o.category === "pipelineDrift") {
+        pipelineDrift++;
+        console.log(`  [${n}] pipeline drift - ${o.url} (live ${o.live}, archived bytes ${o.archived})${bundled}`);
+        console.log("        This is a regression in testimonium, not a defect in your document.");
+      } else if (o.category === "gone") {
+        gone++;
+        // `archivedAt` is when the baseline was established or last MATERIALLY
+        // changed - the store preserves an entry that changed in nothing
+        // material - so this line reads "gone since at least that date".
+        console.log(`  [${n}] gone since ${o.archivedAt} - ${o.url}`);
+        // THE ONE ROW THAT CAN CARRY CONFOUNDS. The gone row is evaluated above
+        // the named confounds (spec 8.3 as amended), because no confound can
+        // explain an origin's 404 - so print them here: the reorder changes
+        // which category wins, not what the author is told.
+        for (const c of o.confounds) console.log(`        ${c}`);
+      } else if (o.category === "unreachable") {
+        console.log(`  [${n}] unreachable now - ${o.url} (tried: ${report.liveResults[i]?.rungsAttempted.join(", ") ?? ""})`);
+      } else if (o.category === "confounded") {
+        console.log(`  [${n}] not compared - ${o.url}`);
+        for (const c of o.confounds) console.log(`        ${c}`);
+      } else if (o.category === "noBaseline") {
+        console.log(`  [${n}] no baseline - ${o.url} (live: ${o.live})`);
+      } else if (o.category === "unclaimed") {
+        console.log(`  [${n}] NO CLAIMS RECORDED - ${o.url}`);
+      } else {
+        console.log(`  [${n}] clean - ${o.url}${bundled}`);
+      }
+      // `liveGone` is set only when the live arm came back UNREACHABLE (Fable's
+      // correction 5), so this clause can no longer print under a citation the
+      // ladder went on to read: a node rung that 404s before a curl rung reads
+      // the document is L = supported, and telling that author their source may
+      // be gone is a false alarm. With the gone row now above the confounds,
+      // the rows this still reaches are `noBaseline` and mixed-status
+      // `unreachable` - which is exactly its remaining job.
+      if (o.liveGone && o.category !== "gone") {
+        console.log("        the live read was a 404 or 410, so this source may be gone");
+      }
+    }
+
+    // Reported exactly as `check` reports them, from the same joinClaims output.
+    for (const na of joined.notApplicable) console.log(`  [${na.n}] not applicable - ${na.reason}`);
+    for (const u of joined.unclaimed) console.log(`  [${u.n}] NO CLAIMS RECORDED - ${u.url}`);
+    for (const o of joined.orphanedClaims) console.log(`  warn claimed but no longer cited: ${o}`);
+
+    // The LIVE arm's results, which is the same thing `check` writes there and
+    // the only arm whose verdicts describe the world. `recheck` writes nothing
+    // into the archive and never refreshes a baseline.
+    writeEvidenceFile(evidencePathFor(doc), report.liveResults);
+    if (flags.has("--json")) {
+      console.log(JSON.stringify({ version: 1, results: report.liveResults, drift: report.outcomes }, null, 2));
+    }
+
+    console.log(`\n${sourceDrift} source drift, ${pipelineDrift} pipeline drift, ${gone} gone since archiving`);
+    console.log(
+      "recheck detects change, never correctness: a source that was already wrong when it was archived is archived wrong.",
+    );
+    return classifyRecheckRun({ sourceDrift, pipelineDrift, gone }, { failOnGone: flags.has("--fail-on-gone") });
   }
 
   if (command !== "check") {
