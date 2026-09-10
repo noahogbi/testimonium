@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { recheck, type RecheckCitation } from "../src/recheck.js";
+import * as checkModule from "../src/check.js";
 import { buildArchiveEntry } from "../src/archive/record.js";
 import { archiveIndexPath, writeArchive } from "../src/archive/store.js";
 import { VERSION } from "../src/version.js";
@@ -36,9 +37,38 @@ function live(rawBody: string, status = 200, finalUrl = URL): Fetcher {
   };
 }
 
+/** One fixed response per URL, keyed by exact match. For proving a per-citation
+ *  property does not leak into a sibling citation's outcome - `live()` alone
+ *  cannot do this because it ignores the URL it is asked for and answers every
+ *  citation identically. */
+function liveMap(
+  byUrl: Readonly<
+    Record<string, { rawBody: string; status?: number; finalUrl?: string; headers?: Readonly<Record<string, string>> }>
+  >,
+): Fetcher {
+  return {
+    rungs: ["node", "curl"],
+    async fetch(url: string, _rung: RungId): Promise<RawResponse> {
+      const e = byUrl[url];
+      if (!e) return { rawBody: "", status: 0, headers: {}, finalUrl: "", bytes: 0 };
+      return {
+        rawBody: e.rawBody,
+        status: e.status ?? 200,
+        headers: e.headers ?? { "content-type": "text/html" },
+        finalUrl: e.finalUrl ?? url,
+        bytes: e.rawBody.length,
+      };
+    },
+  };
+}
+
 /** Write a baseline the way `check` writes one: through buildArchiveEntry and
  *  writeArchive, never a hand-written index. */
-function seed(dir: string, rawBody: string, over: { finalUrl?: string; claims?: readonly string[] } = {}): void {
+function seed(
+  dir: string,
+  rawBody: string,
+  over: { url?: string; finalUrl?: string; claims?: readonly string[] } = {},
+): void {
   const staged = buildArchiveEntry({
     verdict: "supported",
     claims: over.claims ?? [CLAIM],
@@ -48,7 +78,7 @@ function seed(dir: string, rawBody: string, over: { finalUrl?: string; claims?: 
     pdftotextVersion: null,
     archivedAt: "2026-09-09T00:00:00.000Z",
   });
-  writeArchive(dir, new Map([[URL, staged]]));
+  writeArchive(dir, new Map([[over.url ?? URL, staged]]));
 }
 
 function blobCount(dir: string): number {
@@ -175,5 +205,61 @@ describe("recheck", () => {
     const r = await recheck(CITATIONS, { archiveDir: dir, fetcher: live("<html><body>Not found</body></html>", 404) });
     expect(r.outcomes[0]?.category).toBe("gone");
     expect(r.outcomes[0]?.archivedAt).toBe("2026-09-09T00:00:00.000Z");
+  });
+
+  it("passes the SAME sourceLabel to both arms - the control arm's founding invariant", async () => {
+    // Verdict-inert TODAY only: C1's slugLabelOverlap is computed and
+    // deliberately not consulted (classify/verdict.ts). The day it - or any
+    // rule - reads it, L and A must still be asked about the same label or
+    // the comparison silently becomes two different questions, and nothing
+    // in compareCitation's decision procedure would notice. This spies on the
+    // real `check()` rather than asserting a verdict, because no fixture can
+    // make a divergence observable while C1 stays unconsulted.
+    const dir = tmpArchive();
+    seed(dir, WITH_CLAIM);
+    const spy = vi.spyOn(checkModule, "check");
+    await recheck(CITATIONS, { archiveDir: dir, fetcher: live(WITH_CLAIM) });
+    expect(spy.mock.calls).toHaveLength(2);
+    const labels = spy.mock.calls.map((call) => (call[2] as { sourceLabel?: string } | undefined)?.sourceLabel);
+    expect(labels[0]).toBe(CITATIONS[0]?.label);
+    expect(labels[1]).toBe(CITATIONS[0]?.label);
+    spy.mockRestore();
+  });
+
+  it("does not leak one citation's live read statuses into another citation's outcome", async () => {
+    // The recorder is built fresh, per citation, inside the loop (recheck.ts).
+    // If it were hoisted above the loop instead, `recorder.reads` would still
+    // hold the first citation's 404 by the time the second citation's outcome
+    // is compared - liveGone is `live === "unreachable" && statuses include a
+    // gone status`, so a leaked 404 would turn a genuinely-unreachable-for-
+    // unrelated-reasons second citation into a false "gone" report. The second
+    // citation is made unreachable by an N1 vendor-challenge header at status
+    // 200 specifically so its OWN status is never a gone status - only a leak
+    // from citation one could make it read gone.
+    const dir = tmpArchive();
+    const GONE_URL = "https://g.com/vanished";
+    const CHALLENGED_URL = "https://h.com/story";
+    seed(dir, WITH_CLAIM, { url: GONE_URL });
+    seed(dir, WITH_CLAIM, { url: CHALLENGED_URL });
+    const two: RecheckCitation[] = [
+      { url: GONE_URL, label: "Vanished", claims: [CLAIM] },
+      { url: CHALLENGED_URL, label: "Story", claims: [CLAIM] },
+    ];
+    const fetcher = liveMap({
+      [GONE_URL]: { rawBody: "<html><body>Not found</body></html>", status: 404, headers: {} },
+      [CHALLENGED_URL]: {
+        rawBody: WITH_CLAIM,
+        status: 200,
+        headers: { "content-type": "text/html", "CF-Mitigated": "challenge" },
+      },
+    });
+    const r = await recheck(two, { archiveDir: dir, fetcher });
+    expect(r.outcomes[0]?.url).toBe(GONE_URL);
+    expect(r.outcomes[0]?.category).toBe("gone");
+    expect(r.outcomes[1]?.url).toBe(CHALLENGED_URL);
+    expect(r.outcomes[1]?.live).toBe("unreachable");
+    // The one assertion a leak would break: a status leaked from citation one
+    // would make this "gone" instead.
+    expect(r.outcomes[1]?.category).toBe("unreachable");
   });
 });

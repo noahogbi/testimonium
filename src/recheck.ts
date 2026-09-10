@@ -30,7 +30,11 @@ export interface RecheckOptions {
 }
 
 export interface RecheckReport {
-  /** One per input citation, in the SAME ORDER. */
+  /** One per input citation, in the SAME ORDER. Each outcome's `missed` is
+   *  the LIVE arm's miss list on EVERY row - present even on rows that do
+   *  not accuse - and is an ACCUSATION only when `category === "sourceDrift"`:
+   *  `pipelineDrift` and `confounded` carry it too, and both blame this tool
+   *  or the author's own machine, never the source. */
   readonly outcomes: CitationOutcome[];
   /** The LIVE arm's results - what is true of the source today, and the only
    *  arm whose verdicts describe the world. The caller writes these to
@@ -61,6 +65,12 @@ export async function recheck(
   citations: readonly RecheckCitation[],
   opts: RecheckOptions,
 ): Promise<RecheckReport> {
+  // PAIRED WITH check.ts:74's identical `defaultFetcher(opts.rules ? { hosts:
+  // opts.rules.hosts } : {})` call. check() is off-limits to this plan, so
+  // this is a second copy of the host-rule wiring rather than a shared
+  // helper - an edit to one call that is not mirrored in the other silently
+  // drops local host rules from whichever side got missed (Critical 1's
+  // failure shape: a rule that loads and validates but is never consulted).
   const live = opts.fetcher ?? defaultFetcher(opts.rules ? { hosts: opts.rules.hosts } : {});
   const archive = readArchive(opts.archiveDir);
   const index = archive.kind === "ok" ? archive.index : null;
