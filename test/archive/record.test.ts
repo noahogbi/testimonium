@@ -60,6 +60,26 @@ describe("the recording fetcher", () => {
     expect(rec.reads[1]?.response.rawBody).toBe(DOC);
   });
 
+  it("composes with buildArchiveEntry: the real Recorder.reads from a check() run, not a hand-built fixture", async () => {
+    // The two describe blocks below never meet on their own: every
+    // buildArchiveEntry test elsewhere hand-builds RecordedRead[] through the
+    // read() helper. TypeScript guarantees the shapes line up; it does not
+    // guarantee the two halves interoperate. This pipes an ACTUAL
+    // Recorder.reads - produced by a real check() run through the tee -
+    // straight into buildArchiveEntry, with no hand-built fixture in between.
+    const rec = recordingFetcher(stub({ node: { rawBody: WALL, status: 202 }, curl: { rawBody: DOC, status: 200 } }));
+    const r = await check("https://e.com/report", [CLAIM], { fetcher: rec.fetcher });
+    expect(r.verdict).toBe("supported");
+
+    const staged = buildArchiveEntry({ ...ENTRY_DEFAULTS, verdict: r.verdict, reads: rec.reads });
+
+    expect(staged.entry.reads.map((x) => x.rung)).toEqual(["node", "curl"]);
+    expect(staged.entry.reads.map((x) => x.status)).toEqual([202, 200]);
+    expect(staged.blobs.size).toBe(2);
+    expect(staged.blobs.get(staged.entry.reads[0]!.hash)).toBe(WALL);
+    expect(staged.blobs.get(staged.entry.reads[1]!.hash)).toBe(DOC);
+  });
+
   it("records nothing for a rung whose inner fetch throws, and does not abort the run", async () => {
     // The Fetcher contract says a fetcher must not throw; readSource degrades a
     // throwing rung to an unread rung with a warning. The recorder must not
