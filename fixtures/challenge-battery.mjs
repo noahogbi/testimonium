@@ -7,7 +7,7 @@
  * walls) that must never be misclassified as walls.
  *
  * This file used to import a classifier from a sibling repo at a hard-coded
- * absolute path (<origin repo path withheld>/scripts/lib/source-fetch.mjs)
+ * absolute path in the origin repository (path withheld 2026-09-10)
  * and is not portable that way. It no longer imports anything from outside
  * this repo: it now writes each constructed body out as its own HTML file
  * under fixtures/challenge/<name>.html, for the fixture corpus that

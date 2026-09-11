@@ -65,6 +65,13 @@ the tree clean, and re-verified all three. And the source's thirteen em dashes
 are written here as hyphens, so this file is pure ASCII; nothing else in the
 text below is altered.
 
+**Withheld 2026-09-10.** The four claims files are named `source-a-claims.json`
+through `source-d-claims.json` in the log below, assigned in the alphabetical
+order the real filenames already had; the origin repository's name and the
+commit Task 2 pinned are withheld with them. Mechanical substitutions for
+publication: no ruling, finding, count, byte size or date recorded here
+changed.
+
 ---
 
 # SDD ledger - plan: docs/superpowers/plans/2026-09-08-plan-2-harvest.md
@@ -158,11 +165,11 @@ paragraph) judged already true or correctly scoped and left alone, plus
 historical plan/ledger docs deliberately untouched as records. Task review
 dispatched (opus) with that judgement called out for verification.
 
-Task 2 pre-check (read-only, 2026-09-08): origin-repository HEAD has moved twice
+Task 2 pre-check (read-only, 2026-09-08): the origin repository's HEAD has moved twice
 during this session (5f5f765 -> 8f05ab39 -> 7505dc2; another session
 committing, never this one). The three working-tree claims files remain
 byte-stable at 5684 / 1839 / 3165 bytes, matching what the planner recorded,
-and <pinned origin commit withheld> still resolves for
+and the pinned commit (withheld) still resolves for
 source-c-claims.json. Task 2's freeze reproduces as planned.
 
 Task 1: review (opus) spec X / quality NOT approved. 2 Critical, 3 Important,
@@ -508,10 +515,10 @@ All three acceptance-test mutations watched to fail with predicted messages
 before restore.
 Controller verified the freeze reproduces exactly: the source-c blob is
 e03e28ff6bf3727810ce52b9fdb05898a13e6171 at the pinned ref
-<pinned origin commit withheld>, at that branch's CURRENT tip 78d3aa9
+(withheld 2026-09-10), at that branch's CURRENT tip 78d3aa9
 (now 10 commits on), and in fixtures/claims/ - all three identical. Pinning the
 ref rather than the branch name is what made this checkable.
-Read-only boundary held: origin-repository carries 2 dirty files
+Read-only boundary held: the origin repository carries 2 dirty files
 (docs/bulletin-process.md and a 2026-09-09 worklog) which are that session's
 own bulletin work, no claims file dirty, our worktree clean, and our `git show`
 reads left no trace.

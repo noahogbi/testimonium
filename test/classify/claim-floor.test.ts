@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync, readdirSync } from "node:fs";
-import { toText } from "../../src/text/extract.js";
-import { norm } from "../../src/text/normalize.js";
+import { readFileSync } from "node:fs";
 import { THRESHOLDS } from "../../src/classify/thresholds.js";
 
 // The discipline test/classify/acceptance.test.ts imposes on the prose floor,
@@ -11,58 +9,61 @@ import { THRESHOLDS } from "../../src/classify/thresholds.js";
 // than counting it, and a margin is demanded so a number that only just holds
 // cannot ship.
 //
-// This is the only new test in plan 2 that reads fixtures. Every other one
+// WHAT THIS FILE READS, AND WHY IT CHANGED (2026-09-10). It used to walk the
+// 210 claim strings in `fixtures/claims/`, frozen from four of the owner's
+// unpublished drafts, and re-run the matcher over them. That corpus was
+// deleted when this repository was made public: the claim text discloses what
+// those drafts are about. It was replaced by `fixtures/claim-lengths.json`,
+// which keeps the lengths and counts the assertions below actually consume -
+// see that file's `_note`.
+//
+// ONE ASSERTION DID NOT SURVIVE THE REPLACEMENT, and it is not quietly gone.
+// "NO claim at or above the floor matches a page it was not written about"
+// re-ran `phraseFound` over every claim string against every unrelated
+// `document` fixture. It cannot be re-derived from lengths, and a version of
+// it rewritten to consult the stored `spurious` list would be a test that
+// re-reads its own answer - it could no longer fail on evidence, only on the
+// fixture being edited. So it was DELETED rather than faked. Its result is a
+// dated measurement: on 2026-09-09, over 208 distinct claims and 10 unrelated
+// document fixtures, exactly two matched a page they were not written about,
+// both far below the floor. That measurement stands recorded in
+// docs/calibration-2026-09.md ("Calibration of `minClaimChars` and
+// `harvestSeedChars`", and the 2026-09-10 correction beneath it) and is NOT
+// re-runnable from what this repository now ships. What remains below still
+// fails if the floor is lowered - that is the assertion that guards the
+// constant, and it was watched to fail before it was trusted.
+//
+// This is still the only test in plan 2 that reads a fixture. Every other one
 // builds its bodies inline.
 
-type Fixture = { path: string; kind: "challenge" | "document" | "known-gap" };
-const corpus: Fixture[] = JSON.parse(readFileSync("fixtures/corpus.json", "utf8"));
-// Normalized ONCE per document. `d.includes(norm(c))` is exactly
-// phraseFound(text, c) with the haystack pre-normalized - the same saving
-// harvest's filter 2 makes, for the same reason.
-const documents = corpus
-  .filter((f) => f.kind === "document")
-  .map((f) => norm(toText(readFileSync(f.path, "utf8"))));
-
-/** The walker scripts/calibrate-claim-floor.mjs uses, restated in TypeScript:
- *  claim strings only, no `_` notes, no notApplicable reason strings. */
-function walk(v: unknown, out: string[]): void {
-  if (typeof v === "string") {
-    out.push(v);
-    return;
-  }
-  if (Array.isArray(v)) {
-    for (const x of v) walk(x, out);
-    return;
-  }
-  if (v && typeof v === "object") {
-    if (typeof (v as { notApplicable?: unknown }).notApplicable === "string") return;
-    for (const [k, x] of Object.entries(v)) if (!k.startsWith("_")) walk(x, out);
-  }
-}
-
-const raw: string[] = [];
-for (const f of readdirSync("fixtures/claims").filter((n) => n.endsWith("-claims.json")).sort()) {
-  walk(JSON.parse(readFileSync(`fixtures/claims/${f}`, "utf8")), raw);
-}
-const rows = [...new Set(raw)].map((c) => ({
-  c,
-  n: norm(c).length,
-  hits: documents.filter((d) => d.includes(norm(c))).length,
-}));
-const spurious = rows.filter((r) => r.hits > 0);
+type Derived = {
+  /** Frozen count of `kind: "document"` fixtures the measurement ran against. */
+  documentFixtures: number;
+  /** Every claim that matched a `document` fixture it was not written about. */
+  spurious: { claim: string; n: number; hits: number }[];
+  /** Every distinct claim's `norm(claim).length`, ascending. */
+  lengths: number[];
+};
+const derived: Derived = JSON.parse(readFileSync("fixtures/claim-lengths.json", "utf8"));
+const { lengths, spurious } = derived;
 
 describe("acceptance test - the claim floor (spec 7.3, 13 Q3)", () => {
   it("the populations are the ones the floor is licensed against", () => {
     // Without this every assertion below passes vacuously on an empty
-    // fixtures/claims/ - an instrument that reports success without running,
-    // which is this repository's most-repeated defect.
-    expect(documents.length).toBeGreaterThanOrEqual(10);
-    expect(rows.length).toBeGreaterThanOrEqual(200);
-  });
-
-  it("NO claim at or above the floor matches a page it was not written about", () => {
-    const failures = spurious.filter((r) => r.n >= THRESHOLDS.minClaimChars).map((r) => r.c);
-    expect(failures).toEqual([]);
+    // population - an instrument that reports success without running, which
+    // is this repository's most-repeated defect. It was watched to fail: with
+    // `lengths` emptied, this reports `expected 0 to be greater than or equal
+    // to 200` while the margin and naming assertions below pass, examining
+    // nothing.
+    //
+    // `documentFixtures` is deliberately the FROZEN count, not a live count of
+    // fixtures/corpus.json. It is the population the 2026-09-09 measurement was
+    // taken against, and that number cannot change retroactively; asserting it
+    // equals today's corpus would fail the day someone ADDS a document fixture,
+    // and could not then be repaired, because the claims it was derived from
+    // are gone.
+    expect(derived.documentFixtures).toBeGreaterThanOrEqual(10);
+    expect(lengths.length).toBeGreaterThanOrEqual(200);
   });
 
   it("the floor clears the observed ceiling with margin", () => {
@@ -70,17 +71,21 @@ describe("acceptance test - the claim floor (spec 7.3, 13 Q3)", () => {
     // clearing it. The prose floor demands 200 characters of air on a
     // 4,500-character threshold; 3 on a 16-character one is the same idea at
     // this scale.
+    //
+    // THIS IS THE ASSERTION THAT GUARDS THE CONSTANT. Every other file that
+    // mentions `minClaimChars` consumes it without checking its value, so all
+    // of them stay green at 8. This one does not.
     const ceiling = Math.max(0, ...spurious.map((r) => r.n));
     expect(ceiling).toBeLessThanOrEqual(THRESHOLDS.minClaimChars - 3);
   });
 
   it("names what it pins: every claim that demonstrably attests nothing is refused", () => {
     // Fable F6: the floor is NOT derived from these events - two of them is
-    // not a derivation. What this pins is that on THIS corpus every claim
+    // not a derivation. What this pins is that on THAT corpus every claim
     // shown to match a page it was not written about is refused, and the
     // failure message names it.
     for (const r of spurious) {
-      expect(r.n, JSON.stringify(r.c)).toBeLessThan(THRESHOLDS.minClaimChars);
+      expect(r.n, JSON.stringify(r.claim)).toBeLessThan(THRESHOLDS.minClaimChars);
     }
   });
 
@@ -88,8 +93,8 @@ describe("acceptance test - the claim floor (spec 7.3, 13 Q3)", () => {
     // 18 of 208, 8.7 percent, on 2026-09-09. The bound is loose on purpose:
     // it exists to catch a floor raised until it refuses a quarter of an
     // author's file, not to pin today's ratio.
-    const refused = rows.filter((r) => r.n < THRESHOLDS.minClaimChars).length;
-    expect(refused / rows.length).toBeLessThan(0.15);
+    const refused = lengths.filter((n) => n < THRESHOLDS.minClaimChars).length;
+    expect(refused / lengths.length).toBeLessThan(0.15);
   });
 
   it("the seed length is at least the floor (spec 8.2, Thresholds)", () => {

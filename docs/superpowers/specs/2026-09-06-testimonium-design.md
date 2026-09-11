@@ -25,12 +25,16 @@ those. Plan 3 implements 8.3 as amended, including the README sentence 8.3 now
 requires rather than asserts.
 **Language:** TypeScript, Node >= 20, npm.
 **Sibling to:** `urtext`. Not a subcommand of it. See section 3.
+**Withheld:** 2026-09-10, for publication. The origin repository this spec draws
+on is named only as "the origin repository (private)", its absolute path is
+removed, and the commit 7.3's freeze pinned is withheld. Mechanical
+substitutions; no section, ruling, number or resolved question changed.
 
 ---
 
 ## 0. Provenance of this document
 
-This spec draws on code in `<origin repo path withheld>`, which is read-only to
+This spec draws on code in the origin repository (private), which is read-only to
 this project and had uncommitted work in flight while it was written.
 
 - Claims about that code were verified by direct read at HEAD `3eaf353`
@@ -99,7 +103,7 @@ work. That is a worse failure than the one the tool exists to prevent, because i
 is self-inflicted and it is aimed at the author's own honest citations.
 
 This is the outward-facing form of a rule already applied internally in
-origin-repository (`src/lib/documents/artifact.ts:47-51`): "the evidence moved" must
+the origin repository (`src/lib/documents/artifact.ts:47-51`): "the evidence moved" must
 never render as "the model fabricated this."
 
 **Section 6 is the operational form of this rule and everything in this document
@@ -159,7 +163,7 @@ a Python repo - a limit, not a roadmap item.
 
 The reachability figure from the origin corpus - **121 of 125 (96.8%) of published
 citation URLs still re-fetch cleanly** `[measured; probe over the 15 newest posts,
-per the origin-repository design spec section 2]` - **must not be quoted as a general
+per the origin repository's design spec section 2]` - **must not be quoted as a general
 number.** That corpus was filtered at authoring time for sources the author could
 read. A new user's first honest experience is *their* number, which will be lower.
 This is why `reachability` is a v1 command (section 8).
@@ -273,7 +277,7 @@ a hand-rolled ladder forfeits the keystone guarantee, citing this history.
 ### 6.1 The defect being corrected
 
 The keystone rule says `unsupported` requires *positive proof we read the page*.
-Both the pre-fix and post-fix implementations in origin-repository are a **blocklist
+Both the pre-fix and post-fix implementations in the origin repository are a **blocklist
 of known walls**: `isChallengePage` matches a body against a signature list, and
 anything unmatched is treated as read. That makes `unsupported` require the
 *absence of proof we did not* read the page. Those are different rules, and every
@@ -958,14 +962,24 @@ tell from evidence. Re-derived on 2026-09-09 by
 `node scripts/calibrate-claim-floor.mjs` against the 208 distinct real claims
 frozen in `fixtures/claims/` - the origin repo's four files, three from its
 working tree and one from
-`<pinned origin commit withheld>`, copied in so the number
+a pinned commit (withheld), copied in so the number
 reproduces without it. Chance matches against unrelated fixtures occurred at
 3 and 12 normalized characters and never above 12; 16 is that ceiling plus
 margin, and it refuses 18 of 208 (8.7 percent), each a number, a name or a
 fragment that states no proposition. (This paragraph said "203 distinct real
 claims" and "18 of the 203" until 2026-09-09: the ceiling has not moved, the
 population has - the origin repo's working-tree files changed between the two
-measurements, which is why plan 2 froze them.) This resolves Q3 in
+measurements, which is why plan 2 froze them.) (Corrected 2026-09-10:
+`fixtures/claims/` no longer exists. It was deleted when this repository was
+made public, because the claim text discloses what the unpublished drafts it
+came from are about, and `fixtures/claim-lengths.json` - the lengths and the
+two spurious matches, no claim text - replaced it. The population, the
+distribution and the 18-of-208 refusal still re-derive from that file and were
+re-derived on 2026-09-10 before the deletion; the ceiling does not, because
+re-running the matcher needs the strings, so "3 and 12 normalized characters
+and never above 12" is from here on a dated measurement rather than a
+reproducible one. docs/calibration-2026-09.md's "Correction, 2026-09-10" sets
+out both halves.) This resolves Q3 in
 section 13: a **refusal, uniform across the three sites, calibrated** - not a
 warning, because a warning that a claim proves nothing leaves it proving nothing
 while the run still passes. It is a breaking change for `check` against an
@@ -1291,7 +1305,11 @@ whose above-floor mean is below 1.0 - is 21, and it is recorded in
 **Plan 2's first task is calibration**, before any harvest code: commit the
 probe as `scripts/calibrate-claim-floor.mjs` (its walker skips `notApplicable`
 objects, which the probe's did not); freeze the claims it measures under
-`fixtures/claims/` so the numbers reproduce without the origin repo;
+`fixtures/claims/` so the numbers reproduce without the origin repo (that
+freeze was deleted on 2026-09-10 when the repository was made public, and
+`fixtures/claim-lengths.json` replaced it - the script now reports that file
+rather than measuring a corpus, and no longer calibrates anything; see
+docs/calibration-2026-09.md's "Correction, 2026-09-10");
 hand-classify every cross-fixture common span as chance or boilerplate; and
 bind the result with an acceptance test at `test/classify/claim-floor.test.ts`,
 the discipline section 6.3 imposed on the prose floor. The floor's licence is a
@@ -2045,6 +2063,10 @@ with their resolutions rather than deleted, so the reasoning survives.**
    characters and none above, 18 of 208 refused, re-derived 2026-09-09 against
    the population frozen in `fixtures/claims/`. This line said "203 real
    claims" and "18 of 203" until then; 7.3 says why the population moved.
+   (Corrected 2026-09-10: that population was deleted when this repository was
+   made public and `fixtures/claim-lengths.json` replaced it. The counts still
+   re-derive; the chance matches at 3 and 12 are from here on a dated
+   measurement. 7.3 and docs/calibration-2026-09.md say what that costs.)
    Implemented in plan 2, whose calibration task re-derived the number before
    any code depended on it.
 4. ~~**Archive failures.**~~ **RESOLVED 2026-09-09: local bytes, content-addressed,

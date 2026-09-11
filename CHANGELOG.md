@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.0 - 2026-09-10
 
 Initial implementation of plan 1 (`check`, `reachability`). See
 `docs/superpowers/plans/2026-09-06-plan-1-core.md` and
