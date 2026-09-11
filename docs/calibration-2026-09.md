@@ -532,10 +532,10 @@ floor".
 
 Four real claims files, frozen into `fixtures/claims/` so these numbers
 reproduce without the origin repo. Three were copied from
-`<origin repo path withheld>`'s WORKING TREE and are uncommitted there, so
+the origin repository's WORKING TREE and are uncommitted there, so
 their provenance is an mtime and a size and nothing stronger;
-`source-c-claims.json` is not on that repo's `master` at all and was taken from
-`<pinned origin commit withheld>`, a commit on its `source-c-longform`
+`source-c-claims.json` is not on that repo's `master` at all and was taken
+from a pinned commit (withheld) on its `source-c-longform`
 branch. `fixtures/claims/provenance.json` records all four.
 
 That commit was the branch tip on 2026-09-08, when this task was written. On
@@ -687,6 +687,16 @@ all of them stay green at 8.
 Superseded with the rest: `fixtures/claims/provenance.json`. The mtimes, the
 sizes and the `source-c-claims.json` blob hash it recorded now survive only as
 what the "Populations" subsection above quotes of them.
+
+**Also 2026-09-10: the four filenames, the origin path and the pinned commit
+are withheld.** The four files are named `source-a-claims.json` through
+`source-d-claims.json` above, assigned in the alphabetical order the real
+filenames already had, because two of those names disclosed what their draft
+was about; the origin repository's path and the commit one file was read at
+are withheld with them. The substitution is mechanical - a label for a label -
+and nothing else in this section moved: every count, length, band, ceiling,
+floor, margin, refusal and date above is the same figure, from the same run,
+against the same corpus, and none of them was re-derived today.
 
 ### The seed length
 

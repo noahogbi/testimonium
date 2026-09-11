@@ -16,6 +16,10 @@ F1-F18. Suite re-run at review time: 281 passed at `ff71ec8`+plan commit.
 Date of review: 2026-09-08 (session clock 2026-09-08; the plan's measurements
 dated 2026-09-08 were all re-derived, see "What was verified by running").
 
+**Withheld 2026-09-10.** The origin repository is not named in this review as
+published and the commit its freeze pinned is withheld. Mechanical
+substitutions: every number, finding and verdict below is unchanged.
+
 ## VERDICT: APPROVE WITH CORRECTIONS
 
 Ten tasks, all executable from their text alone; every load-bearing number and
@@ -304,7 +308,7 @@ demand.
   distinct, 10 document fixtures totalling 367,390 chars, spurious exactly
   `"SAUDI ARABIA"`@12 and `"169"`@3, ceiling 12, refused-at-16 = 18, the full
   refused-at-F line. All four source files pure ASCII. Sources byte-stable at
-  the report's sizes/mtimes; `<pinned origin commit withheld>...` resolves; origin-repository HEAD
+  the report's sizes/mtimes; the pinned ref (withheld) resolves; origin-repository HEAD
   `8f05ab39` (read-only throughout).
 - **Every seed-sweep number:** the full 9-row table digit-for-digit, 43/32
   spans at L=20/21, longest span 27 normalized chars.

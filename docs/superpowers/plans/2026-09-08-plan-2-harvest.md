@@ -12,6 +12,8 @@
 
 **Base:** `main` @ `ff71ec8` (plan 1.2 merged as PR #3). Branch `feat/plan-2-harvest` in the worktree `C:\Users\noaho\testimonium-plan2`. 281 tests green, `npx tsc --noEmit` clean, `dist/` present.
 
+**Withheld 2026-09-10.** The four claims files this plan freezes are named `source-a-claims.json` through `source-d-claims.json` here, assigned in the alphabetical order the real filenames already had; two of those names disclosed what their draft was about. The origin repository's path and the commit Task 2 pinned are withheld with them, and Task 2 Step 1's copy commands are replaced by a single line, because the corpus they copied was deleted on 2026-09-10 and is not re-importable. Every one of these is a label for a label: no task, step, ruling, count, verdict or date in this plan changed.
+
 ## Global Constraints
 
 - **THE KEYSTONE RULE (spec 2):** `unsupported` requires positive proof the real page was read. **Harvest never writes `<doc>.claims.json`; it writes the draft only.** A proposal becomes a claim when the author moves it, and not before.
@@ -24,7 +26,7 @@
 - **Every number written into a doc comes from a command run that day, and the command is named beside it.** Numbers this plan quotes from the spec are marked **re-derive; do not copy** with the command that re-derives them. Write what the command printed on the day. **If a re-run moves the observed ceiling above the floor, that is a finding to stop on and report in the ledger, not a number to explain away.**
 - **A doc-drift sweep is over the whole document, not over the diff.** A task that changes behaviour names every existing README, CHANGELOG or spec sentence it falsifies - including sentences it did not touch - and fixes them in the same task. This is the defect class this repository is worst at: plan 1.2's final review found a Critical in a spec paragraph that no task had edited.
 - **No unit test touches the network.** Build bodies inline with a stub fetcher, as `test/check.test.ts` does. `test/classify/claim-floor.test.ts` reads `fixtures/`, which `test/classify/acceptance.test.ts` already does; no other new test may.
-- `<origin repo path withheld>` is **read-only** from this work. Reading files and `git -C <path> show|log|rev-parse` are the only permitted operations against it; never write, checkout, stash, add or commit there. Task 2 is the only task that touches it at all, and only to copy four files out.
+- The origin repository (private) is **read-only** from this work. Reading files and `git -C <path> show|log|rev-parse` are the only permitted operations against it; never write, checkout, stash, add or commit there. Task 2 is the only task that touches it at all, and only to copy four files out.
 - **Worktree environment.** `core.autocrlf=true`: files are CRLF on disk and LF in the index - do not convert them. Commit with `git -c core.safecrlf=false commit ...`. The Node binary is `python`'s neighbour `node`; the Python binary on this machine is `python`, not `python3`. `grep -P` fails in this locale - use `grep -E`. Every Bash call starts in a fresh cwd, so begin every command with `cd C:/Users/noaho/testimonium-plan2 &&`.
 
 ---
@@ -368,20 +370,13 @@ cd C:/Users/noaho/testimonium-plan2 && git add docs/superpowers/specs/2026-09-06
 
 **Why calibration comes before code (spec 8.2).** "Calibrating after the reducer and its tests exist is the single most expensive mistake available here" - spec 13 Q1, learned in plan 1. Two numbers decide what harvest proposes and what every entry point refuses, and both must be measured by a committed, re-runnable script against inputs frozen in this repo, so that a reader a year from now can reproduce them without the origin repo and without trusting this plan.
 
-**READ-ONLY WARNING.** `<origin repo path withheld>` is another session's live working tree. In this task you may **only** read files under it and run `git -C <origin repo path withheld> show|log|rev-parse`. Never `cd` into it, never write, checkout, stash, add or commit there.
+**READ-ONLY WARNING.** The origin repository (private) is another session's live working tree. In this task you may **only** read files under it and run `git -C <origin repo path withheld> show|log|rev-parse`. Never `cd` into it, never write, checkout, stash, add or commit there.
 
 - [ ] **Step 1: Freeze the four claims files**
 
-```bash
-cd C:/Users/noaho/testimonium-plan2 && mkdir -p fixtures/claims && \
-cp <origin repo path withheld>/docs/drafts/source-a-claims.json fixtures/claims/source-a-claims.json && \
-cp <origin repo path withheld>/docs/drafts/source-b-claims.json fixtures/claims/source-b-claims.json && \
-cp <origin repo path withheld>/docs/drafts/source-d-claims.json fixtures/claims/source-d-claims.json && \
-git -C <origin repo path withheld> show <pinned origin commit withheld>:docs/drafts/source-c-claims.json > fixtures/claims/source-c-claims.json && \
-ls -l fixtures/claims/
-```
+**Commands withheld 2026-09-10.** The four copies that imported the corpus out of the origin repository are removed: the corpus was deleted on 2026-09-10 and is not re-importable; what survives is `fixtures/claim-lengths.json`.
 
-`source-c-claims.json` is NOT on origin-repository's `master`; it exists only on the branch `source-c-longform`, whose tip is that commit. That ref is the fixture's provenance and must be recorded.
+`source-c-claims.json` is NOT on the origin repository's `master`; it exists only on the branch `source-c-longform`, whose tip was the pinned commit (withheld). That ref is the fixture's provenance and must be recorded.
 
 - [ ] **Step 2: Record provenance beside the fixtures**
 
@@ -397,7 +392,7 @@ Then write `fixtures/claims/provenance.json`, the way `fixtures/corpus.json` rec
 [
   {
     "file": "source-a-claims.json",
-    "origin": "<origin repo path withheld>",
+    "origin": "the origin repository (private)",
     "path": "docs/drafts/source-a-claims.json",
     "ref": "working tree",
     "mtime": "2026-09-06 21:14",
@@ -406,7 +401,7 @@ Then write `fixtures/claims/provenance.json`, the way `fixtures/corpus.json` rec
   },
   {
     "file": "source-b-claims.json",
-    "origin": "<origin repo path withheld>",
+    "origin": "the origin repository (private)",
     "path": "docs/drafts/source-b-claims.json",
     "ref": "working tree",
     "mtime": "2026-09-03 09:40",
@@ -415,16 +410,16 @@ Then write `fixtures/claims/provenance.json`, the way `fixtures/corpus.json` rec
   },
   {
     "file": "source-c-claims.json",
-    "origin": "<origin repo path withheld>",
+    "origin": "the origin repository (private)",
     "path": "docs/drafts/source-c-claims.json",
-    "ref": "<pinned origin commit withheld>",
+    "ref": "the pinned origin commit (withheld)",
     "note": "branch source-c-longform; not present on master",
     "frozen": "2026-09-08",
     "claimStrings": 89
   },
   {
     "file": "source-d-claims.json",
-    "origin": "<origin repo path withheld>",
+    "origin": "the origin repository (private)",
     "path": "docs/drafts/source-d-claims.json",
     "ref": "working tree",
     "mtime": "2026-09-05 22:08",
@@ -1060,10 +1055,10 @@ Then append a new top-level section at the END of the file. Every number in it i
 
 Four real claims files, frozen into `fixtures/claims/` so these numbers
 reproduce without the origin repo. Three were copied from
-`<origin repo path withheld>`'s WORKING TREE and are uncommitted there, so
+the origin repository's WORKING TREE and are uncommitted there, so
 their provenance is an mtime and nothing stronger; `source-c-claims.json` is not
 on that repo's `master` at all and was taken from
-`<pinned origin commit withheld>`, the tip of its `source-c-longform`
+a pinned commit (withheld), the tip of its `source-c-longform`
 branch. `fixtures/claims/provenance.json` records all four.
 
 <the per-file counts, the distinct total, and the document-fixture count and
@@ -4040,7 +4035,7 @@ Append to the `### Plan 2 (harvest)` section Task 3 opened, after the claim-floo
 Re-derived on <DATE> by `node scripts/calibrate-claim-floor.mjs` against the
 <N> distinct real claims frozen in `fixtures/claims/` - the origin repo's
 four files, three from its working tree and one from
-`<pinned origin commit withheld>`, copied in so the number
+a pinned commit (withheld), copied in so the number
 reproduces without it. Chance matches against unrelated fixtures occurred at
 3 and 12 normalized characters and never above 12; 16 is that ceiling plus
 margin, and it refuses <R> of <N>, each a number, a name or a fragment that

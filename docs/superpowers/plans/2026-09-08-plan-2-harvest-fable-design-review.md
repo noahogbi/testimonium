@@ -22,6 +22,11 @@ Severity scale used below: BLOCKING = the amendment must not enter the spec
 with this text; MAJOR = a plan drafted from this text would carry the defect;
 MINOR = precision or wording.
 
+**Withheld 2026-09-10.** The origin repository is not named in this review as
+published, and the one claims file it names by slug is called `source-a` here,
+matching the labels the plan and the calibration doc now use. Mechanical
+substitutions: no finding, severity or verdict below changed.
+
 ---
 
 ## 1. Verdict
@@ -314,8 +319,8 @@ the loader floor.
   after the author renames it.
 - Filter 4 reads `<doc>.claims.json` with, presumably, the same parser. After
   Q3 that parser refuses any file holding a sub-floor claim, so on exactly the
-  files harvest is meant to help migrate (section 5: "[the origin repository]'s four files
-  would need 15-25 edits") harvest exits 2 before proposing anything.
+  files harvest is meant to help migrate (section 5: "[the origin repository]'s
+  four files would need 15-25 edits") harvest exits 2 before proposing anything.
 - Filter 4 says nothing about a `{ "notApplicable": "<reason>" }` entry for U
   (`claims.ts:78`). Harvest should propose nothing for a URL the author has
   declared not checkable.

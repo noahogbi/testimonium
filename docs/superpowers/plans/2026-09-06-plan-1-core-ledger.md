@@ -4,6 +4,8 @@ Spec: docs/superpowers/specs/2026-09-06-testimonium-design.md (read; binding aut
 Worktree: C:\users\noaho\testimonium-plan1 on feat/plan-1-core, from main @ 3c6c0cf
 16 tasks.
 
+**Withheld 2026-09-10.** The origin repository's name is withheld for publication; the Task 3 minor below now reads "origin-repository path" where it named that repository. A mechanical substitution: no finding, verdict, severity or count in this ledger changed.
+
 ## Pre-flight conflict scan
 
 ### Cross-task: shared files and interfaces
