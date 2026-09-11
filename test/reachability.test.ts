@@ -103,7 +103,7 @@ describe("reachability", () => {
 
   it("climbs past a first rung vetoed only by N4, and only by N5, over the floor", async () => {
     // Spec 6.6, "Escalation". The preflight's own copy of the loop already
-    // climbed on all five vetoes at 3974d27, and check()'s did not; this pins
+    // climbed on all five vetoes at 6546176, and check()'s did not; this pins
     // the behaviour so moving onto the shared reader cannot lose it. The
     // matching test in check.test.ts is the one that failed first.
     for (const [name, per] of [
@@ -117,7 +117,7 @@ describe("reachability", () => {
   });
 
   it("calls a URL readable when a later rung read it, though an earlier rung was walled (rule 5)", async () => {
-    // At 3974d27 the preflight ORed the vetoes across every rung, so a host
+    // At 6546176 the preflight ORed the vetoes across every rung, so a host
     // that walled node and served curl the document was readable to check()
     // and unreadable here - the README carried it as a known disagreement.
     // Spec 6.6 rule 5: readable iff SOME read is readable, judged from the

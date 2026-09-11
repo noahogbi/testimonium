@@ -9,10 +9,10 @@ citations across 16 source and test files point at these two documents by
 finding number, and relabelling them was rejected as riskier than preserving
 the source.
 
-Reviewed: `docs/superpowers/plans/2026-09-08-plan-2-harvest.md` at `aa7dc2c` on
+Reviewed: `docs/superpowers/plans/2026-09-08-plan-2-harvest.md` at `cf7d5d8` on
 `feat/plan-2-harvest` (4020 lines, 10 tasks), against spec 8.2 as authority,
 7.3/7.4/6.6/5.3/13/10 as context, the three ledgers, and the design review
-F1-F18. Suite re-run at review time: 281 passed at `ff71ec8`+plan commit.
+F1-F18. Suite re-run at review time: 281 passed at `a1feba7`+plan commit.
 Date of review: 2026-09-08 (session clock 2026-09-08; the plan's measurements
 dated 2026-09-08 were all re-derived, see "What was verified by running").
 

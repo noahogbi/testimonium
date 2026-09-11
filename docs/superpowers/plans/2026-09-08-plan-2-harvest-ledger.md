@@ -49,7 +49,7 @@ dropped:
   sentence** (ruling T1-R7): superseded plan documents are records of what was
   planned on a date, not live claims about the shipped tool, and are left as
   records.
-- **Commit `b31d436`'s bare `docs:` prefix** (ruling T2-R2), where the plan's
+- **Commit `c2179fb`'s bare `docs:` prefix** (ruling T2-R2), where the plan's
   own constraint asks for a scope. The message was prescribed by the brief.
 - **Per-command flag tables.** `validateFlags` is command-agnostic, so
   `harvest doc.md --fail-on-unreachable` is accepted and ignored exactly as
@@ -60,7 +60,7 @@ dropped:
 
 **Two notes on this file as an artifact.** The source ledger below ends with
 Task 9's round-1 re-review *dispatched*; its return is not recorded there. Task
-10 was dispatched from `3f9a378` with the suite at 361 green, `tsc` clean and
+10 was dispatched from `864b3e0` with the suite at 361 green, `tsc` clean and
 the tree clean, and re-verified all three. And the source's thirteen em dashes
 are written here as hyphens, so this file is pure ASCII; nothing else in the
 text below is altered.
@@ -77,11 +77,11 @@ changed.
 # SDD ledger - plan: docs/superpowers/plans/2026-09-08-plan-2-harvest.md
 
 Worktree `C:/Users/noaho/testimonium-plan2`, branch `feat/plan-2-harvest`,
-base `main @ ff71ec8`, plan committed `aa7dc2c` + corrections `ed3cfce`.
+base `main @ a1feba7`, plan committed `cf7d5d8` + corrections `5f431a2`.
 Spec: `docs/superpowers/specs/2026-09-06-testimonium-design.md`, section 8.2
 is the authority. Plan drafted by Opus, reviewed by Fable (APPROVE WITH
 CORRECTIONS, 0 blocking / 3 major / 9 minor), corrections 1-10 applied at
-`ed3cfce`. User approved execution 2026-09-08.
+`5f431a2`. User approved execution 2026-09-08.
 
 Expected test ladder from the plan header: 281 at start; 283, 289, 293, 297,
 305, 313, 323, 336, 341, 341 at the end of Tasks 1-10.
@@ -154,7 +154,7 @@ an astral character; no wrong output, one missing suggestion.
 
 ## Task log
 
-Task 1: dispatched (sonnet) at BASE ed3cfce; DONE at 6e65c4d, 283 tests
+Task 1: dispatched (sonnet) at BASE 5f431a2; DONE at c6d801c, 283 tests
 (+2 as the ladder predicts), tsc clean, 0 non-ASCII / 0 NUL on all four
 touched files, both mutants reproduced the brief's predicted failures.
 Diff: spec 6.3 + the :1298 row + 7.2's rule contract, src/rules/challenge.ts
@@ -180,7 +180,7 @@ skips only vetoed reads, so an unnamed wall's match enters the union - measured
 supported quoting the wall's own sentence). C2: spec :482-483, same falsehood,
 in the paragraph Step 4 only half-rewrote. I3: :465-466 counterfactual wrong
 (the readable read ALONE does produce that unsupported). I4: :792 misattributes
-the load.ts comment to C13; git log -S puts it in e4d9f46, plan 1's final fix
+the load.ts comment to C13; git log -S puts it in 4c81090, plan 1's final fix
 wave, C14. I5: the mechanism is isBlocked-wide, not N3's. Minor: :460 "never
 judged on its own" (a vetoed read can win via largest); load.ts re-wrap ragged.
 Sweep items the implementer judged already-true were independently confirmed.
@@ -212,20 +212,20 @@ Deferred minor: src/rules/load.ts:58-60 re-wrap left a ragged short line
 (cosmetic; welcome if that hunk is touched for I4, not worth its own commit).
 
 Task 1: fix round 1/5 complete (6 findings addressed by the implementer;
-commits 6e65c4d..cb59cbe). 283 tests unchanged (comment/prose-only), tsc
+commits c6d801c..05fcb9e). 283 tests unchanged (comment/prose-only), tsc
 clean, spec + challenge.ts 0 non-ASCII / 0 NUL, excerpt.ts still exactly 57,
 tree clean. Implementer flagged README's 3 pre-existing non-ASCII bytes (a
 U+2265 at :203) as unrelated to its edit and did not touch them - correct:
 the ASCII constraint binds source and test files, and that byte predates
 plan 2. Controller independently confirmed the I4 attribution before the
 round ran: `git log -S "signature and path rules" -- src/rules/load.ts`
-returns only e4d9f46 ("close false comments"), 15 commits after C13's
-7a0cf6f ("thread local host rules into the fetcher"), and the plan-1 ledger
+returns only 4c81090 ("close false comments"), 15 commits after C13's
+7c8a0ff ("thread local host rules into the fetcher"), and the plan-1 ledger
 :303 names C14 as the fix wave that closed false comments - so C14 is right.
-Scoped re-review dispatched (opus) over 6e65c4d..cb59cbe with both controller
+Scoped re-review dispatched (opus) over c6d801c..05fcb9e with both controller
 rulings called out as things a fix must not quietly narrow.
 
-Task 1: re-review (opus) over 6e65c4d..cb59cbe - all SIX findings ADDRESSED,
+Task 1: re-review (opus) over c6d801c..05fcb9e - all SIX findings ADDRESSED,
 each verified by compiling src/ to a scratch dir and driving check(): I5's
 veto-wide statement measured across all five vetoes (N1 cf-mitigated, N2
 /cdn-cgi/challenge-platform/, N3, N4 404, N5 content-type) each giving
@@ -253,8 +253,8 @@ an instruction to re-sweep 6.3, challenge.ts's header and README 120-125 /
 209-250 for sentences its own two rounds falsified - round 1 found one, round
 2 found two, so the sweep is now the deliverable rather than the edits.
 
-Task 1: fix round 2/5 complete (2 findings addressed; commits cb59cbe..
-7c90321, 9 insertions / 7 deletions across the spec and challenge.ts). 283
+Task 1: fix round 2/5 complete (2 findings addressed; commits 05fcb9e..
+1d1e992, 9 insertions / 7 deletions across the spec and challenge.ts). 283
 green, tsc 0, src/ diff verified comment-only by the controller (0 non-comment
 changed lines), both files 0 non-ASCII / 0 NUL. Implementer re-swept spec 6.3
 whole, challenge.ts's header whole and README 120-125 / 209-250 and reports
@@ -269,7 +269,7 @@ two-clause diff. But the implementer's "sweep found nothing further" claim was
 NOT VERIFIED: one real miss at spec :521-525 ("An accusation stops depending
 on the completeness of a list that provably cannot be completed ... listed or
 not, English or not, inflected or padded"), falsified by this task's OWN text
-at :466-468 and :504-507, and introduced by 6e65c4d - so in scope. Reviewer's
+at :466-468 and :504-507, and introduced by c6d801c - so in scope. Reviewer's
 diagnosis of why all three sweeps missed something: "the check ran in one
 direction only".
 
@@ -286,7 +286,7 @@ Deferred minors: challenge.ts:35-36 stale "the"/"either" (one word); plan file
 :284 and :315 quote superseded text (routed to Task 10 with T1-R3);
 src/rules/load.ts:58-60 ragged wrap.
 
-Task 1: fix round 3/5 complete (commits 7c90321..fcd053a). The stated
+Task 1: fix round 3/5 complete (commits 1d1e992..57d7843). The stated
 bidirectional method WORKED and is worth carrying: run over 15 claims, it
 found 2 failures - the reviewer's named :521-525 AND one the sweep found on
 its own, challenge.ts:12-16's parallel unscoped "holds for walls nobody has
@@ -336,8 +336,8 @@ a three-axis check (direction, floor, VETO - the axis that produced both false
 passes) to be run at the check() level over all 15 table rows, and an explicit
 warning not to run the battery script.
 
-Task 1: fix round 4/5 complete (FRESH opus implementer; commits fcd053a..
-966e0c3, README.md only, 22+/15-). The escalation worked: 56 check()-level
+Task 1: fix round 4/5 complete (FRESH opus implementer; commits 57d7843..
+e751e25, README.md only, 22+/15-). The escalation worked: 56 check()-level
 experiments across direction/floor/veto, all 15 table rows re-run plus 7
 sentences the table omitted, NO row resisted a check()-level experiment.
 Four failures found and fixed - rows 12 and 13 (round 3's false passes), the
@@ -379,7 +379,7 @@ what was planned on a date, not live claims about the shipped tool, and round
 reader mines an old plan for current behaviour and is misled; mitigated by the
 document's own header dating it and by plan 2's plan superseding it.
 
-Task 1: round 4 re-review dispatched (opus) over fcd053a..966e0c3.
+Task 1: round 4 re-review dispatched (opus) over 57d7843..e751e25.
 
 Task 1: round 4 re-review (opus) - Important 1 and 2 ADDRESSED, independently
 reproduced (302-char notice at node + 5200-char readable curl missing the
@@ -422,7 +422,7 @@ Task 1: fix round 5/5 dispatched (resumed opus implementer) - 1 Important + a
 dependency trace + 2 Minors. Breaker trips after this round's re-review:
 whatever remains open, the controller adjudicates and the task closes.
 
-Task 1: fix round 5/5 complete (commits 966e0c3..6047ffe, spec + README).
+Task 1: fix round 5/5 complete (commits e751e25..2709a03, spec + README).
 All three findings reproduced by measurement, none disputed. Row 7 confirmed
 and NARROWED by the implementer's own grid: varying list membership across a
 2x3 grid changes the verdict in exactly one of six cells (below the cap,
@@ -454,7 +454,7 @@ check.ts for eight more tasks, read by implementers of those tasks who might
 rely on it; mitigated by it being one word, ledgered, and routed to a task
 that must touch the truth of documents anyway.
 
-Task 1: round 5 (final) re-review dispatched (opus) over 966e0c3..6047ffe.
+Task 1: round 5 (final) re-review dispatched (opus) over e751e25..2709a03.
 Breaker trips on its return - whatever remains open, the controller
 adjudicates and the task closes.
 
@@ -498,13 +498,13 @@ the clause over-generalises the very support it cites. Same asymmetry the
 implementer diagnosed and did not carry across to the clause it was fixing. -
 Cost if wrong: one word wrong in a sentence that is true existentially.
 
-Task 1: complete (commits ed3cfce..6047ffe, 3 parked). Five fix rounds, 15
+Task 1: complete (commits 5f431a2..2709a03, 3 parked). Five fix rounds, 15
 findings closed, 0 executable lines changed, 283 tests throughout, tsc clean,
 tree clean, README exactly 3 non-ASCII / spec 0 / no NULs. Carried into Task
 10: T1-R11, T1-R12, T1-R13 and T1-R10 (check.ts:93-94's "ANY sub-floor read").
 
-Task 2: dispatched (opus) at BASE 6047ffe; DONE_WITH_CONCERNS at f196986 +
-b31d436. 289 tests (+6, ladder predicted 289), tsc clean, tree clean. All four
+Task 2: dispatched (opus) at BASE 2709a03; DONE_WITH_CONCERNS at 3fb050f +
+c2179fb. 289 tests (+6, ladder predicted 289), tsc clean, tree clean. All four
 new scripts/source/test files 0 non-ASCII / 0 NUL; all five fixtures 0
 non-ASCII (recorded, not required). Constants: minClaimChars 16 (observed
 ceiling 12, margin 4, refuses 18/208 = 8.7%) and harvestSeedChars 21 (rule
@@ -570,7 +570,7 @@ keeps paying for, and Minor 4 is three integers the reviewer already verified
 that turn an unverifiable provenance record into a checkable one. - Cost if
 wrong: two extra one-clause edits in a round that was happening anyway.
 
-Ruling: T2-R2 - commit b31d436's missing scope ("docs:" not "docs(calibration):"
+Ruling: T2-R2 - commit c2179fb's missing scope ("docs:" not "docs(calibration):"
 against the plan's own conventional-prefix constraint) is PARKED, not rewritten
 - because the message was prescribed by the brief the implementer was given,
 the commit is already in history, and rewriting it to fix a prefix would
@@ -590,7 +590,7 @@ pin than it assumes. Task 9 touches that file.
 
 Task 2: fix round 1/5 dispatched (resumed implementer) with 4 fixes.
 
-Task 2: fix round 1/5 complete (commit b31d436..8fd3936; doc + provenance +
+Task 2: fix round 1/5 complete (commit c2179fb..091325c; doc + provenance +
 thresholds docstring, 50+/11-). Constants unchanged: 16 and 21. Three results
 worth keeping:
 (a) The implementer re-derived Important 1 BEFORE rewording and confirmed it -
@@ -646,7 +646,7 @@ Task 2: fix round 2/5 dispatched (resumed implementer) - one reword of the
 recipe to the true rule, plus a re-run confirming all nine values reproduce
 from the recipe AS WRITTEN.
 
-Task 2: fix round 2/5 complete (commit 8fd3936..185abf9, doc only, 15+/5-).
+Task 2: fix round 2/5 complete (commit 091325c..f1e3b1c, doc only, 15+/5-).
 The implementer re-derived the finding before accepting it: enumerated
 non-ASCII spans at every swept L and found "espanol francais" (1 pair, 16
 chars) exists at L=13 and L=16 only, while the doc's table is taken at L=21 -
@@ -686,7 +686,7 @@ time), rebuilt with char-code comparison, verified 0 NULs and deleted the
 scratch. Not a repo defect - but it is that memory's hazard reproducing in a
 third independent session, which is worth noting.
 
-Task 2: complete (commits 6047ffe..185abf9, review clean). 289 tests, tsc
+Task 2: complete (commits 2709a03..f1e3b1c, review clean). 289 tests, tsc
 clean, tree clean. Constants shipped: minClaimChars 16, harvestSeedChars 21.
 Carried forward to Task 5: seedIndex keeps only the first occurrence of each
 L-gram (two independent reasons the re-run can diverge, with ruling P1's
@@ -694,7 +694,7 @@ replica swap). Carried to Task 9: exports.test.ts pins only six absent names.
 Carried to Task 10: spec 8.2's "chance L-gram matches" wording and its
 24.8/5.0/0.9/0.2 figures still need an owner.
 
-Task 3: dispatched (sonnet) at BASE 185abf9; DONE at 315e13b. 293 tests (+4,
+Task 3: dispatched (sonnet) at BASE f1e3b1c; DONE at 90f2572. 293 tests (+4,
 ladder predicted 293), tsc clean, tree clean. Diff: src/io/claims.ts (the two
 new functions + loader site), src/check.ts (front door), the 16 literal
 substitutions across three test files, plus README and CHANGELOG. Controller
@@ -732,9 +732,9 @@ and the accepted literal FROM THRESHOLDS.minClaimChars rather than hardcoding
 15/16, so they cannot go stale if Task 2's calibrated number ever moves. That
 is the pattern later tasks should copy for anything keyed to a constant.
 
-Task 3: complete (commits 185abf9..315e13b, review clean). 293 tests.
+Task 3: complete (commits f1e3b1c..90f2572, review clean). 293 tests.
 
-Task 4: dispatched (sonnet) at BASE 315e13b; DONE at 7ed80c4. 297 tests (+4,
+Task 4: dispatched (sonnet) at BASE 90f2572; DONE at 6a43daf. 297 tests (+4,
 ladder predicted 297), tsc clean, tree clean, 3 files touched (adapters source,
 types, adapter test), all 0 non-ASCII / 0 NUL, excerpt.ts still 57, neither
 index.ts nor exports.test.ts in the diff. Document gains `prose` additively -
@@ -789,7 +789,7 @@ alone. Point 3 matters most: the old [^9]:-shaped line is still in the fixture
 and its assertion STILL passes under the mutation (DEFINITION strips it
 regardless), but the test now fails anyway, on the new assertion,
 independently. The coincidence is present but no longer load-bearing.
-Task 4: complete (commits 315e13b..1938ffa, review clean after 1 fix round).
+Task 4: complete (commits 90f2572..9087115, review clean after 1 fix round).
 297 tests.
 
 Halfway state: 4 tasks closed, 13 commits over main, 281 -> 297 tests, the
@@ -797,7 +797,7 @@ ladder hit its predicted count at every task (283/289/293/297), no verdict
 moved, public surface untouched, every calibration number reproducing from a
 named command.
 
-Task 5: dispatched (opus) at BASE 1938ffa; DONE_WITH_CONCERNS at 2842762. 305
+Task 5: dispatched (opus) at BASE 9087115; DONE_WITH_CONCERNS at 0068e0b. 305
 tests (+8, ladder predicted 305), tsc clean, tree clean, 5 files, all 0
 non-ASCII / 0 NUL (calibration doc legitimately 185), excerpt.ts still 57,
 public surface untouched, replica gone from the sweep script and the shipped
@@ -896,7 +896,7 @@ was happening anyway.
 
 Task 5: fix round 1/5 dispatched (resumed implementer) with 6 findings.
 
-Task 5: fix round 1/5 complete (commits 2842762..b3a5c12, +256/-18 across
+Task 5: fix round 1/5 complete (commits 0068e0b..41ee6be, +256/-18 across
 spans.ts and its test). 313 tests (305 + 8: one each for Important 1, 3 and
 Minor 4, five for Important 2), tsc clean, tree clean, both files 0 non-ASCII /
 0 NUL re-checked after writing the surrogate escapes, excerpt.ts still 57,
@@ -963,11 +963,11 @@ Deferred minors (to the final whole-branch review):
   Pre-existing, unchanged by this diff, and dropContained has no bug channel.
 - Task 5's report over-claims that its mutation table carries change counts.
 
-Task 5: complete (commits 1938ffa..b3a5c12, review clean after 1 fix round,
+Task 5: complete (commits 9087115..41ee6be, review clean after 1 fix round,
 3 deferred minors). 313 tests. harvestSeedChars=21 now calibrated against the
 shipped commonSpans, proven by an independent re-run.
 
-Task 6: dispatched (sonnet) at BASE b3a5c12; DONE at 9e35141. 321 tests, tsc
+Task 6: dispatched (sonnet) at BASE 41ee6be; DONE at 8101400. 321 tests, tsc
 clean, tree clean. check() confirmed byte-identical: signals.ts shows only the
 additive finalUrl field and its return line, and test/check.test.ts is 36/36
 with its pre-existing redirect pin unmoved. The F1 mutation
@@ -1044,7 +1044,7 @@ More seriously, the reviewer found that the plan's Global Constraint at :20 -
 "All source and test files are pure ASCII ... The one standing exception is
 src/text/excerpt.ts" - IS ALREADY FALSE OF THE REPO and was false before plan 2
 began: test/text/excerpt.test.ts carries 45 non-ASCII bytes and
-test/text/extract.test.ts carries 3, both from plan 1.2's 3f74990 (soft-hyphen
+test/text/extract.test.ts carries 3, both from plan 1.2's 84a6a07 (soft-hyphen
 work, on main). Controller verified by enumerating every tracked .ts in src/
 and test/. I have been repeating that false constraint in EVERY dispatch; it
 never surfaced because no task touched those two files, so every implementer's
@@ -1059,7 +1059,7 @@ not one.
 
 Task 6: fix round 1/5 dispatched (resumed implementer) with 3 findings.
 
-Task 6: fix round 1/5 complete (commits 9e35141..c73d4dd, +50/-5). 323 tests
+Task 6: fix round 1/5 complete (commits 8101400..a37805c, +50/-5). 323 tests
 (321 + 2, reconciled by counting rather than by matching a target), tsc clean,
 tree clean, both files 0 non-ASCII / 0 NUL, public surface untouched. All three
 fixed: the payload-shape pin (rung/text/normText, built from toText/norm
@@ -1092,11 +1092,11 @@ The reviewer also caught its OWN instrument mid-check: its first pass on
 excerpt.ts read 19 non-ASCII, and rather than concluding the file had changed
 it diagnosed the instrument (decoded-char count vs raw-byte count) and re-ran
 for 57. That is the discipline applied reflexively rather than on instruction.
-Task 6: complete (commits b3a5c12..c73d4dd, review clean after 1 fix round).
+Task 6: complete (commits 41ee6be..a37805c, review clean after 1 fix round).
 323 tests. The keystone (isReadable, never !isBlocked) is shipped and defended
 by a test that discriminates and now asserts its own premise.
 
-Task 7: dispatched (sonnet) at BASE c73d4dd; DONE at 067d691. 333 tests (323 +
+Task 7: dispatched (sonnet) at BASE a37805c; DONE at 8a38df3. 333 tests (323 +
 8 filter + 2 loadRules, matching the it()-derived count exactly), tsc clean,
 tree clean, 7 files, all 0 non-ASCII / 0 NUL, public surface untouched.
 Three implementer notes, all good:
@@ -1165,7 +1165,7 @@ deleted; the plan text is corrected either way.
 
 Task 7: fix round 1/5 dispatched (resumed implementer) with 6 findings.
 
-Task 7: fix round 1/5 complete (commits 067d691..f658b89, +136/-31). 335 tests
+Task 7: fix round 1/5 complete (commits 8a38df3..f455c43, +136/-31). 335 tests
 (333 + 2: the normText pin and the self-exclusion test), tsc clean, tree clean,
 all three files 0 non-ASCII / 0 NUL, public surface untouched. Self-exclusion
 guard confirmed present at filters.ts:84 with a comment naming it defensive.
@@ -1196,11 +1196,11 @@ after a rule at :398.
 The reviewer also noted, correctly, that char-level decode undercounts
 multi-byte UTF-8 and that the 57/45/3 exceptions are byte-level counts - the
 same instrument distinction the Task 6 reviewer caught itself on.
-Task 7: complete (commits c73d4dd..f658b89, review clean after 1 fix round).
+Task 7: complete (commits a37805c..f455c43, review clean after 1 fix round).
 335 tests. The claim floor now has all three spec-7.3 doors behind one
 implementation, proven byte-identical in message at each.
 
-Task 8: dispatched (opus) at BASE f658b89; DONE_WITH_CONCERNS at 1abd0f8. 350
+Task 8: dispatched (opus) at BASE f455c43; DONE_WITH_CONCERNS at c1b9e86. 350
 tests (335 + 15 it()), tsc clean, build clean, tree clean, four new files all 0
 non-ASCII / 0 NUL, no existing file modified, public surface untouched.
 KEYSTONE VERIFIED INDEPENDENTLY BY THE CONTROLLER: only two writers exist in
@@ -1300,7 +1300,7 @@ Cost if wrong: one clause changed in a docstring nobody disputes is incomplete.
 
 Task 8: fix round 1/5 dispatched (resumed implementer) with 5 findings.
 
-Task 8: fix round 1/5 complete (commits 1abd0f8..3e3f959, +220/-30). 353 tests
+Task 8: fix round 1/5 complete (commits c1b9e86..c63de86, +220/-30). 353 tests
 (350 + 3, reconciled by counting: harvest.test 9->11, draft.test 6->7), tsc
 clean, build clean, all six files 0 non-ASCII / 0 NUL, three exceptions still
 57/45/3, public surface untouched, committed blobs cr=0.
@@ -1349,11 +1349,11 @@ proven unchanged: the assertion block's diff shows only the pushed string
 argument changing, same if/continue structure, same order, no branch added or
 removed. Breaking writeDraftFile's trailing newline turns its new round-trip
 test red. Keystone re-verified. No new breakage.
-Task 8: complete (commits f658b89..3e3f959, review clean after 1 fix round).
+Task 8: complete (commits f455c43..c63de86, review clean after 1 fix round).
 353 tests. harvest() and the draft file are shipped; the draft's _note tells
 the author in the file itself that its proposals are unconfirmed.
 
-Task 9: dispatched (sonnet) at BASE 3e3f959; DONE_WITH_CONCERNS at 19508c4.
+Task 9: dispatched (sonnet) at BASE c63de86; DONE_WITH_CONCERNS at a104529.
 359 tests (353 + 6), tsc clean, build clean, five files all 0 non-ASCII / 0
 NUL. THE SMOKE RUN RAN AND LEFT NO TRACE - controller verified independently:
 example/ has 0 files changed vs main across the WHOLE branch, tree clean, no
@@ -1434,7 +1434,7 @@ single ASCII exception; spec 8.2 step 4's "each a bug if it fails"; thresholds.t
 as a four-time drift hotspot; README's two false sentences at :326 and :345;
 and Task 7 Step 8's stale grep expectation.
 
-Task 9: fix round 1/5 complete (commits 19508c4..3f9a378). 361 tests (359 + 2),
+Task 9: fix round 1/5 complete (commits a104529..864b3e0). 361 tests (359 + 2),
 tsc clean. Rather than patch the string in place, the implementer extracted it
 into an exported harvestSummaryLine(draftPath, totalProposals,
 readableUrlCount) so the wording is PINNED rather than left to the next edit -
@@ -1449,7 +1449,7 @@ strengthened 8-name allowlist pin still passes 6/6. src/bin.ts is not a subpath
 export, so exporting from it does not widen the package surface.
 Task 9: round 1 re-review dispatched (sonnet).
 
-Task 10: dispatched (opus) at BASE 3f9a378, with the plan's own nine sweep
+Task 10: dispatched (opus) at BASE 864b3e0, with the plan's own nine sweep
 items and seventeen further items routed here during execution. Zero new
 `it()` blocks by the plan's own instruction; 361 tests in, 361 out; `tsc`
 clean; no executable line changed anywhere.
@@ -1475,7 +1475,7 @@ and outlive nothing.
 
 Ruling: T10-R2 - carried item A2's premise is NARROWED. It said Task 10's
 byte-check step "FAILS as written". Run 2026-09-09 it does not: the loop
-iterates `git diff --name-only ff71ec8..HEAD` plus two files, and the two test
+iterates `git diff --name-only a1feba7..HEAD` plus two files, and the two test
 files that break the stated exception set are not in that range, because no
 plan-2 task touched them. What is wrong is the expectation's wording -
 "`nonascii=0` for everything except" these three is a claim about the
@@ -1674,7 +1674,7 @@ instrument proved able to report non-zero first.
 
 ## Final whole-branch review, fix wave, and close-out
 
-Final whole-branch review (opus) over ff71ec8..f6efbe7, 26 commits:
+Final whole-branch review (opus) over a1feba7..7b9836d, 26 commits:
 **READY WITH FIXES - no Critical.** The keystone is clean end to end
 (isReadable at sources.ts:121 is the sole filter, harvest.ts:130 iterates only
 that list, isBlocked appears nowhere executable in harvest, and the
@@ -1700,7 +1700,7 @@ read or written on disk" was FALSE (it reads <doc>.claims.json and exits 2 on a
 malformed one), found by running rather than reading.
 
 Final fix wave (sonnet, single dispatch as the skill requires): commits
-2744796 + 1106424. Eight of nine closed, item 9 correctly parked. 361 tests,
+322c229 + d442588. Eight of nine closed, item 9 correctly parked. 361 tests,
 tsc clean, NO EXECUTABLE LINE CHANGED (21 changed +/- lines across src/+test/,
 0 non-comment, detector proven on a planted `const x = 1;`).
 Item 4 is the one worth recording: 27 shipped citations across 16 src/ and
@@ -1713,7 +1713,7 @@ rejected: rewriting 27 sites risks inventing a falsehood at 27 sites. This is a
 defect the PROCESS created, not the code - the branch would have merged with 27
 dangling references and the documents that resolved them deleted.
 
-Scoped re-review of the fix wave (opus) over f6efbe7..1106424: ALL NINE
+Scoped re-review of the fix wave (opus) over 7b9836d..d442588: ALL NINE
 ADDRESSED. Byte-fidelity of the preserved reviews proven by sha256 - removing
 exactly the 9 inserted header lines reproduces both scratch originals
 bit-for-bit. Nine citation spot-checks across nine files all resolve to the
@@ -1749,7 +1749,7 @@ because the sentence becomes true the moment the workspace is deleted, which is
 the next step in this plan's own close-out. - Cost if wrong: two headers are
 briefly imprecise inside a directory that no longer exists.
 
-Close-out: 28 commits over main @ ff71ec8, 361 tests (from 281), tsc clean,
+Close-out: 28 commits over main @ a1feba7, 361 tests (from 281), tsc clean,
 build clean, tree clean, example/ untouched across the whole branch, three
 standing ASCII exceptions unchanged at 57/45/3, the only tracked NUL file the
 deliberate pdf-binary fixture. The keystone holds: only io/draft.ts and

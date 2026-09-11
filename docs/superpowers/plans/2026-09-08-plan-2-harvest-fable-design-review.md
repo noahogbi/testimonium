@@ -10,7 +10,7 @@ finding number, and relabelling them was rejected as riskier than preserving
 the source.
 
 Reviewed: `.superpowers/sdd/2026-09-07-plan-2-harvest/design-draft.md` against
-`main @ 3974d27`, read-only. Verified by running (no repo writes): `npx tsc
+`main @ 6546176`, read-only. Verified by running (no repo writes): `npx tsc
 --noEmit` clean; `npm test` 246 passed; `probe-floor.mjs` re-run against `dist`
 as-is (dist is NOT stale: every `dist/**/*.js` is newer than its `src` file and
 the load-bearing constructs, `isBlocked`, `proven`, the bn/mn folds, are present
@@ -383,7 +383,7 @@ usable sources.
 ### F12. MINOR - CONFIRMED. "drifted from the first twice already" - three repairs
 
 `excerpt.ts:25-30` (dash range), `:36-42` (zero-width DROP set), `:48-52`
-(punctuation pull-back); commits 39f1d7e, 42d21e5, 5c3c98d. Draft 2.2. The
+(punctuation pull-back); commits ffb8918, c2f2f75, 1e0858b. Draft 2.2. The
 direction of the error matters because the count is the argument for exporting
 `foldWithMap` rather than tolerating a third rendering - it is stronger than
 stated. Also note the drift class F3 adds: not a missing fold but a length
@@ -417,7 +417,7 @@ mechanism, and one that would ALSO propose a soft-hyphen-carrying span if the
 author's draft was pasted from the same source. Folding U+00AD into `norm`'s
 deletion set (and `DROP`) is the right one-line fix and should stay in plan 2.
 
-### F16. MINOR - CONFIRMED. Spec 5.3 is already false at 3974d27 and the amendment edits 5.1 next to it without correcting it
+### F16. MINOR - CONFIRMED. Spec 5.3 is already false at 6546176 and the amendment edits 5.1 next to it without correcting it
 
 Spec 5.3:239-240: primitives "are exported to the test suite through a separate
 internal entry point." `package.json:11-14` exports only `"."` and

@@ -495,7 +495,7 @@ returns the identical `unsupported`; the same body at 200 returns `supported`
 - the mechanism the N4 paragraph below now names directly, rather than as a
 residual of rule 2 alone. This paragraph said "Every verdict it decides is a
 withheld accusation, never a supplied one" until 2026-09-08. That was false at
-3974d27 and at every commit since - the union machinery is unchanged from it -
+6546176 and at every commit since - the union machinery is unchanged from it -
 and it is the twin of the false status claim the N4 paragraph below has now
 corrected twice. It is corrected here rather than left standing, for the
 reason given there: this document is the authority every ruling resolves
@@ -545,9 +545,9 @@ wrong: a complete list would not have closed this gap either, because no entry
 can fire here at all. What makes "never truth" wrong is the pair of costs
 below the cap, both stated above - an over-broad entry buys a false accusation,
 and rot buys a false attestation. This paragraph asserted the opposite ("there
-the list's completeness does bear on truth") from `551e8da` until 2026-09-09.
+the list's completeness does bear on truth") from `0c85e07` until 2026-09-09.
 It was false the day it was written: N3's length gate already shipped in
-`75fae68`, a verified ancestor of that commit. It survived four review rounds
+`6962163`, a verified ancestor of that commit. It survived four review rounds
 because the tests run against it varied the WALL and held the LIST fixed -
 round 4 did measure the falsifying pair, a listed and an unlisted padded wall
 both returning `unsupported`, and recorded it as confirmation. The structural
@@ -715,7 +715,7 @@ promoted from a signature-gated special case to the primary test.
 ### 6.6 Reads, readability, and aggregation across rungs
 
 Added 2026-09-07, after Fable's review of the plan 2 (`harvest`) design found
-that the code at 3974d27 answered "did we read this document?" three different
+that the code at 6546176 answered "did we read this document?" three different
 ways. Plan 1.2 implements this section. Nothing in it is an optimization.
 
 **A read** is one rung's fetch of one URL, classified: `{ rung, computed }`,
@@ -752,7 +752,7 @@ readSource(url, claims, { fetcher, sourceLabel?, rules? })
 `check`, `reachability` and, in plan 2, `harvest` call it. It is
 module-internal: not re-exported from `src/index.ts`, because a consumer
 holding raw reads can assemble a verdict `verdict()` never issued (section
-5.1). At 3974d27 `check.ts` and `reachability.ts` each carried a copy of this
+5.1). At 6546176 `check.ts` and `reachability.ts` each carried a copy of this
 loop, the copies disagreed (next paragraph), and no test pinned either. The
 plan 1.1 ledger parked the duplication for plan 2; the plan 2 design was
 drafted without reading that item and claimed "zero behaviour change" for a
@@ -760,7 +760,7 @@ merge of two loops that do not behave the same.
 
 **Escalation: climb unless the last read is readable.** The ladder stops when
 the most recent read is readable, and otherwise tries the next rung until none
-remain. At 3974d27 `check` climbed on N1, N2, N3 or a sub-floor body, while
+remain. At 6546176 `check` climbed on N1, N2, N3 or a sub-floor body, while
 `reachability` climbed on any of the five vetoes or a sub-floor body; so a URL
 whose first rung returned a 404 carrying 13,216 characters of navigation
 chrome (N4), or a PDF served as bytes (N5), stopped climbing in `check` and
@@ -779,7 +779,7 @@ silent on this before.
    returned. This is the sub-floor-stub exposure `test/check.test.ts` pins and
    section 6.2 accepts: a short real article followed by a fat block page is
    the ordinary case, not an exotic one.
-2. **Otherwise the readable read with the most prose wins.** At 3974d27
+2. **Otherwise the readable read with the most prose wins.** At 6546176
    the largest read won regardless of readability, so a large vetoed wall
    on the first rung followed by a smaller readable page on the second,
    matching in part, returned `unreachable`. It now returns `unsupported`,
@@ -799,11 +799,11 @@ silent on this before.
 4. **`missed` is the set of claims located by no non-vetoed read.** A match
    inside a vetoed body is the wall's text; it neither proves the claim nor
    clears it. Each claim's evidence is quoted from the read that located it.
-   Unchanged from 3974d27.
+   Unchanged from 6546176.
 5. **`reachability` calls a URL readable iff some read of it is readable**, so
    that it agrees with `check`: a preflight that calls a host readable while
    the gate calls it unreachable, or the reverse, teaches the author the wrong
-   thing about their corpus. At 3974d27 it called a URL readable iff its
+   thing about their corpus. At 6546176 it called a URL readable iff its
    largest read cleared the floor *and no read at all was vetoed*, so a site
    that walled the node rung and served curl the document was readable to
    `check` and unreadable to `reachability`.
@@ -871,7 +871,7 @@ contract a stale host rule costs one wasted request - latency, not correctness.
 **Signature and path rules are not under that contract**: they feed N2 and N3,
 which veto a read, so an over-broad entry can cost correctness - 6.3 says what
 that cost is. `src/rules/load.ts`'s own comment has said so since plan 1's
-final fix wave (`e4d9f46`); this sentence had not. Corrected 2026-09-08: it
+final fix wave (`4c81090`); this sentence had not. Corrected 2026-09-08: it
 generalised a host rule's contract to all three lists, and was false for two
 of them.
 
@@ -948,7 +948,7 @@ renderings; paraphrase does not match and is not meant to.
 Invisible formatting characters - the zero-width spaces and joiners, the
 directional marks, the word joiner, the byte-order mark and, from plan 1.2, the
 soft hyphen U+00AD - are deleted before matching. A source that breaks a word for
-layout has not changed what it says; at 3974d27 the soft hyphen survived `norm`
+layout has not changed what it says; at 6546176 the soft hyphen survived `norm`
 and defeated `phraseFound`, a false-miss route.
 
 **Claims have a length floor.** `THRESHOLDS.minClaimChars` is 16, the fifth
@@ -1206,7 +1206,7 @@ makes a proposal a claim.
    `foldWithMap(span).folded === matchedFoldedSpan`, so the offset map did not
    shift. The third is the one `phraseFound` cannot stand in for: a map that
    is off by one yields a slice the source still contains, one character
-   over, and `phraseFound` says yes to it. `foldWithMap` at 3974d27 pushed one
+   over, and `phraseFound` says yes to it. `foldWithMap` at 6546176 pushed one
    map entry per *input* unit while a code unit whose lowercase is two units
    (U+0130) added two to the folded text, shifting every offset after it; plan
    1.2 repairs it to one entry per *output* unit and pins `folded.length ===

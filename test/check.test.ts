@@ -422,7 +422,7 @@ describe("check", () => {
 
   it("climbs past a first rung vetoed only by N4 - a 404 carrying a full page of chrome", async () => {
     // Spec 6.6, "Escalation": climb unless the last read is readable. At
-    // 3974d27 this file's copy of the ladder climbed on N1, N2 and N3 only, so
+    // 6546176 this file's copy of the ladder climbed on N1, N2 and N3 only, so
     // a first rung answering 404 with a body over the floor ENDED the ladder -
     // while reachability's copy climbed on all five vetoes. Written before the
     // reader was unified, this failed with rungsAttempted ["node"] and the
@@ -450,7 +450,7 @@ describe("check", () => {
   it("climbs past a first rung vetoed only by N4 and ACCUSES from the readable second read", async () => {
     // The same escalation, where the readable second read carries only some
     // of the claims. This is the one place Task 2 moves a verdict toward an
-    // accusation: at 3974d27 the ladder stopped at the 404 and answered
+    // accusation: at 6546176 the ladder stopped at the 404 and answered
     // `unreachable`; now it climbs, and the curl read - the largest read, no
     // veto, over the floor - is judged on its own and names what it lacks.
     // That is within the keystone rule (a readable read is positive proof of
@@ -481,7 +481,7 @@ describe("check", () => {
     // from. `node` is a fat challenge page over the floor - vetoed by N2, a
     // challenge PATH, rather than N1, so the wall carries a firedRule whose
     // absence from the result is asserted below; `curl` is the document,
-    // smaller but readable, carrying one of the two claims. At 3974d27 the
+    // smaller but readable, carrying one of the two claims. At 6546176 the
     // largest read won regardless of readability, the verdict was computed on
     // the wall, and the answer was `unreachable` - hiding a partial miss that
     // a readable read had positively shown. Written first, this failed with
@@ -504,7 +504,7 @@ describe("check", () => {
     // An unsupported result carries no evidence (io/evidence.ts): the miss
     // list is the whole report.
     expect(r).not.toHaveProperty("evidence");
-    // At 3974d27 the wall won and its Cloudflare path rule rode along as
+    // At 6546176 the wall won and its Cloudflare path rule rode along as
     // provenance; the readable read fired no rule, so none is reported.
     expect(r).not.toHaveProperty("firedRule");
   });
@@ -539,7 +539,7 @@ describe("check", () => {
   it("ACCEPTED EXPOSURE: a full match assembled across two sub-floor reads is supported (rule 3's inherited shape)", async () => {
     // No read is readable and neither matches in full on its own, yet between
     // them the two non-vetoed stubs carry every claim. Rule 3 reaches
-    // `unreachable` through verdict() on the largest read, exactly as 3974d27
+    // `unreachable` through verdict() on the largest read, exactly as 6546176
     // did, and verdict() answers `supported` for an unvetoed read whose union
     // match count is complete. This is the sub-floor-stub exposure the two
     // ACCEPTED EXPOSURE tests above accept, in its union form, pinned so the
@@ -560,7 +560,7 @@ describe("check", () => {
 
   it("ACCEPTED EXPOSURE: a sub-floor stub on the second rung attests a claim the origin said was gone (rule 1 through the escalation)", async () => {
     // rule 1 - "a full match proves a read, whatever its prose volume" -
-    // reached through the escalation: at 3974d27 the ladder stopped on
+    // reached through the escalation: at 6546176 the ladder stopped on
     // the 404 and answered `unreachable`; now it climbs, and the stub
     // attests. Licensed by spec 6.6 rule 1, disclosed by README's 404
     // bullet, and the second-worst outcome class in the keystone rule
@@ -623,7 +623,7 @@ describe("N3 through the cross-read union (spec 6.3; plan 1.2 ledger R13)", () =
   // nothing else, turns the same pair of responses into `supported`. The
   // veto is the but-for cause of the accusation.
   //
-  // Pre-existing at 3974d27: the union machinery is unchanged from it, and
+  // Pre-existing at 6546176: the union machinery is unchanged from it, and
   // N3 fires only under maxChallengeChars, so a vetoed N3 read is never the
   // larger read rule 2 chooses between. Plan 1.2 did not cause this and did
   // not fix it (ledger R13); this is the reviewed dispatch R13 asked for.

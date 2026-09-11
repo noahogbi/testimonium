@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-06-testimonium-design.md`. This plan **amends section 6.2** by adding a fifth veto.
 
-**Base:** `main` @ `dbaa030`, 199 tests green.
+**Base:** `main` @ `7accd06`, 199 tests green.
 
 ## Global Constraints
 
@@ -194,9 +194,9 @@ Run `npx vitest run` and `npx tsc --noEmit`.
 **Then the sweep. `scripts/calibrate.mjs` imports from `dist/`, so it measures the OLD build unless you rebuild first** - run as written, "0 verdicts moved" is vacuously true. Do this:
 
 1. `npm run build`.
-2. Write a throwaway script in your temp directory that, for each of the 34 fixtures in `fixtures/corpus.json`, computes a verdict **twice: once through the whole patched pipeline, once through the whole `dbaa030` pipeline.** Use a claim drawn from the fixture's own extracted text, as `corpus-verdict.test.ts` does.
+2. Write a throwaway script in your temp directory that, for each of the 34 fixtures in `fixtures/corpus.json`, computes a verdict **twice: once through the whole patched pipeline, once through the whole `7accd06` pipeline.** Use a claim drawn from the fixture's own extracted text, as `corpus-verdict.test.ts` does.
 
-   **Baseline means the whole pipeline, not just `toText`.** `computeSignals` closes over its imported `toText` and takes no injection, so you cannot swap one function in. Check out `dbaa030` into a second temp directory and build it, or reconstruct the old signal derivation alongside the old extractor. At Task 2 this matters twice over: a script that swaps only `toText` would leave N5 running on **both** sides and report a vacuous 0 moved.
+   **Baseline means the whole pipeline, not just `toText`.** `computeSignals` closes over its imported `toText` and takes no injection, so you cannot swap one function in. Check out `7accd06` into a second temp directory and build it, or reconstruct the old signal derivation alongside the old extractor. At Task 2 this matters twice over: a script that swaps only `toText` would leave N5 running on **both** sides and report a vacuous 0 moved.
 3. Report fixtures, comparisons, and verdicts moved.
 
 **Expected: 0 verdicts moved.** A prior review performed this by simulation and measured 0 of 34. **If one moves, report the fixture and both verdicts rather than proceeding.**
@@ -349,7 +349,7 @@ and in the returned signals:
 
 **State, do not fix, one divergence:** `reachability` escalates its ladder on `isBlocked` while `check.ts` escalates on the inline `N1 || N2 || N3`. Post-N5 the preflight will try curl on a PDF and the gate will stop after one rung. Harmless (curl returns the same bytes) and verdict-neutral. Note it in the report for plan 2 rather than changing escalation here.
 
-- [ ] **Step 4: Verify** - `npx vitest run`, `npx tsc --noEmit`, `npm run build`, then the **same sweep procedure as Task 1 Step 4**, comparing against `dbaa030`. Every fixture is HTML, so **0 verdicts moved** is expected; a prior review measured the binary probe firing on 0 of 34 with no fixture within 10x of the threshold. **If one moves, report the fixture and its measured ratio rather than raising the threshold.**
+- [ ] **Step 4: Verify** - `npx vitest run`, `npx tsc --noEmit`, `npm run build`, then the **same sweep procedure as Task 1 Step 4**, comparing against `7accd06`. Every fixture is HTML, so **0 verdicts moved** is expected; a prior review measured the binary probe firing on 0 of 34 with no fixture within 10x of the threshold. **If one moves, report the fixture and its measured ratio rather than raising the threshold.**
 
 - [ ] **Step 5: Commit** with `feat:`.
 

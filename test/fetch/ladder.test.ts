@@ -5,7 +5,7 @@ const ALL = ["node", "curl", "pdftotext"] as const;
 // The ladder sees one bit per attempt: did that rung read the document
 // (spec 6.6, isReadable - no veto AND prose over the floor)? It is not told a
 // prose count or which veto fired, so no caller can hand it a private
-// definition of "challenged". Both copies of the loop at 3974d27 did exactly
+// definition of "challenged". Both copies of the loop at 6546176 did exactly
 // that, and disagreed.
 const read: Attempt = { rung: "node", readable: true };
 const unread: Attempt = { rung: "node", readable: false };

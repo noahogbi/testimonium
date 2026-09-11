@@ -57,7 +57,7 @@ export async function reachability(
     }
 
     // No read was readable: diagnose from all of them. The ladder of reasons is
-    // unchanged from 3974d27. A 404 is not an interstitial, and saying so would
+    // unchanged from 6546176. A 404 is not an interstitial, and saying so would
     // be a new inaccuracy introduced by folding N4 into `blocked`. N5 implies
     // blocked (isBlocked ORs in notText), so a body that is not text at all
     // would otherwise fall into the `challenged` branch below and report as a

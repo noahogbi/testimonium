@@ -215,7 +215,7 @@ describe("foldWithMap", () => {
   ];
 
   it("records one map entry per FOLDED code unit, each inside the source", () => {
-    // At 3974d27 the map recorded one entry per INPUT unit, so for U+0130
+    // At 6546176 the map recorded one entry per INPUT unit, so for U+0130
     // `folded.length === map.length + 1` and every offset after it was one
     // late. excerptFor absorbed the shift inside its window; harvest's
     // slice-and-validate cannot, because the source still contains the

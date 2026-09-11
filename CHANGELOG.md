@@ -9,7 +9,7 @@ Initial implementation of plan 1 (`check`, `reachability`). See
 ### Plan 2 (harvest) - changes since the plan-1.2 merge
 
 One new command, one breaking refusal, and three additive fields. All of them
-landed after `ff71ec8` and before this version was released, so none carries a
+landed after `a1feba7` and before this version was released, so none carries a
 deprecation path. Apart from the refusal below, `check` gained no new
 behaviour: `harvest` is a third consumer of the reader plan 1.2 built, not a
 change to the gate, and no verdict moved.
@@ -104,7 +104,7 @@ of its arms through it.
 ### Plan 1.2 (reader) - changes since the plan-1.1 merge
 
 Three verdict-moving changes, each confined to the case spec section 6.6
-names for it, plus two repairs and one non-change. All landed after `3974d27`
+names for it, plus two repairs and one non-change. All landed after `6546176`
 and before this version was released, so they carry no deprecation path.
 
 - **`check` climbs the fetch ladder past a first read vetoed only by N4
@@ -152,7 +152,7 @@ and before this version was released, so they carry no deprecation path.
 ### Plan 1.1 (extraction fidelity) - changes since the plan-1 merge
 
 Five behaviour changes visible to anyone integrating against `check`, the CLI,
-or the `Fetcher` interface. All of them landed after `dbaa030` and before this
+or the `Fetcher` interface. All of them landed after `7accd06` and before this
 version was released, so they carry no deprecation path.
 
 - **BREAKING (CLI): an unrecognized `--flag` now exits 2 instead of being

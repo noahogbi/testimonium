@@ -115,7 +115,7 @@ export async function check(
   // decides WHICH claims are missed.
   // Rule 3: with no readable read either, the largest read carries the
   // verdict to verdict(), which returns `unreachable` for a vetoed or
-  // sub-floor body - the 3974d27 route, kept so that no unlicensed verdict
+  // sub-floor body - the 6546176 route, kept so that no unlicensed verdict
   // moves. (Its one inherited shape, a full match assembled across unvetoed
   // sub-floor reads, is pinned as an accepted exposure in check.test.ts.)
   const largest = reads.reduce((a, b) => (b.computed.signals.proseChars > a.computed.signals.proseChars ? b : a));

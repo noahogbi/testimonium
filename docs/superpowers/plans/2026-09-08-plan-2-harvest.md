@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-06-testimonium-design.md`. **Section 8.2 (lines 979-1108) is the authority for this plan**; 7.3:846-864 carries the claim floor, 6.6 the reader this builds on, 5.3 the sealed surface, 13 Q3 and Q5 the two resolutions, 10 the testing doctrine. Where 8.2 and any earlier paragraph disagree, 8.2 wins.
 
-**Base:** `main` @ `ff71ec8` (plan 1.2 merged as PR #3). Branch `feat/plan-2-harvest` in the worktree `C:\Users\noaho\testimonium-plan2`. 281 tests green, `npx tsc --noEmit` clean, `dist/` present.
+**Base:** `main` @ `a1feba7` (plan 1.2 merged as PR #3). Branch `feat/plan-2-harvest` in the worktree `C:\Users\noaho\testimonium-plan2`. 281 tests green, `npx tsc --noEmit` clean, `dist/` present.
 
 **Withheld 2026-09-10.** The four claims files this plan freezes are named `source-a-claims.json` through `source-d-claims.json` here, assigned in the alphabetical order the real filenames already had; two of those names disclosed what their draft was about. The origin repository's path and the commit Task 2 pinned are withheld with them, and Task 2 Step 1's copy commands are replaced by a single line, because the corpus they copied was deleted on 2026-09-10 and is not re-importable. Every one of these is a label for a label: no task, step, ruling, count, verdict or date in this plan changed.
 
@@ -18,8 +18,8 @@
 
 - **THE KEYSTONE RULE (spec 2):** `unsupported` requires positive proof the real page was read. **Harvest never writes `<doc>.claims.json`; it writes the draft only.** A proposal becomes a claim when the author moves it, and not before.
 - **Harvest proposes nothing from a read that would not license an accusation** (spec 6.6, "Harvest reads only what is readable"). The predicate is `isReadable` from `src/classify/verdict.ts` - never `!isBlocked`, which admits every paywall stub and 22 of the 25 challenge fixtures. Only readable reads propose, and only readable reads vote in the frequency filter.
-- **Nothing new becomes public** (spec 5.3). `src/index.ts` keeps exactly the exports it has at `ff71ec8`, `package.json`'s `exports` map stays `.` and `./package.json`, and `test/exports.test.ts` pins both. Every new module is imported by path inside `src/` and by the test suite; none is re-exported.
-- **All source and test files are pure ASCII.** Check with `LC_ALL=C tr -d '\000-\177' < FILE | wc -c` -> must print `0`. **CORRECTED 2026-09-09 (Task 10):** this said "the one standing exception is `src/text/excerpt.ts`", and that was false of this repository before plan 2 began. There are **three** standing exceptions, and every dispatch from Task 6 onward named all three: `src/text/excerpt.ts` (**57** non-ASCII bytes), `test/text/excerpt.test.ts` (**45**) and `test/text/extract.test.ts` (**3**), the latter two from plan 1.2's `3f74990`. All three still carry those counts (re-measured 2026-09-09 over every tracked file); every other tracked `.ts` under `src/` and `test/` prints `0`. The false single-exception form never surfaced because no task touched those two test files, so every implementer's "0 non-ASCII on the files I touched" was true and consistent with it - a premise no evidence the checks collect could contradict. Write non-ASCII in source as backslash-u escapes and in tests with `String.fromCharCode` / `String.fromCodePoint`. **The tooling that applies edits has stored a backslash-u escape as the raw character before, twice in this repository's history: after every edit that writes one, re-run the byte count.** Fixtures are not source: `fixtures/**` may hold non-ASCII, and the four claims fixtures this plan freezes happen to be pure ASCII (verified 2026-09-08) - record the count, do not require zero.
+- **Nothing new becomes public** (spec 5.3). `src/index.ts` keeps exactly the exports it has at `a1feba7`, `package.json`'s `exports` map stays `.` and `./package.json`, and `test/exports.test.ts` pins both. Every new module is imported by path inside `src/` and by the test suite; none is re-exported.
+- **All source and test files are pure ASCII.** Check with `LC_ALL=C tr -d '\000-\177' < FILE | wc -c` -> must print `0`. **CORRECTED 2026-09-09 (Task 10):** this said "the one standing exception is `src/text/excerpt.ts`", and that was false of this repository before plan 2 began. There are **three** standing exceptions, and every dispatch from Task 6 onward named all three: `src/text/excerpt.ts` (**57** non-ASCII bytes), `test/text/excerpt.test.ts` (**45**) and `test/text/extract.test.ts` (**3**), the latter two from plan 1.2's `84a6a07`. All three still carry those counts (re-measured 2026-09-09 over every tracked file); every other tracked `.ts` under `src/` and `test/` prints `0`. The false single-exception form never surfaced because no task touched those two test files, so every implementer's "0 non-ASCII on the files I touched" was true and consistent with it - a premise no evidence the checks collect could contradict. Write non-ASCII in source as backslash-u escapes and in tests with `String.fromCharCode` / `String.fromCodePoint`. **The tooling that applies edits has stored a backslash-u escape as the raw character before, twice in this repository's history: after every edit that writes one, re-run the byte count.** Fixtures are not source: `fixtures/**` may hold non-ASCII, and the four claims fixtures this plan freezes happen to be pure ASCII (verified 2026-09-08) - record the count, do not require zero.
 - **No NUL bytes anywhere.** `LC_ALL=C tr -cd '\000' < FILE | wc -c` must print `0`, and the instrument is proved first: `printf 'a\0b' | LC_ALL=C tr -cd '\000' | wc -c` prints `1`.
 - **`npm test` green and `npx tsc --noEmit` clean at every commit.** Never commit with a red test.
 - **Conventional commit prefixes with the scope in parentheses**, as `git log --oneline -30` shows: `feat(classify)`, `feat(fetch)`, `feat(harvest)`, `fix(text)`, `docs(spec)`, `docs(readme)`, `test:`, `chore:`.
@@ -43,7 +43,7 @@ Three things this plan must not re-litigate:
 
 And one thing it must take first, before any harvest code, because plan 1.2's ledger hands it here:
 
-**R13, the N3 twin.** Spec 6.3:456-460 and the decision-table row at :1298 say the signature list "can withhold an accusation, never supply one". That is false, and was false at `main` before plan 1.2: `check.ts`'s union loop excludes a vetoed read's matches, so a claim carried only by an N3-vetoed read is `missed` when a readable later rung is judged, and N3 is then the but-for cause of an `unsupported`. Measured against `dist` at `ff71ec8` on 2026-09-08, with the exact bodies Task 1 uses: with the signature phrase present the verdict is `unsupported` and `missed` is `["spending rose sharply"]`; with the same body minus the signature phrase it is `supported`. Plan 1.2 parked the correction because it deserved a reviewed dispatch rather than an unreviewed controller edit of the binding spec. This is that dispatch.
+**R13, the N3 twin.** Spec 6.3:456-460 and the decision-table row at :1298 say the signature list "can withhold an accusation, never supply one". That is false, and was false at `main` before plan 1.2: `check.ts`'s union loop excludes a vetoed read's matches, so a claim carried only by an N3-vetoed read is `missed` when a readable later rung is judged, and N3 is then the but-for cause of an `unsupported`. Measured against `dist` at `a1feba7` on 2026-09-08, with the exact bodies Task 1 uses: with the signature phrase present the verdict is `unsupported` and `missed` is `["spending rose sharply"]`; with the same body minus the signature phrase it is `supported`. Plan 1.2 parked the correction because it deserved a reviewed dispatch rather than an unreviewed controller edit of the binding spec. This is that dispatch.
 
 ## Decisions this plan takes, and where they come from
 
@@ -97,7 +97,7 @@ And one thing it must take first, before any harvest code, because plan 1.2's le
 - `test/bin.test.ts` (Task 9).
 - `README.md`, `CHANGELOG.md`, `docs/calibration-2026-09.md` (Tasks 2 and 10).
 
-**Not touched, in any task:** `src/classify/verdict.ts`, `src/classify/signals.ts` beyond the one reported field, `src/check.ts` beyond its front-door guard, `src/reachability.ts`, `src/fetch/**`, `src/text/**`, `src/rules/hosts.ts`, `src/rules/challenge.ts` beyond one comment, every existing fixture, `example/**`, and `package.json`. **No verdict moves in this plan.** `check`'s behaviour after Task 10 is byte-identical to `ff71ec8` for every input except a claims file or a caller that supplies a claim under the floor, which is now refused. If a task finds it needs to change anything else here, stop and record a ruling before touching it.
+**Not touched, in any task:** `src/classify/verdict.ts`, `src/classify/signals.ts` beyond the one reported field, `src/check.ts` beyond its front-door guard, `src/reachability.ts`, `src/fetch/**`, `src/text/**`, `src/rules/hosts.ts`, `src/rules/challenge.ts` beyond one comment, every existing fixture, `example/**`, and `package.json`. **No verdict moves in this plan.** `check`'s behaviour after Task 10 is byte-identical to `a1feba7` for every input except a claims file or a caller that supplies a claim under the floor, which is now refused. If a task finds it needs to change anything else here, stop and record a ruling before touching it.
 
 **Task order:** 1 (R13, the spec correction plan 1.2 parked) -> 2 (calibration, before any harvest code) -> 3 (the floor at three sites) -> 4 (`Document.prose`) -> 5 (`commonSpans`) -> 6 (reading the sources) -> 7 (the filters) -> 8 (the command and the draft file) -> 9 (the CLI) -> 10 (the ledger).
 
@@ -135,7 +135,7 @@ describe("N3 through the cross-read union (spec 6.3; plan 1.2 ledger R13)", () =
   // nothing else, turns the same pair of responses into `supported`. The
   // veto is the but-for cause of the accusation.
   //
-  // Pre-existing at 3974d27: the union machinery is unchanged from it, and
+  // Pre-existing at 6546176: the union machinery is unchanged from it, and
   // N3 fires only under maxChallengeChars, so a vetoed N3 read is never the
   // larger read rule 2 chooses between. Plan 1.2 did not cause this and did
   // not fix it (ledger R13); this is the reviewed dispatch R13 asked for.
@@ -219,7 +219,7 @@ signature-carrying body under the cap holding claim A, followed by a readable
 body holding claim B and not A, returns `unsupported` with A missed; the same
 body with the signature phrase removed returns `supported`. This paragraph said
 "Every verdict it decides is a withheld accusation, never a supplied one" until
-2026-09-08. That was false at 3974d27 and at every commit since - the union
+2026-09-08. That was false at 6546176 and at every commit since - the union
 machinery is unchanged from it - and it is the twin of the false status claim the
 N4 paragraph below has now corrected twice. It is corrected here rather than left
 standing, for the reason given there: this document is the authority every ruling
@@ -287,7 +287,7 @@ ruling C13; this sentence had not. Corrected 2026-09-08: it generalised a host
 rule's contract to all three lists, and was false for two of them.
 ```
 
-**CORRECTED 2026-09-09 (Task 10):** the block above is the text Task 1 was told to write, and it is not the text that shipped. Task 1's review (Important 4) found the attribution wrong - `git log -S "signature and path rules" -- src/rules/load.ts` returns only `e4d9f46`, plan 1's final fix wave, fifteen commits after C13's `7a0cf6f` - so the shipped spec reads "since plan 1's final fix wave (`e4d9f46`)". Read this block as the instruction, not as the spec.
+**CORRECTED 2026-09-09 (Task 10):** the block above is the text Task 1 was told to write, and it is not the text that shipped. Task 1's review (Important 4) found the attribution wrong - `git log -S "signature and path rules" -- src/rules/load.ts` returns only `4c81090`, plan 1's final fix wave, fifteen commits after C13's `7c8a0ff` - so the shipped spec reads "since plan 1's final fix wave (`4c81090`)". Read this block as the instruction, not as the spec.
 
 - [ ] **Step 7: Sweep the two source comments carrying the same claim**
 
@@ -1607,7 +1607,7 @@ Run: `cd C:/Users/noaho/testimonium-plan2 && npx vitest run test/adapters/gfm-fo
 Expected: all pass.
 
 Run: `cd C:/Users/noaho/testimonium-plan2 && npm test && npx tsc --noEmit`
-Expected: **297 passed**, typecheck silent. `Document` gained a required field; if anything constructs a `Document` literal, typecheck names it. Nothing at `ff71ec8` does - `parseGfmFootnotes` is the only producer - but let the compiler say so rather than assuming it.
+Expected: **297 passed**, typecheck silent. `Document` gained a required field; if anything constructs a `Document` literal, typecheck names it. Nothing at `a1feba7` does - `parseGfmFootnotes` is the only producer - but let the compiler say so rather than assuming it.
 
 - [ ] **Step 6: Prove the continuation-line test discriminates**
 
@@ -2624,7 +2624,7 @@ and to BOTH returns:
 
 `toRule` already demands `pattern`, `lastConfirmed` and `note` and compiles the pattern with no flags, so `.test()` carries no `lastIndex` state - the same property `matchesChallengeSignature` relies on.
 
-Run: `npx vitest run test/rules/load.test.ts` - expected all pass. Run `npx tsc --noEmit`: **it will fail** anywhere a `RuleSet` literal is constructed without the new field. At `ff71ec8` that is `test/check.test.ts`'s `RULES_WITH_LOCAL_SIGNATURE`. Add `boilerplate: [],` to it, with the comment `// harvest's list; no bearing on check()`.
+Run: `npx vitest run test/rules/load.test.ts` - expected all pass. Run `npx tsc --noEmit`: **it will fail** anywhere a `RuleSet` literal is constructed without the new field. At `a1feba7` that is `test/check.test.ts`'s `RULES_WITH_LOCAL_SIGNATURE`. Add `boilerplate: [],` to it, with the comment `// harvest's list; no bearing on check()`.
 
 - [ ] **Step 4: Write the failing filter tests**
 
@@ -4134,11 +4134,11 @@ Expected: **341 passed**, typecheck silent, build clean, and `git status --short
 *The file list.* Task 10 also touches `src/check.ts`, `src/harvest/spans.ts` and `src/classify/thresholds.ts` (comment-only - no executable line changes), this plan file, and the new `docs/superpowers/plans/2026-09-08-plan-2-harvest-ledger.md`. `docs/calibration-2026-09.md` is NOT touched: both calibration scripts were re-run on 2026-09-09 and every number in that document reproduced, so nothing moved.
 
 ```bash
-cd C:/Users/noaho/testimonium-plan2 && printf 'a\0b' | LC_ALL=C tr -cd '\000' | wc -c && for f in $(git diff --name-only ff71ec8..HEAD; echo README.md CHANGELOG.md) ; do printf "%s nonascii=" "$f"; LC_ALL=C tr -d '\000-\177' < "$f" | wc -c; printf "%s nul=" "$f"; LC_ALL=C tr -cd '\000' < "$f" | wc -c; done
+cd C:/Users/noaho/testimonium-plan2 && printf 'a\0b' | LC_ALL=C tr -cd '\000' | wc -c && for f in $(git diff --name-only a1feba7..HEAD; echo README.md CHANGELOG.md) ; do printf "%s nonascii=" "$f"; LC_ALL=C tr -d '\000-\177' < "$f" | wc -c; printf "%s nul=" "$f"; LC_ALL=C tr -cd '\000' < "$f" | wc -c; done
 ```
 Expected: self-test `1`; `nul=0` for every file without exception; `nonascii=0` for everything except `src/text/excerpt.ts` (**57**), `README.md` (**3** unless a step above deliberately added one, in which case record the new number and why) and `docs/calibration-2026-09.md` (the number Task 2 recorded).
 
-**CORRECTED 2026-09-09 (Task 10), and the correction is narrower than it was routed here as.** Task 6's reviewer routed this step forward as one that "would FAIL as written". Run on 2026-09-09, it does not: the loop iterates `git diff --name-only ff71ec8..HEAD` plus two files, and the two test files that break the stated exception set are not in that range, because no plan-2 task touched them. What IS wrong is the expectation's own wording - "`nonascii=0` for everything except" these three is a claim about the REPOSITORY, and it is false of the repository, inheriting the false single-exception premise from the Global Constraint at the top of this plan (corrected there too). A false universal that this particular file list happens never to exercise is the same defect as one that fails: it is true only by the accident of what the loop reaches. The true expectation, re-measured 2026-09-09 over every tracked file:
+**CORRECTED 2026-09-09 (Task 10), and the correction is narrower than it was routed here as.** Task 6's reviewer routed this step forward as one that "would FAIL as written". Run on 2026-09-09, it does not: the loop iterates `git diff --name-only a1feba7..HEAD` plus two files, and the two test files that break the stated exception set are not in that range, because no plan-2 task touched them. What IS wrong is the expectation's own wording - "`nonascii=0` for everything except" these three is a claim about the REPOSITORY, and it is false of the repository, inheriting the false single-exception premise from the Global Constraint at the top of this plan (corrected there too). A false universal that this particular file list happens never to exercise is the same defect as one that fails: it is true only by the accident of what the loop reaches. The true expectation, re-measured 2026-09-09 over every tracked file:
 
 - `src/text/excerpt.ts` **57**
 - `test/text/excerpt.test.ts` **45**
@@ -4150,7 +4150,7 @@ Expected: self-test `1`; `nul=0` for every file without exception; `nonascii=0` 
 The loop's own file list reaches only two of these: `README.md` at 3 and `docs/calibration-2026-09.md` at 185, both as expected. Widen the check to every tracked file if you want the expectation tested rather than merely stated - `for f in $(git ls-files); do ...; done`, with `fixtures/**` allowed to be non-zero.
 
 ```bash
-cd C:/Users/noaho/testimonium-plan2 && git diff -w --stat ff71ec8..HEAD && git diff --stat ff71ec8..HEAD
+cd C:/Users/noaho/testimonium-plan2 && git diff -w --stat a1feba7..HEAD && git diff --stat a1feba7..HEAD
 ```
 The two must agree on the file list. A file that appears only in the second is a whitespace-only change nobody intended - most likely a line-ending conversion, which this worktree's `core.autocrlf=true` makes easy to cause and hard to see.
 

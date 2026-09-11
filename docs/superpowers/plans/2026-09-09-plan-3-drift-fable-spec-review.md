@@ -7,7 +7,7 @@
 
 # Fable spec review: section 8.3 (recheck, archive as control arm)
 
-Reviewed at `8a681e7` on `feat/plan-3-drift`, worktree green (361/361, run 2026-09-09).
+Reviewed at `fb824f1` on `feat/plan-3-drift`, worktree green (361/361, run 2026-09-09).
 Scope: spec 8.3 (lines 1258-1378), the amended "Archive on success" paragraph (~1016),
 Q4's resolution (~1520), the plan 3 row and file list in 8.1. Every factual claim about
 shipped behaviour was checked against the code, not the citation.

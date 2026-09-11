@@ -7,14 +7,14 @@
 
 # Fable plan review: plan 3 (`recheck` and the archive)
 
-Reviewed at `c4eefd4` on `feat/plan-3-drift`, worktree green (361/361, 29 files,
+Reviewed at `5cfbade` on `feat/plan-3-drift`, worktree green (361/361, 29 files,
 re-run during this review), `dist/` built, tree clean. The plan (4,023 lines),
 the drafter's report, the amendment report, spec 8.3 (1305-1800) plus sections
 2, 6.6, 7.4, 8, 8.1, 11 and 12, and the plan-2 ledger were all read. Every
 factual claim checked below was checked against the code or a command run on
 this machine, not against the citation.
 
-**Amendment check, done first as instructed:** the e66ed34 amendment discharged
+**Amendment check, done first as instructed:** the 8284691 amendment discharged
 corrections 1-13 where its report says they landed - the decision procedure and
 R-invariant in 8.3, the corrected "Archive on success" paragraph and command
 table in section 8, the sink withdrawal with the `{ hosts }` detail, the PDF

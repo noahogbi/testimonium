@@ -5,7 +5,7 @@ Three thresholds, three dated records. `minProseChars` (plan 1) is below;
 
 **Date:** 2026-09-07 (round 3, after ruling C7) — supersedes the round-1 and round-2 records.
 Round 3's own baseline numbers were then overtaken twice more, same day: the entity-decoding
-fix (`6932e5e`, `4e47996`) changed several fixtures' extracted length before Task 3 added two
+fix (`b75a8e5`, `61c8a9a`) changed several fixtures' extracted length before Task 3 added two
 more fixtures on top. **Every number on this page has been re-verified against both changes**
 by Task 4 (plan 1.1) - re-run the reproduce line below rather than trust a number here that
 looks stale.
@@ -38,7 +38,7 @@ otherwise try to add it back.
 own numbers below moved since they were first recorded - the smallest real document dropped
 from 6,858 to 6,394 (the entity-heavy fixture Task 3 added is smaller than round 3's
 smallest), and the ECB fixture's extracted length dropped from 13,221 to 13,216 once the
-entity-decoding fix landed (`6932e5e`, `4e47996`) - and every downstream figure that depends
+entity-decoding fix landed (`b75a8e5`, `61c8a9a`) - and every downstream figure that depends
 on them (gap, clear air, the sweep) is recomputed from the corrected numbers, not carried
 forward by arithmetic on the old ones.
 
@@ -236,7 +236,7 @@ those.
 | 33 | `documents/en-wikipedia-org-wiki-Textual-criticism.html` | document | 200 | 108,248 | 1.00 | reaches accusation | prose (103,748 clear) |
 
 *(Rows 24, 27–30, 32, and 33 were corrected for Task 4, plan 1.1: their extracted lengths
-shifted by a few characters each after the entity-decoding fix (`6932e5e`, `4e47996`) landed,
+shifted by a few characters each after the entity-decoding fix (`b75a8e5`, `61c8a9a`) landed,
 after round 3's numbers above were first recorded. Confirmed directly against `toText`'s
 current output, not carried forward from the old table by arithmetic.)*
 
@@ -384,10 +384,10 @@ for dashes. (Written as code points deliberately: every character in those two r
 either invisible or indistinguishable from an ASCII hyphen in an editor, and this
 repository has twice been corrupted by pasting such characters literally.)
 
-Measured directly at ae9d299 *[re-measured 2026-09-07]*, before the change, on a paragraph reading
+Measured directly at c538fd3 *[re-measured 2026-09-07]*, before the change, on a paragraph reading
 `closer co&shy;operation on enforcement`:
 
-| claim | `phraseFound` at ae9d299 |
+| claim | `phraseFound` at c538fd3 |
 |---|---|
 | `cooperation` | **false** |
 | `co-operation` | **false** |
@@ -416,7 +416,7 @@ Re-measured after the change, from a fresh build, with
 
 `co-operation` still misses, and should: nothing on the page says it. The fixture corpus holds
 no soft hyphen in either form (39 files, 0 `&shy;`, 0 raw U+00AD, counted 2026-09-08), so no
-fixture verdict moved. The one-line command above printed `false` / `false` at ae9d299 before
+fixture verdict moved. The one-line command above printed `false` / `false` at c538fd3 before
 the change; run it again before believing this table.
 
 ## The two N5 constants, and what does and does not license them
@@ -478,7 +478,7 @@ A synthetic but structurally faithful PDF — `%PDF-1.7` header, object dictiona
 `status: 200`, at `https://arxiv.org/abs/2401.01234v2` (no `.pdf`, no `/pdf/` segment: the
 content-negotiated shape N4/N3 cannot see and N5 exists for).
 
-This pins N5 (`notText`, the "body is not text at all" veto added in `78881e3`). Decoded as
+This pins N5 (`notText`, the "body is not text at all" veto added in `393cf10`). Decoded as
 UTF-8 and run through `toText`, the binary stream extracts to 6,221 characters —
 **above** the 4,500-char floor by 1,721, with plenty of margin. That is the load-bearing
 property: an earlier size (8KB of stream) was rejected in review because it measured a

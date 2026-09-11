@@ -58,7 +58,7 @@ describe("readSource", () => {
 
   it("climbs past a first read vetoed only by N4, and only by N5, over the floor", async () => {
     // Spec 6.6, "Escalation": the unified rule is the wider of the two the
-    // callers used to hold. At 3974d27 check() stopped here and reachability()
+    // callers used to hold. At 6546176 check() stopped here and reachability()
     // climbed. check.test.ts and reachability.test.ts pin each caller; this
     // pins the loop they now share.
     const n4 = stub({ node: { rawBody: LONG_PROSE, status: 404 }, curl: { rawBody: LONG_PROSE, status: 200 } });

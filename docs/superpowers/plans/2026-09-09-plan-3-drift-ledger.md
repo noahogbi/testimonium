@@ -156,7 +156,7 @@ can perform.
 
 ## Task 11: the doc-truth sweep, and this ledger
 
-Executed 2026-09-09 at BASE `f60c512`, 485 tests green, `tsc` clean, `dist/`
+Executed 2026-09-09 at BASE `f26b4b3`, 485 tests green, `tsc` clean, `dist/`
 built, tree clean. Two `it()` blocks specified, both written failing first and
 watched to fail (`grep -c "detects change, never correctness" README.md` -> 0,
 and `testimonium recheck <doc.md>` absent from the commands block) before any
@@ -213,7 +213,7 @@ together.
 
 **Ruling T11-R3 - the README's one pre-existing non-ASCII byte is converted,
 reversing plan 2's leave-it ruling.** `README.md` carried a single U+2265 (3
-bytes) since a plan-1-era commit, `42d21e5`. Plan 2's ledger records its
+bytes) since a plan-1-era commit, `c2f2f75`. Plan 2's ledger records its
 implementer flagging it and correctly leaving it, on the reasoning that "the
 ASCII constraint binds source and test files". Task 11's own byte check names
 `README.md` explicitly and expects zero, and this task rewrites a large part of
@@ -464,15 +464,15 @@ server still answering? no - port is free
 worktree shows no leaks (no `.archive` directory, nothing under `/tmp`).
 
 **Code changes: none.** The existing `bin.ts` implementation (committed at
-f341183) already satisfies spec 13 Q4 exactly as the reviewer's manual
+4e283b8) already satisfies spec 13 Q4 exactly as the reviewer's manual
 reproduction found - this fix round added verification coverage, not a
 behavior change. `task-6-brief.md` (step 8g) and this report were updated;
 both live under `.superpowers/sdd/2026-09-09-plan-3-drift/`, which
 `.superpowers/sdd/.gitignore` excludes wholesale (`git check-ignore -v`
 confirms; `git log --all -- .superpowers/sdd` has zero commits ever, in this
 repo's history) - so there is nothing to `git add` or commit on top of
-f341183 for this fix. `git status --short` remains clean and HEAD is still
-f341183822b668fa62aa0c96130d6a919030511e; `npm test` (421/421) and
+4e283b8 for this fix. `git status --short` remains clean and HEAD is still
+4e283b87622b47f9a74183779bc225d332d4dbbf; `npm test` (421/421) and
 `npx tsc --noEmit` were re-confirmed unaffected (no source touched).
 
 ---
@@ -660,14 +660,14 @@ the occurrence count back to 0 and the two tests still green.
 # SDD ledger - plan: docs/superpowers/plans/2026-09-09-plan-3-drift.md
 
 Worktree `C:/Users/noaho/testimonium-plan3`, branch `feat/plan-3-drift`, base
-`main @ 84202d3`. Spec: `docs/superpowers/specs/2026-09-06-testimonium-design.md`,
+`main @ 070d92e`. Spec: `docs/superpowers/specs/2026-09-06-testimonium-design.md`,
 **section 8.3 is the authority**.
 
-Provenance: 8.3 written 2026-09-09 (`8a681e7`), Fable-reviewed (APPROVE WITH
-CORRECTIONS, 1 BLOCKING / 6 MAJOR / 7 MINOR), all 13 applied (`e66ed34`). Plan
-drafted by Opus (`c4eefd4`), Fable-reviewed (APPROVE WITH CORRECTIONS, 1
+Provenance: 8.3 written 2026-09-09 (`fb824f1`), Fable-reviewed (APPROVE WITH
+CORRECTIONS, 1 BLOCKING / 6 MAJOR / 7 MINOR), all 13 applied (`8284691`). Plan
+drafted by Opus (`5cfbade`), Fable-reviewed (APPROVE WITH CORRECTIONS, 1
 BLOCKING / 2 MAJOR / 4 MINOR), corrections 1-7 plus 3 self-found twins applied
-(`bd43fc0`). User approved execution 2026-09-09.
+(`e1b515f`). User approved execution 2026-09-09.
 
 Starting state: **361 tests**, 29 files, `tsc` clean, tree clean.
 
@@ -718,7 +718,7 @@ conflict - row 19 (T10 adds to `KNOWN_FLAGS`, never rewrites it) and row 12
 
 ## Task log
 
-Task 1: dispatched (sonnet) at BASE bd43fc0; DONE at f0f1deb. 361 tests
+Task 1: dispatched (sonnet) at BASE e1b515f; DONE at 989cabf. 361 tests
 unchanged, tsc clean, tree clean. Both Fable reviews preserved into
 docs/superpowers/plans/ with F-range headers, and 8.3's citations repointed
 (3 files, 570 insertions).
@@ -757,9 +757,9 @@ the FIFTH sed-mutation-that-did-not-apply in this project, and the first caught
 by the practice of running a control at all. The lesson compounds: a negative
 control needs its own proof that it fired.
 
-Task 1: complete (commits bd43fc0..f0f1deb, review clean). 361 tests.
+Task 1: complete (commits e1b515f..989cabf, review clean). 361 tests.
 
-Task 2: dispatched (sonnet) at BASE f0f1deb; DONE at 4387db9. 372 tests
+Task 2: dispatched (sonnet) at BASE 989cabf; DONE at 495180a. 372 tests
 (361 + 11, matching the it()-derived count), tsc clean, tree clean, two new
 files only, both 0 non-ASCII / 0 NUL, public surface untouched.
 Controller verified the three decisions with silent failure modes before
@@ -787,9 +787,9 @@ exactly the any-casing test. The reviewer disclosed honestly that it did not
 re-run the fourth (claimsHashFor) and trusted the implementer's triple-checked
 evidence given the pattern held on the three it did run - which is the right
 way to report partial verification.
-Task 2: complete (commits f0f1deb..4387db9, review clean). 372 tests.
+Task 2: complete (commits 989cabf..495180a, review clean). 372 tests.
 
-Task 3: dispatched (sonnet) at BASE 4387db9; DONE at c7f107c. 378 tests
+Task 3: dispatched (sonnet) at BASE 495180a; DONE at 65b54db. 378 tests
 (372 + 6), tsc clean, tree clean, two files, mutation caught exactly the three
 predicted failures, and the implementer additionally ran the REAL binary as a
 manual check and got the brief's measured shape (exit 99, version on stderr)
@@ -843,7 +843,7 @@ a module the plan already owns.
 
 Task 3: fix round 1/5 dispatched (resumed implementer).
 
-Task 3: fix round 1/5 complete (commits c7f107c..0b9149b). 381 tests (378 + 3),
+Task 3: fix round 1/5 complete (commits 65b54db..ea377ea). 381 tests (378 + 3),
 tsc clean, both files 0 non-ASCII / 0 NUL, toVersionProbe exported by path with
 zero hits in src/index.ts.
 Ruling T3-R1 landed, and the second half landed BETTER than ruled. I asked for
@@ -867,12 +867,12 @@ with no error is NOT missing - Xpdf's own exit code", 380 passing. Agreement
 with pdftotextAvailable re-derived from both implementations rather than from
 either's comment. Export surface clean, off-limits files untouched, all
 mutations restored and re-verified.
-Task 3: complete (commits 4387db9..0b9149b, review clean after 1 fix round).
+Task 3: complete (commits 495180a..ea377ea, review clean after 1 fix round).
 381 tests. The lesson recorded for the remaining tasks: an injection seam that
 makes code testable can leave the code BEHIND it unreachable, and the reachable
 side passing tells you nothing about the other.
 
-Task 4: dispatched (sonnet) at BASE 0b9149b; DONE at 6efec58. 394 tests
+Task 4: dispatched (sonnet) at BASE ea377ea; DONE at 72a6b78. 394 tests
 (381 + 13), tsc clean, tree clean, two new files only, both 0 non-ASCII / 0 NUL.
 Controller verified the diff touches NO off-limits file: check.ts,
 read-source.ts, classify/, io/evidence.ts, index.ts and exports.test.ts all
@@ -913,7 +913,7 @@ file the task already owns.
 Task 4: fix round 1/5 dispatched (resumed implementer) - one composition
 assertion using the real Recorder rather than a hand-built fixture.
 
-Task 4: fix round 1/5 complete (commits 6efec58..bfed104, 20 lines, test file
+Task 4: fix round 1/5 complete (commits 72a6b78..f414a61, 20 lines, test file
 only). 395 tests (394 + 1), tsc clean, tree clean, 0 non-ASCII / 0 NUL.
 RULING T4-R1 VINDICATED BY THE FIX ITSELF. The composition test is
 mutation-proven to catch a defect INVISIBLE TO ALL 13 PRIOR TESTS: a status
@@ -935,10 +935,10 @@ hand-built test named "records the status of each read, because N4 is decided
 from it". A test explicitly about recording status could not see status being
 corrupted, because its input was hand-built rather than teed. That is the
 sharpest illustration of the seam lesson this project has produced.
-Task 4: complete (commits 0b9149b..bfed104, review clean after 1 fix round).
+Task 4: complete (commits ea377ea..f414a61, review clean after 1 fix round).
 395 tests.
 
-Task 5: dispatched (sonnet) at BASE bfed104; DONE at 3b34545. 410 tests
+Task 5: dispatched (sonnet) at BASE f414a61; DONE at bfa6272. 410 tests
 (395 + 15), tsc clean, tree clean, two new files, both 0 non-ASCII / 0 NUL, no
 off-limits file touched. Both mutation probes (merge-seed removal,
 preservation-branch disable) isolated exactly the predicted tests.
@@ -979,10 +979,10 @@ seam is unpinned, and neither holds here. - Cost if wrong: if someone later
 splits the two refusal routes so they no longer share a throw point, the
 version-99 route loses its bytes-untouched evidence.
 
-Task 5: complete (commits bfed104..3b34545, review clean, 1 deferred minor).
+Task 5: complete (commits f414a61..bfa6272, review clean, 1 deferred minor).
 410 tests.
 
-Task 6: dispatched (sonnet) at BASE 3b34545; DONE at f341183. 421 tests
+Task 6: dispatched (sonnet) at BASE bfa6272; DONE at 4e283b8. 421 tests
 (410 + 11), tsc clean, tree clean, only bin.ts and bin.test.ts touched - no
 off-limits file in the diff. --no-archive present in KNOWN_FLAGS at :59 and in
 USAGE at :67.
@@ -1042,7 +1042,7 @@ runs it next.
 
 Task 6: fix round 1/5 dispatched (resumed implementer) - step 8g.
 
-Task 6: fix round 1/5 complete WITH NO CODE DELTA - HEAD stays f341183. The
+Task 6: fix round 1/5 complete WITH NO CODE DELTA - HEAD stays 4e283b8. The
 finding was a coverage gap, not a defect, so the fix was to run the missing
 verification and record it.
 STEP 8g TRANSCRIPT (the durable record; the Global Constraints require manual
@@ -1067,17 +1067,17 @@ enters the ledger without a second reader, mitigated by the reviewer having
 already reproduced the same guarantee independently before the round was
 dispatched.
 Cleanup used the netstat/taskkill fallback rather than `kill $!`, per T6-R2.
-Task 6: complete (commits 3b34545..f341183, review clean after 1 fix round).
+Task 6: complete (commits bfa6272..4e283b8, review clean after 1 fix round).
 421 tests.
 
-Task 7: dispatched (sonnet) at BASE f341183; DONE at b5114c6. 432 tests
+Task 7: dispatched (sonnet) at BASE 4e283b8; DONE at cc87663. 432 tests
 (421 + 11), 33 files, tsc clean. Both mutation pins - rungs-from-machine and
 finalUrl-fill-in - proven to discriminate before restore.
 
 CONTROLLER ERROR, and the implementer caught it. My dispatch said "3 it()
 blocks, total 424". Wrong: the brief specifies 11 and expects 432. The cause is
-that I derived task line ranges from the plan as it stood at c4eefd4, BEFORE
-the corrections commit bd43fc0 added ~230 lines - so every range after the
+that I derived task line ranges from the plan as it stood at 5cfbade, BEFORE
+the corrections commit e1b515f added ~230 lines - so every range after the
 insertion point is shifted. Task 7 actually spans 2201-2510, not 1971-2280.
 Tasks 2-6 matched by luck rather than by method.
 The implementer FLAGGED the conflict and followed the brief, which is
@@ -1099,9 +1099,9 @@ exercised rather than assumed - the reviewer traced fetcher.rungs through
 check.ts:161's rungsAvailable into isLadderTruncated at evidence.ts:90, and test
 3 covers it. ArchiveEntry inputs come from buildArchiveEntry via entryOf, never
 hand-written literals: the Task 4/5 lesson carried forward without being asked.
-Task 7: complete (commits f341183..b5114c6, review clean). 432 tests.
+Task 7: complete (commits 4e283b8..cc87663, review clean). 432 tests.
 
-Task 8: dispatched (sonnet) at BASE b5114c6; DONE at bbbd9cf. 458 tests
+Task 8: dispatched (sonnet) at BASE cc87663; DONE at 25e38eb. 458 tests
 (432 + 26, derived from the BRIEF per ruling T7-R1), tsc clean, tree clean, two
 new files. All three targeted mutations - the deleted-table row, the R-invariant
 degrade, and the gone/confound reorder - failed exactly the tests the brief
@@ -1167,7 +1167,7 @@ decision procedure exists to withhold.
 Brief-specified and test-pinned, so not a defect to fix here, but Task 9's
 reporter must not double-report the same line.
 
-Task 8: fix round 1/5 complete (commits bbbd9cf..56b9e97, 3 lines, comment
+Task 8: fix round 1/5 complete (commits 25e38eb..780a244, 3 lines, comment
 only). 458 tests unchanged, tsc clean. The implementer verified the claim
 against control flow BEFORE editing rather than after: liveGone can only be true
 on the noBaseline row, which returns before :171's gone-check, and every other
@@ -1196,11 +1196,11 @@ falsified by the fix. That check is the one this repo's history most demanded
 and the one a smaller review would have skipped.
 Comment-only confirmed by filtering the diff for changed non-comment lines and
 getting nothing.
-Task 8: complete (commits b5114c6..56b9e97, review clean after 1 fix round).
+Task 8: complete (commits cc87663..780a244, review clean after 1 fix round).
 458 tests. The decision procedure is shipped, and its exclusivity is proven
 across 48,960 combinations against a spec-derived oracle.
 
-Task 9: dispatched (sonnet) at BASE 56b9e97; DONE at 4231d54. 468 tests
+Task 9: dispatched (sonnet) at BASE 780a244; DONE at 71827e1. 468 tests
 (458 + 10), tsc clean, tree clean, two new files.
 Controller verified the never-writes-the-archive invariant properly before
 review: the store import is `{ readArchive, readBlob }` ONLY, and recheck is
@@ -1272,7 +1272,7 @@ count assertion caught it. That is the practice paying for itself in the tool
 that enforces the practice.
 Task 9: fix round 1/5 dispatched (resumed implementer) with 4 items.
 
-Task 9: fix round 1/5 complete (commits 4231d54..aa1a455). 470 tests (468 + 2),
+Task 9: fix round 1/5 complete (commits 71827e1..127f25d). 470 tests (468 + 2),
 tsc clean, tree clean, two files.
 Controller read the Important-2 fix before dispatching the re-review: the
 RecheckReport.outcomes docstring now says missed is the live arm's list "on
@@ -1308,10 +1308,10 @@ implementer following it gates correctly regardless of the incomplete list. A
 rule of the form "only X licenses this" survives an incomplete list of what does
 not; a rule that enumerates exceptions does not. Worth carrying as a drafting
 principle.
-Task 9: complete (commits 56b9e97..aa1a455, review clean after 1 fix round).
+Task 9: complete (commits 780a244..127f25d, review clean after 1 fix round).
 470 tests.
 
-Task 10: dispatched (sonnet) at BASE aa1a455; DONE at e039e92. 479 tests, tsc
+Task 10: dispatched (sonnet) at BASE 127f25d; DONE at bf5e1c1. 479 tests, tsc
 clean, tree clean, only bin.ts and bin.test.ts touched.
 
 MY COUNT WAS WRONG A SECOND TIME, for a NEW reason, and the implementer caught
@@ -1378,7 +1378,7 @@ carries the fact. - Cost if wrong: one line of report output.
 
 Task 10: fix round 1/5 dispatched (resumed implementer) with 3 items.
 
-Task 10: fix round 1/5 complete (commits e039e92..f60c512, +173/-49). 485 tests
+Task 10: fix round 1/5 complete (commits bf5e1c1..f26b4b3, +173/-49). 485 tests
 (479 + 6, verified by the controller as +6/-0 in the test diff per ruling
 T10-R1's two-instrument rule), tsc clean, tree clean, two files.
 renderOutcome extracted as an exported PURE function at bin.ts:113 and correctly
@@ -1410,10 +1410,10 @@ Honest caveat recorded by the reviewer rather than glossed: the report's claim
 that the manual drift transcript is "byte-identical" to the original is asserted
 by inspection, not by a saved-and-diffed comparison, so it is not independently
 checkable from what was recorded. The static equivalence check stands on its own.
-Task 10: complete (commits aa1a455..f60c512, review clean after 1 fix round).
+Task 10: complete (commits 127f25d..f26b4b3, review clean after 1 fix round).
 485 tests. recheck is reachable from the CLI.
 
-Task 11: dispatched (opus) at BASE f60c512; DONE at e4b5a13. 487 tests (485 + 2,
+Task 11: dispatched (opus) at BASE f26b4b3; DONE at bde99f6. 487 tests (485 + 2,
 reconciled BOTH ways per ruling T10-R1 - brief count 2 and git diff +2/-0 - and
 both tests watched to fail first), tsc clean, build clean, 7 files, tree clean.
 Closed 13 sweep items: the brief's 9 plus 4 the sweep found on its own,
@@ -1466,7 +1466,7 @@ matching every prior task's pattern. Task 6's 8g and Task 10's five transcripts
 verified present.
 Independent sweep found NOTHING the implementer missed. Both parked items
 confirmed untouched and carried forward with argument.
-Task 11: complete (commits f60c512..e4b5a13, review clean). 487 tests.
+Task 11: complete (commits f26b4b3..bde99f6, review clean). 487 tests.
 
 ALL ELEVEN TASKS COMPLETE. Final whole-branch review dispatched.
 
@@ -1474,7 +1474,7 @@ ALL ELEVEN TASKS COMPLETE. Final whole-branch review dispatched.
 
 ## Final whole-branch review, fix wave, and close-out
 
-Final whole-branch review (opus) over 84202d3..e4b5a13, 20 commits: READY WITH
+Final whole-branch review (opus) over 070d92e..bde99f6, 20 commits: READY WITH
 FIXES - 3 Important, 3 Minor, none touching the keystone.
 THE KEYSTONE HOLDS, PROVED END TO END THROUGH THE DELIVERY PATH. The reviewer
 transcribed spec 8.3 into an independent oracle and drove 86,400 combinations
@@ -1489,7 +1489,7 @@ count, all red.
 Its three Important findings, two of them the same defect at new sites:
 (1) src/bin.ts:155-157 REINTRODUCED A SENTENCE ALREADY MEASURED FALSE. The
 liveGone clause was found false by Task 8's reviewer and corrected in
-compare.ts at 56b9e97 - and e039e92 restored it VERBATIM in the reporter two
+compare.ts at 780a244 - and bf5e1c1 restored it VERBATIM in the reporter two
 commits later, where Task 11's whole-document sweep missed the twin. The
 correction was durable; the phrasing travelled.
 (2) recheck --json WAS AN UNGATED ACCUSATION SURFACE. The terminal reporter was
@@ -1505,9 +1505,9 @@ has more than one.
 broken gate would pass its tests when that gate in fact fails 3 of the 4 - worse
 than silence, because it invites a reader to "strengthen" tests that work.
 
-Final fix wave (sonnet, single dispatch): commit 844b4ef, all five applied.
+Final fix wave (sonnet, single dispatch): commit 6f712d3, all five applied.
 491 tests (487 + 4, reconciled both ways), tsc clean, four files.
-Scoped re-review (opus) over e4b5a13..844b4ef: ALL FINDINGS ADDRESSED, driven
+Scoped re-review (opus) over bde99f6..6f712d3: ALL FINDINGS ADDRESSED, driven
 rather than read. It rebuilt dist/ first and found it WAS stale (bin.js 23:13
 against bin.ts 23:16), so that warning was live. Driving recheck --json over a
 fixture yielding all four categories with non-empty live missed: the fixed build
@@ -1527,7 +1527,7 @@ superseded clause as prose in the plan's own voice without an IN-PLACE
 superseding marker, unlike spec 8.3:1383's "Corrected 2026-09-09: the decision
 table is deleted, not adjusted", which is this repo's stronger convention. Not
 fixed, because the plan is an as-dispatched artifact already headed with a
-correction note and citing base facts (HEAD e66ed34, 361 tests) that are
+correction note and citing base facts (HEAD 8284691, 361 tests) that are
 visibly stale, so a reader knows its era - and the skill allows exactly one fix
 wave. - Cost if wrong: a reader quoting the plan's prose out of context repeats
 a clause the shipped source contradicts.
@@ -1540,7 +1540,7 @@ ordinary `check --json` output, it carries no drift category, and it is
 Cost if wrong: none identified; the alternative would strip information the
 schema exists to carry.
 
-Close-out at 844b4ef: 21 commits over main @ 84202d3, 491 tests (from 361), tsc
+Close-out at 6f712d3: 21 commits over main @ 070d92e, 491 tests (from 361), tsc
 clean, build clean, tree clean. THE PLAN'S CENTRAL PROMISE VERIFIED BY HASH, not
 by inspection: src/check.ts, src/fetch/read-source.ts, src/io/evidence.ts,
 src/index.ts and test/exports.test.ts are BIT-IDENTICAL to main by blob hash,
