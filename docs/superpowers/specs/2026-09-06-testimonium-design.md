@@ -965,7 +965,17 @@ margin, and it refuses 18 of 208 (8.7 percent), each a number, a name or a
 fragment that states no proposition. (This paragraph said "203 distinct real
 claims" and "18 of the 203" until 2026-09-09: the ceiling has not moved, the
 population has - the origin repo's working-tree files changed between the two
-measurements, which is why plan 2 froze them.) This resolves Q3 in
+measurements, which is why plan 2 froze them.) (Corrected 2026-09-10:
+`fixtures/claims/` no longer exists. It was deleted when this repository was
+made public, because the claim text discloses what the unpublished drafts it
+came from are about, and `fixtures/claim-lengths.json` - the lengths and the
+two spurious matches, no claim text - replaced it. The population, the
+distribution and the 18-of-208 refusal still re-derive from that file and were
+re-derived on 2026-09-10 before the deletion; the ceiling does not, because
+re-running the matcher needs the strings, so "3 and 12 normalized characters
+and never above 12" is from here on a dated measurement rather than a
+reproducible one. docs/calibration-2026-09.md's "Correction, 2026-09-10" sets
+out both halves.) This resolves Q3 in
 section 13: a **refusal, uniform across the three sites, calibrated** - not a
 warning, because a warning that a claim proves nothing leaves it proving nothing
 while the run still passes. It is a breaking change for `check` against an
@@ -1291,7 +1301,11 @@ whose above-floor mean is below 1.0 - is 21, and it is recorded in
 **Plan 2's first task is calibration**, before any harvest code: commit the
 probe as `scripts/calibrate-claim-floor.mjs` (its walker skips `notApplicable`
 objects, which the probe's did not); freeze the claims it measures under
-`fixtures/claims/` so the numbers reproduce without the origin repo;
+`fixtures/claims/` so the numbers reproduce without the origin repo (that
+freeze was deleted on 2026-09-10 when the repository was made public, and
+`fixtures/claim-lengths.json` replaced it - the script now reports that file
+rather than measuring a corpus, and no longer calibrates anything; see
+docs/calibration-2026-09.md's "Correction, 2026-09-10");
 hand-classify every cross-fixture common span as chance or boilerplate; and
 bind the result with an acceptance test at `test/classify/claim-floor.test.ts`,
 the discipline section 6.3 imposed on the prose floor. The floor's licence is a
@@ -2045,6 +2059,10 @@ with their resolutions rather than deleted, so the reasoning survives.**
    characters and none above, 18 of 208 refused, re-derived 2026-09-09 against
    the population frozen in `fixtures/claims/`. This line said "203 real
    claims" and "18 of 203" until then; 7.3 says why the population moved.
+   (Corrected 2026-09-10: that population was deleted when this repository was
+   made public and `fixtures/claim-lengths.json` replaced it. The counts still
+   re-derive; the chance matches at 3 and 12 are from here on a dated
+   measurement. 7.3 and docs/calibration-2026-09.md say what that costs.)
    Implemented in plan 2, whose calibration task re-derived the number before
    any code depended on it.
 4. ~~**Archive failures.**~~ **RESOLVED 2026-09-09: local bytes, content-addressed,

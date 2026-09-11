@@ -521,6 +521,13 @@ measured three times — not because anything was tuned to make it pass.
 
 ## Calibration of `minClaimChars` and `harvestSeedChars` (plan 2, 2026-09-09)
 
+**Corrected 2026-09-10: `fixtures/claims/` was deleted when this repository was
+made public.** Every figure in this section was measured against that corpus on
+2026-09-09 and none of it has been rewritten. Which of those figures can still
+be re-derived, and which are now dated measurements that cannot be re-taken, is
+set out in "Correction, 2026-09-10: the claims corpus was deleted", below "The
+floor".
+
 ### Populations
 
 Four real claims files, frozen into `fixtures/claims/` so these numbers
@@ -614,6 +621,72 @@ spurious-match assertion, the margin assertion and the naming assertion - PASS,
 vacuously, having examined nothing at all. The guard is the only thing between
 this file and a check that reports success without running, and it has now been
 watched to fail rather than assumed to work.
+
+### Correction, 2026-09-10: the claims corpus was deleted
+
+Everything above was measured against `fixtures/claims/` - four files holding
+210 claim strings, 208 distinct, frozen from the owner's unpublished drafts.
+**That directory was deleted on 2026-09-10, when this repository was made
+public.** The claim text discloses what those drafts are about, and renaming
+the files would not have helped, because the subjects are legible from the
+strings themselves. Nothing in `src/` ever read them and they never shipped to
+npm (`files: ["dist"]`); the one thing they did was license `minClaimChars =
+16`, and that is what had to survive without them.
+
+**What replaced it.** `fixtures/claim-lengths.json`: every distinct claim's
+`norm(claim).length` as a plain array of 208 integers sorted ascending, the two
+spurious matches as `{claim, n, hits}`, and the document-fixture count the
+vacuity guard reads. No claim text, and no way back to it from the lengths. It
+stores no summary figure - not the count, not the maximum, not the refusal
+table - because each of those is derivable from the array beside it, and a
+stored copy is a number free to go quietly false.
+
+**What is still re-derivable, and what is not.** The difference is the whole
+cost of this change, so it is set out rather than summarised:
+
+- Re-derivable, by `node scripts/calibrate-claim-floor.mjs`, which now reports
+  the derived fixture instead of measuring a corpus: the population (208
+  distinct claims; 10 document fixtures), the length distribution (14 / 12 / 20
+  / 21 / 59 / 82 across the six bands above, with the minimum at 3 and the
+  maximum at 158), the refusal table (`8:7  12:15  16:18  20:26  25:34  30:46
+  40:65`), the cost at the shipped floor (18 of 208, 8.7 percent) and this
+  floor's margin over the recorded ceiling. Every one of those was re-derived
+  on 2026-09-10, from the claims, immediately before they were deleted, and
+  reproduces the run recorded above cell for cell. That is the audit this
+  correction rests on: the numbers remain auditable against the intermediates
+  recorded here, but they are no longer re-derivable from the corpus.
+- NOT re-derivable: the CEILING. Finding which claims match a page they were
+  not written about means running `phraseFound` over the strings, and the
+  strings are gone. **The ceiling of 12 is now a dated measurement from
+  2026-09-09, not a live one**, and so are the two spurious matches themselves.
+  `fixtures/claim-lengths.json` carries them forward as a record, not as
+  evidence anyone can re-take here.
+
+**The acceptance test lost one assertion, and now has five.** The sentence above
+saying `test/classify/claim-floor.test.ts` has "six assertions" was true when it
+was written and is not now. The deleted one is "NO claim at or above the floor
+matches a page it was not written about". It was deleted rather than rewritten
+because every way of keeping it would have been a pretence: pointed at the
+stored `spurious` list it would be re-reading its own answer, able to fail only
+if someone edited the fixture, never on evidence. Its result stands as the dated
+measurement recorded above - on 2026-09-09, over 208 distinct claims against 10
+unrelated document fixtures, exactly two matched a page they were not written
+about, at 12 and 3 normalized characters, none at or above the floor.
+
+**The guard on the constant survives, and was watched to fail again on
+2026-09-10**, on the derived fixture rather than on the corpus. At
+`minClaimChars: 8` the margin assertion fails with `expected 12 to be less than
+or equal to 5` and the naming assertion fails with `"SAUDI ARABIA": expected 12
+to be less than 8`. With `lengths` emptied the vacuity guard fails with
+`expected 0 to be greater than or equal to 200`, while the margin and naming
+assertions pass having examined nothing - the same finding recorded above,
+re-confirmed against what replaced the corpus. This matters more than it did
+before: no other test file validates `minClaimChars`. The others consume it, so
+all of them stay green at 8.
+
+Superseded with the rest: `fixtures/claims/provenance.json`. The mtimes, the
+sizes and the `source-c-claims.json` blob hash it recorded now survive only as
+what the "Populations" subsection above quotes of them.
 
 ### The seed length
 

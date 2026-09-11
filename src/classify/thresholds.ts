@@ -149,14 +149,29 @@ export const THRESHOLDS = {
    *  F6: "smallest F admitting zero spurious" would be a fit to two events.
    *
    *  Measured 2026-09-09 with `node scripts/calibrate-claim-floor.mjs` over
-   *  the 208 distinct real claims frozen in `fixtures/claims/` against the 10
-   *  unrelated `document` fixtures: 2 claims matched a page they were not
-   *  written about ("169" at 3 normalized characters, "SAUDI ARABIA" at 12),
-   *  none above 12, and this floor refuses 18 of 208 (8.7 percent), each a
-   *  number, a name or a fragment that states no proposition. 16 is that
-   *  ceiling plus margin. `test/classify/claim-floor.test.ts` binds it. A
-   *  re-run that puts the ceiling at or above this number is a finding to act
-   *  on. */
+   *  208 distinct real claims, frozen at the time in `fixtures/claims/`,
+   *  against the 10 unrelated `document` fixtures: 2 claims matched a page
+   *  they were not written about ("169" at 3 normalized characters, "SAUDI
+   *  ARABIA" at 12), none above 12, and this floor refuses 18 of 208 (8.7
+   *  percent), each a number, a name or a fragment that states no
+   *  proposition. 16 is that ceiling plus margin.
+   *  `test/classify/claim-floor.test.ts` binds it.
+   *
+   *  **The corpus those numbers came from no longer exists (2026-09-10).** It
+   *  was 210 claim strings taken from four unpublished drafts, and it was
+   *  deleted when this repository was made public, because the claim text
+   *  discloses what the drafts are about. `fixtures/claim-lengths.json`
+   *  replaced it: every claim's normalized length, and the two spurious
+   *  matches, with no claim text. What still re-derives from it is the
+   *  distribution, the refusal count and this floor's margin over the
+   *  recorded ceiling - so the acceptance test still fails if this number is
+   *  lowered, reporting `expected 12 to be less than or equal to 5` at 8, and
+   *  the script named above still prints STOP if the floor reaches the
+   *  ceiling. What does NOT re-derive is the ceiling itself: re-running the
+   *  matcher needs the strings. 12 is therefore a dated measurement from
+   *  2026-09-09, and "a re-run that puts the ceiling at or above this number
+   *  is a finding to act on" is no longer a re-run anyone can perform here.
+   *  See the 2026-09-10 correction in docs/calibration-2026-09.md. */
   minClaimChars: 16,
   /** Harvest's seed length: the L of the L-grams of the folded source that
    *  `commonSpans` looks for in the folded document (spec 8.2 step 3).
