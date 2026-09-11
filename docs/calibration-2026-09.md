@@ -698,14 +698,22 @@ and nothing else in this section moved: every count, length, band, ceiling,
 floor, margin, refusal and date above is the same figure, from the same run,
 against the same corpus, and none of them was re-derived today.
 
-Two origin-repository object ids are deliberately KEPT: the branch tip
+Origin-repository object ids are deliberately KEPT, wherever in this
+repository they appear. The line drawn here is between an identifier that
+names or locates - a filename, a repository, a path - and a hash that attests
+to which bytes were measured. A hash from a private repository resolves
+nowhere and names nothing, so withholding it would cost this record its only
+precise statement of what was measured and buy no privacy at all.
+
+Six survive publication, and they are listed here so that finding one is not
+mistaken for finding an oversight: the branch tip
 `78d3aa9bbdfcf5a9a8faa71c0b61f5b64973a18f` and the blob hash
-`e03e28ff6bf3727810ce52b9fdb05898a13e6171`, both in "Populations". The line
-drawn here is between an identifier that names or locates - a filename, a
-repository, a path - and a hash that attests to which bytes were measured. A
-hash from a private repository resolves nowhere and names nothing, so
-withholding it would cost this record its only precise statement of what was
-frozen and buy no privacy at all. They are kept by decision, not by oversight.
+`e03e28ff6bf3727810ce52b9fdb05898a13e6171` in "Populations" above; the three
+tips recording where the origin's HEAD stood as plan 2 ran, in that plan's
+ledger and in the review of it; and `3eaf353`, the origin HEAD at which the
+design spec's claims about that code were verified by direct read. An earlier
+version of this paragraph named only the first two, which was true of this
+section and misleading about the repository.
 
 ### The seed length
 
