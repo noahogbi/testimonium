@@ -698,6 +698,15 @@ and nothing else in this section moved: every count, length, band, ceiling,
 floor, margin, refusal and date above is the same figure, from the same run,
 against the same corpus, and none of them was re-derived today.
 
+Two origin-repository object ids are deliberately KEPT: the branch tip
+`78d3aa9bbdfcf5a9a8faa71c0b61f5b64973a18f` and the blob hash
+`e03e28ff6bf3727810ce52b9fdb05898a13e6171`, both in "Populations". The line
+drawn here is between an identifier that names or locates - a filename, a
+repository, a path - and a hash that attests to which bytes were measured. A
+hash from a private repository resolves nowhere and names nothing, so
+withholding it would cost this record its only precise statement of what was
+frozen and buy no privacy at all. They are kept by decision, not by oversight.
+
 ### The seed length
 
 From `node scripts/calibrate-harvest-seed.mjs`:
