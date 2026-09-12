@@ -34,9 +34,10 @@ describe("package surface", () => {
     // the public runtime surface into a deliberate edit to a red test,
     // rather than a silent one. Type-only exports (CheckOptions,
     // ReachabilityResult, ReachabilityOptions, CitationResult, FiredRule,
-    // RuleSet, Verdict, Fetcher, RawResponse, RungId) are erased at compile
-    // time and never appear in Object.keys, so they are not - and cannot be
-    // - part of this list.
+    // RuleSet, Verdict, Fetcher, RawResponse, RungId, FetcherOptions,
+    // ClaimProblem, RunTally, FailOn) are erased at compile time and never
+    // appear in Object.keys, so they are not - and cannot be - part of this
+    // list.
     const api = await import("../src/index.js");
     expect(Object.keys(api).sort()).toEqual([
       "THRESHOLDS",
@@ -53,6 +54,21 @@ describe("package surface", () => {
       "reachability",
       "validateClaims",
     ]);
+  });
+
+  it("THRESHOLDS is frozen - `as const` is compile-time only and does not stop a runtime assignment (fix round 1, Important 1)", async () => {
+    const { THRESHOLDS } = await import("../src/index.js");
+    expect(Object.isFrozen(THRESHOLDS)).toBe(true);
+  });
+
+  it("a mutation attempt on THRESHOLDS throws and leaves the value unchanged - the keystone boundary cannot move from outside the package", async () => {
+    const { THRESHOLDS } = await import("../src/index.js");
+    const before = THRESHOLDS.minProseChars;
+    expect(() => {
+      // @ts-expect-error - deliberately violating the readonly type to prove the runtime freeze, not just the compile-time type, holds.
+      THRESHOLDS.minProseChars = 0;
+    }).toThrow(TypeError);
+    expect(THRESHOLDS.minProseChars).toBe(before);
   });
 
   it("VERSION agrees with package.json - src/version.ts is the source, this test is the join", async () => {

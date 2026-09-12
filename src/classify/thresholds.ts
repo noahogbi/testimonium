@@ -27,8 +27,16 @@
  * NOT swept against anything - each one's own docstring says so, and says what
  * evidence there is instead. Do not read this file as though every entry
  * carried the floor's evidence base.
+ *
+ * Frozen (Object.freeze) below, not just typed `as const`: `as const` is a
+ * compile-time annotation only and does nothing at runtime, so without the
+ * freeze an importer of this now-public export could reassign a property -
+ * e.g. `THRESHOLDS.minProseChars = 0` - and move the keystone accusation
+ * boundary for every consumer sharing this module instance in the process,
+ * not just their own calls. The freeze makes that assignment throw instead
+ * (ES modules are always strict).
  */
-export const THRESHOLDS = {
+export const THRESHOLDS = Object.freeze({
   /** Extracted prose characters below which we have not read a document.
    *  Measured 2026-09 against the 35-fixture corpus (25 challenge, 10
    *  document; excludes the known-gap row - re-run scripts/calibrate.mjs to
@@ -204,7 +212,7 @@ export const THRESHOLDS = {
    *  and 3's job (cross-source recurrence, and the author's boilerplate
    *  rules); it is not a filter on what this rule counted. */
   harvestSeedChars: 21,
-} as const;
+} as const);
 
 /** P2's input. Extracted prose length - NOT a text-to-markup ratio, which
  *  measurement showed discriminates in the wrong direction: modern real pages
