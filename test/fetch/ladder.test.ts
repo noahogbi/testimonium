@@ -45,4 +45,24 @@ describe("nextAction", () => {
   it("never retries a rung it has already attempted", () => {
     expect(nextAction([unread, { ...unread, rung: "curl" }], ALL, false)).toEqual({ kind: "stop" });
   });
+
+  it("climbs past a readable read only when told to exhaust the ladder", () => {
+    const history = [{ rung: "node" as const, readable: true }];
+    const rungs = ["node", "curl"] as const;
+    expect(nextAction(history, rungs, false)).toEqual({ kind: "stop" });
+    expect(nextAction(history, rungs, false, true)).toEqual({ kind: "try", rung: "curl" });
+  });
+
+  it("stops when exhausted even under the flag", () => {
+    const history = [
+      { rung: "node" as const, readable: true },
+      { rung: "curl" as const, readable: true },
+    ];
+    expect(nextAction(history, ["node", "curl"] as const, false, true)).toEqual({ kind: "stop" });
+  });
+
+  it("never escalates a PDF, flag or not", () => {
+    const history = [{ rung: "pdftotext" as const, readable: true }];
+    expect(nextAction(history, ["pdftotext"] as const, true, true)).toEqual({ kind: "stop" });
+  });
 });

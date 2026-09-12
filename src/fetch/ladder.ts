@@ -36,6 +36,7 @@ export function nextAction(
   history: readonly Attempt[],
   available: readonly RungId[],
   isPdfUrl: boolean,
+  exhaustive = false,
 ): Action {
   if (isPdfUrl) {
     if (history.length > 0) return { kind: "stop" };
@@ -45,8 +46,13 @@ export function nextAction(
   // Climb unless the last read was readable. A read vetoed by N4 or N5 alone -
   // a 404 over a full page of chrome, a PDF served as bytes - keeps climbing:
   // the next rung may hold the document, and the cost of asking is one fetch.
+  //
+  // `exhaustive` suspends only this early stop. check() sets it when the
+  // verdict would be `unsupported` and a rung is untried, so the ladder looks
+  // once more before this package accuses an author (spec 0.2.0 section 4).
+  // The flag carries no claim: the climb decision stays `{rung, readable}`.
   const last = history[history.length - 1];
-  if (last?.readable) return { kind: "stop" };
+  if (!exhaustive && last?.readable) return { kind: "stop" };
 
   const tried = new Set(history.map((a) => a.rung));
   const next = HTML_ORDER.find((r) => available.includes(r) && !tried.has(r));
