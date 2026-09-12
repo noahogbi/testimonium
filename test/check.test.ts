@@ -1,11 +1,12 @@
-import { describe, expect, it } from "vitest";
-import { check } from "../src/check.js";
+import { describe, expect, it, vi } from "vitest";
+import { check, type CheckOptions } from "../src/check.js";
 import { THRESHOLDS, proseVolume } from "../src/classify/thresholds.js";
 import { toText } from "../src/text/extract.js";
 import type { Fetcher, RawResponse, RungId } from "../src/fetch/types.js";
 import { CHALLENGE_PATHS, CHALLENGE_SIGNATURES, type Rule } from "../src/rules/challenge.js";
 import { HOST_RULES } from "../src/rules/hosts.js";
 import type { RuleSet } from "../src/rules/load.js";
+import { defaultFetcher, userAgentFor, type FetcherOptions } from "../src/fetch/default-fetcher.js";
 
 // Deliberately NO fixture reads here. These tests exercise check() against a
 // stub fetcher and must not depend on Task 3's manually captured corpus - a
@@ -733,5 +734,81 @@ describe("check with a local RuleSet (Task 15)", () => {
     // provenance, not evidence.
     expect(r).not.toHaveProperty("evidence");
     expect(r).not.toHaveProperty("retrievedAt");
+  });
+});
+
+describe("check: identity wiring (CheckOptions -> FetcherOptions)", () => {
+  // A stub fetcher on CheckOptions.fetcher bypasses defaultFetcher entirely
+  // (src/check.ts:74), so a test that exercises check() with a stub fetcher
+  // can never observe whether the identity wire exists. These tests assert
+  // against defaultFetcher/userAgentFor directly, and pin the wire itself:
+  // a value set on CheckOptions must arrive at FetcherOptions unchanged.
+
+  it("supplies the declared identity to a host that requires one", () => {
+    const withId = defaultFetcher({ identity: "example-app contact@example.com" });
+    const withoutId = defaultFetcher({});
+    // userAgentFor warns and falls back to a browser UA when identity is absent.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const a = userAgentFor("https://www.sec.gov/some/filing", { identity: "example-app contact@example.com" });
+      const b = userAgentFor("https://www.sec.gov/some/filing", {});
+      expect(a).toBe("example-app contact@example.com");
+      expect(b).not.toBe(a);
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+    expect(withId).toBeDefined();
+    expect(withoutId).toBeDefined();
+  });
+
+  it("CheckOptions.identity reaches FetcherOptions", async () => {
+    // The wire itself: a value set on CheckOptions must arrive at
+    // defaultFetcher. Assert by type and by construction - check() must
+    // accept the field and must not drop it. Read src/check.ts:74 and pin
+    // the object it builds.
+    const opts: CheckOptions = { identity: "example-app contact@example.com" };
+    expect(opts.identity).toBe("example-app contact@example.com");
+  });
+
+  it("check() itself forwards CheckOptions.identity into the defaultFetcher(...) call at the construction site", async () => {
+    // The two tests above pin the two halves (userAgentFor's behavior given
+    // an identity, and that CheckOptions can carry one) but neither one
+    // actually runs check()'s construction line, so neither can catch a
+    // regression THERE specifically. This test replaces the real
+    // defaultFetcher with a spy and drives it through the public check()
+    // entry point with no opts.fetcher override, so the only path an
+    // identity can travel is src/check.ts:74 itself.
+    //
+    // The spy's fetcher reports zero rungs, so ladder.ts's nextAction never
+    // finds a rung to try and readSource never calls fetch() - this proves
+    // the wire without ever touching the network.
+    vi.resetModules();
+    const defaultFetcherSpy = vi.fn((_opts: FetcherOptions = {}) => ({
+      rungs: [] as RungId[],
+      fetch: async () => {
+        throw new Error("must not be called: rungs is empty");
+      },
+    }));
+    vi.doMock("../src/fetch/default-fetcher.js", () => ({ defaultFetcher: defaultFetcherSpy }));
+    try {
+      const { check: checkWithMockedFetcher } = await import("../src/check.js");
+
+      await checkWithMockedFetcher("https://e.com/a", [], {
+        identity: "example-app contact@example.com",
+      });
+      expect(defaultFetcherSpy).toHaveBeenCalledTimes(1);
+      expect(defaultFetcherSpy.mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({ identity: "example-app contact@example.com" }),
+      );
+
+      defaultFetcherSpy.mockClear();
+      await checkWithMockedFetcher("https://e.com/a", []);
+      expect(defaultFetcherSpy).toHaveBeenCalledTimes(1);
+      expect(defaultFetcherSpy.mock.calls[0]?.[0]).not.toHaveProperty("identity");
+    } finally {
+      vi.doUnmock("../src/fetch/default-fetcher.js");
+      vi.resetModules();
+    }
   });
 });

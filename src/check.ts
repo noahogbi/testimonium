@@ -19,6 +19,13 @@ export interface CheckOptions {
    *  the bundled snapshot only - the same behavior as before this option
    *  existed. */
   readonly rules?: RuleSet;
+  /** Declared identity for hosts that require one, e.g. sec.gov's
+   *  "<app> <contact email>". testimonium ships no identity of its own, and
+   *  before 0.2.0 this option existed on FetcherOptions but was reachable from
+   *  nowhere: check() never passed it, so every such citation took the
+   *  warn-and-use-a-browser-UA branch. Spec 11.4 said this moved to
+   *  configuration; this is the wire. */
+  readonly identity?: string;
 }
 
 // NOTE: there is deliberately no `failOn` here. check() returns ONE result and
@@ -71,7 +78,12 @@ export async function check(
   // The local `rules.hosts` must reach the default fetcher's UA/identity
   // logic - a local host rule that loads and validates but is never consulted
   // is the same silent-no-op failure that signatures/paths had (Critical 1).
-  const fetcher = opts.fetcher ?? defaultFetcher(opts.rules ? { hosts: opts.rules.hosts } : {});
+  const fetcher =
+    opts.fetcher ??
+    defaultFetcher({
+      ...(opts.rules ? { hosts: opts.rules.hosts } : {}),
+      ...(opts.identity ? { identity: opts.identity } : {}),
+    });
   // THE ONE LADDER (spec 6.6). Every rung's read comes back, in order, with
   // its rung attached - the rung is carried WITH the signals, not read off the
   // end of the history, because taking the last attempted rung mis-attributes
