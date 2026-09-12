@@ -19,38 +19,7 @@ import { writeArchive } from "./archive/store.js";
 import { defaultFetcher, type FetcherOptions } from "./fetch/default-fetcher.js";
 import { pdftotextVersion } from "./fetch/pdf.js";
 import type { Fetcher } from "./fetch/types.js";
-
-export interface RunTally {
-  readonly unsupported: number;
-  readonly unclaimed: number;
-  readonly unreachable: number;
-  readonly orphaned: number;
-  readonly infrastructure: boolean;
-}
-
-export interface FailOn {
-  readonly unreachable?: boolean;
-  readonly unclaimed?: boolean;
-  readonly orphanedClaims?: boolean;
-}
-
-/**
- * Exit 0 clean, 1 author-fixable defect, 2 infrastructure failure.
- *
- * An unclaimed citation fails by default: a gate that passes when nothing was
- * actually checked is the whole design's named top risk. `unreachable` does not
- * fail by default - it is an availability fact about us, not a credibility fact
- * about the claim - but a caller may opt in.
- */
-export function classifyRun(t: RunTally, failOn: FailOn): 0 | 1 | 2 {
-  if (t.infrastructure) return 2;
-  const fail =
-    t.unsupported > 0 ||
-    (t.unclaimed > 0 && failOn.unclaimed !== false) ||
-    (t.unreachable > 0 && failOn.unreachable === true) ||
-    (t.orphaned > 0 && failOn.orphanedClaims === true);
-  return fail ? 1 : 0;
-}
+import { classifyRun, type RunTally, type FailOn } from "./run/classify.js";
 
 export interface RecheckTally {
   readonly sourceDrift: number;
