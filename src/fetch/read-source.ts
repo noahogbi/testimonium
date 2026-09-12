@@ -36,16 +36,20 @@ export interface SourceReads {
  * on different predicates - three vetoes in one, five in the other - so the
  * preflight climbed past a 404 that ended the gate's ladder. No test noticed.
  *
- * This module is deliberately NOT exported from src/index.ts (spec 5.3). It
- * returns raw reads, and a caller holding raw reads can assemble a verdict
- * check() never issued. The public surface stays check() and reachability().
+ * Shared by readSource and continueReading (Task 8): both mutate the same
+ * three arrays and differ only in what they start from and whether
+ * `exhaustive` is set, so the loop itself lives once, here.
  */
-export async function readSource(url: string, claims: readonly string[], opts: ReadSourceOptions): Promise<SourceReads> {
-  const pdfUrl = isPdf(url);
-  const history: Attempt[] = [];
-  const attempted: RungId[] = [];
-  const reads: Read[] = [];
-
+async function climb(
+  url: string,
+  claims: readonly string[],
+  opts: ReadSourceOptions,
+  pdfUrl: boolean,
+  history: Attempt[],
+  attempted: RungId[],
+  reads: Read[],
+  exhaustive: boolean,
+): Promise<void> {
   // One shape, one place. Both the ladder's own rung and the PDF re-route
   // below feed a RawResponse through the identical seven fields; a field
   // added to that input later needs updating here once, not in two call
@@ -62,7 +66,7 @@ export async function readSource(url: string, claims: readonly string[], opts: R
     });
 
   for (;;) {
-    const action = nextAction(history, opts.fetcher.rungs, pdfUrl);
+    const action = nextAction(history, opts.fetcher.rungs, pdfUrl, exhaustive);
     if (action.kind === "stop") break;
 
     // A Fetcher must not throw - see the contract on the interface. The three
@@ -112,8 +116,47 @@ export async function readSource(url: string, claims: readonly string[], opts: R
 
     history.push({ rung: action.rung, readable: isReadable(computed.signals) });
   }
+}
+
+/**
+ * This module is deliberately NOT exported from src/index.ts (spec 5.3). It
+ * returns raw reads, and a caller holding raw reads can assemble a verdict
+ * check() never issued. The public surface stays check() and reachability().
+ */
+export async function readSource(url: string, claims: readonly string[], opts: ReadSourceOptions): Promise<SourceReads> {
+  const pdfUrl = isPdf(url);
+  const history: Attempt[] = [];
+  const attempted: RungId[] = [];
+  const reads: Read[] = [];
+
+  await climb(url, claims, opts, pdfUrl, history, attempted, reads, false);
 
   return { reads, attempted, pdfUrl };
+}
+
+/**
+ * Resume a ladder that stopped at a readable read, because check() is about to
+ * accuse and a rung is untried (spec 0.2.0 section 4). The prior reads are
+ * carried forward, so the rung already fetched is not fetched again.
+ *
+ * `history` is rebuilt from `prior.reads` rather than stored on SourceReads:
+ * `readable` is `isReadable(computed.signals)`, which is exactly what the
+ * original loop pushed.
+ */
+export async function continueReading(
+  url: string,
+  claims: readonly string[],
+  opts: ReadSourceOptions,
+  prior: SourceReads,
+): Promise<SourceReads> {
+  const history: Attempt[] = prior.reads.map((r) => ({
+    rung: r.rung,
+    readable: isReadable(r.computed.signals),
+  }));
+  const attempted: RungId[] = [...prior.attempted];
+  const reads: Read[] = [...prior.reads];
+  await climb(url, claims, opts, prior.pdfUrl, history, attempted, reads, true);
+  return { reads, attempted, pdfUrl: prior.pdfUrl };
 }
 
 /**

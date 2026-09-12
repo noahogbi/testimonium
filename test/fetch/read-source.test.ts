@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { bestReadable, readSource, type Read } from "../../src/fetch/read-source.js";
+import { bestReadable, continueReading, readSource, type Read } from "../../src/fetch/read-source.js";
 import { computeSignals } from "../../src/classify/signals.js";
 import type { Fetcher, RawResponse, RungId } from "../../src/fetch/types.js";
 
@@ -21,6 +21,14 @@ const SENTENCE = "The committee report states that spending rose sharply. ";
 const LONG_PROSE = `<html><title>The Committee Report</title><body>${SENTENCE.repeat(120)}</body></html>`;
 const SMALLER_PROSE = `<html><title>The Committee Report</title><body>${SENTENCE.repeat(90)}</body></html>`;
 const WALL = "<html><body>Verifying you are human.</body></html>";
+// Two more bodies, each well past the 4,500-char floor, for the
+// continueReading test below: a first (node) read must be readable on its
+// own so the ladder would otherwise stop there, and a second (curl) read
+// must also be readable so resuming has somewhere to land.
+const SHELL_SENTENCE = "The shell document repeats placeholder text for length only. ";
+const DOC_SENTENCE = "The full document repeats placeholder text for length only. ";
+const LONG_SHELL = `<html><title>Shell Document</title><body>${SHELL_SENTENCE.repeat(120)}</body></html>`;
+const LONG_DOCUMENT = `<html><title>Full Document</title><body>${DOC_SENTENCE.repeat(120)}</body></html>`;
 
 describe("readSource", () => {
   it("returns every rung's read in the order attempted, vetoed reads included", async () => {
@@ -177,6 +185,29 @@ describe("readSource", () => {
       },
     });
     expect(reads[0]!.computed.finalUrl).toBe("https://e.com/elsewhere");
+  });
+
+  it("resumes the ladder without re-fetching the rung already read", async () => {
+    const calls: string[] = [];
+    const fetcher: Fetcher = {
+      rungs: ["node", "curl"],
+      async fetch(_url, rung) {
+        calls.push(rung);
+        return {
+          rawBody: rung === "curl" ? LONG_DOCUMENT : LONG_SHELL,
+          headers: {},
+          finalUrl: _url,
+          status: 200,
+          bytes: 0,
+        };
+      },
+    };
+    const first = await readSource("https://example.com/a", ["a claim not in the shell"], { fetcher });
+    expect(calls).toEqual(["node"]);
+    const second = await continueReading("https://example.com/a", ["a claim not in the shell"], { fetcher }, first);
+    expect(calls).toEqual(["node", "curl"]);
+    expect(second.reads).toHaveLength(2);
+    expect(second.attempted).toEqual(["node", "curl"]);
   });
 });
 
