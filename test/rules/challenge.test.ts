@@ -59,6 +59,15 @@ describe("challenge paths", () => {
   it("ignores an ordinary article path", () => {
     expect(matchesChallengePath("https://example.com/2026/09/an-article")).toBeNull();
   });
+
+  it("vetoes a consent-wall redirect but not a page about consent", () => {
+    // Must still be vetoed - the redirect the rule was written for.
+    expect(matchesChallengePath("https://consent.youtube.com/m?continue=x")).not.toBeNull();
+    expect(matchesChallengePath("https://consent.google.com/ml?continue=x")).not.toBeNull();
+    // Must NOT be vetoed - a document whose subject is consent.
+    expect(matchesChallengePath("https://www.autoriteitpersoonsgegevens.nl/en/themes/consent")).toBeNull();
+    expect(matchesChallengePath("https://ico.org.uk/for-organisations/guide/consent/")).toBeNull();
+  });
 });
 
 describe("host rules", () => {
