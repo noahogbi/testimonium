@@ -61,7 +61,9 @@ describe("check", () => {
     });
     expect(r.verdict).toBe("unsupported");
     expect(r.missed).toEqual(["no such phrase appears here"]);
-    expect(r).not.toHaveProperty("evidence");
+    // 0.2.0: an unsupported result now keeps the passage that DID match, so an
+    // author fixing the miss can see what already landed.
+    expect(r.evidence?.[0]?.claims).toEqual(["spending rose sharply"]);
   });
 
   it("falls through to curl when the node rung is challenged", async () => {
@@ -470,7 +472,8 @@ describe("check", () => {
     expect(r.rungsAttempted).toEqual(["node", "curl"]);
     expect(r.verdict).toBe("unsupported");
     expect(r.missed).toEqual(["revenue fell in the fourth quarter"]);
-    expect(r).not.toHaveProperty("evidence");
+    // 0.2.0: the claim that DID match is still carried as evidence.
+    expect(r.evidence?.[0]?.claims).toEqual(["spending rose sharply"]);
   });
 
   it("a readable read outranks a LARGER vetoed one, and names what it did not carry (rule 2)", async () => {
@@ -502,9 +505,9 @@ describe("check", () => {
     expect(r.rungsAttempted).toEqual(["node", "curl"]);
     expect(r.verdict).toBe("unsupported");
     expect(r.missed).toEqual(["no such phrase appears here"]);
-    // An unsupported result carries no evidence (io/evidence.ts): the miss
-    // list is the whole report.
-    expect(r).not.toHaveProperty("evidence");
+    // 0.2.0 (io/evidence.ts): an unsupported result now keeps the passage
+    // that DID match, alongside the miss list.
+    expect(r.evidence?.[0]?.claims).toEqual(["spending rose sharply"]);
     // At 6546176 the wall won and its Cloudflare path rule rode along as
     // provenance; the readable read fired no rule, so none is reported.
     expect(r).not.toHaveProperty("firedRule");
@@ -651,10 +654,11 @@ describe("N3 through the cross-read union (spec 6.3; plan 1.2 ledger R13)", () =
     expect(r.verdict).toBe("unsupported");
     expect(r.missed).toEqual([A]);
     // The wall leaves no trace on the result it caused: `won` is the readable
-    // read, which fired no rule, and an unsupported result carries no
-    // renderable field at all (spec 7.4).
+    // read, which fired no rule. 0.2.0 (amends spec 7.4): an unsupported
+    // result now carries evidence for the claim that DID match (B), even
+    // though A is the one named as missed.
     expect(r).not.toHaveProperty("firedRule");
-    expect(r).not.toHaveProperty("evidence");
+    expect(r.evidence?.[0]?.claims).toEqual([B]);
   });
 
   it("the same body without the signature phrase is supported, from the same two responses", async () => {

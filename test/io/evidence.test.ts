@@ -23,12 +23,43 @@ describe("buildResult", () => {
     for (const k of RENDERABLE) expect(r).not.toHaveProperty(k);
   });
 
-  it("strips renderable fields on unsupported too", () => {
-    // An accusation is not a render surface either. The author sees the misses
-    // in CLI output; a reader sees nothing.
+  it("carries evidence and retrievedAt on unsupported too, for the claims that DID match", () => {
+    // 0.2.0: an accusation is a render surface after all, for the passages
+    // that landed. The author still sees `missed` in CLI output; a reader now
+    // also sees the excerpts that were not the problem.
     const r = buildResult({ ...BASE, verdict: "unsupported", missed: ["q"] });
-    for (const k of RENDERABLE) expect(r).not.toHaveProperty(k);
+    expect(r.evidence?.[0]?.excerpt).toBe("the passage");
+    expect(typeof r.retrievedAt).toBe("string");
     expect(r.missed).toEqual(["q"]);
+  });
+
+  it("keeps the passages a partially-supported footnote did prove", () => {
+    const r = buildResult({
+      url: "https://example.com/a",
+      verdict: "unsupported",
+      evidence: [{ claims: ["the first claim that matched"], excerpt: "...matched...", rung: "node" }],
+      missed: ["a claim that did not match"],
+      rungsAttempted: ["node"],
+      rungsAvailable: ["node", "curl"],
+      isPdfUrl: false,
+    });
+    expect(r.missed).toEqual(["a claim that did not match"]);
+    expect(r.evidence).toHaveLength(1);
+    expect(r.retrievedAt).toBeTypeOf("string");
+  });
+
+  it("leaves an unreachable result bare - we did not read the page", () => {
+    const r = buildResult({
+      url: "https://example.com/b",
+      verdict: "unreachable",
+      evidence: [{ claims: ["x"], excerpt: "y", rung: "node" }],
+      missed: [],
+      rungsAttempted: ["node"],
+      rungsAvailable: ["node", "curl"],
+      isPdfUrl: false,
+    });
+    expect(r.evidence).toBeUndefined();
+    expect(r.retrievedAt).toBeUndefined();
   });
 
   it.each(["supported", "unreachable", "unclaimed"] as const)(

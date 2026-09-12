@@ -996,6 +996,14 @@ to match, which is the clause this sentence promised.
 `retrievedAt`. The render half of the keystone rule becomes structural rather
 than promised.
 
+**Amended 2026-09-12, testimonium 0.2.0 section 2.** The clause above is now
+false of `unsupported`: it carries `evidence` and `retrievedAt` for the claims
+that DID match, so an author fixing four-of-five claims does not lose the one
+passage that already landed. `unreachable` is unaffected and stays exactly as
+stated above - bare, because we did not read the page and there is nothing
+honest to render. The keystone rule this section names is unchanged; only
+`unsupported`'s render surface widens.
+
 This generalizes a deliberate omission the origin gate already makes on its
 unreachable write path (`citation-check.mjs`, the unreachable branch, which
 withholds evidence and `retrieved_at` precisely so a merge cannot leave a reader
@@ -2131,6 +2139,7 @@ Recorded so they are not relitigated without new information.
 | Host rules are dated, additive-only, locally overridable data | 7.2 |
 | Claims key by URL, with declared join semantics | 7.3 |
 | Non-`supported` results carry no renderable fields | 7.4 |
+| **Amended 2026-09-12, testimonium 0.2.0 section 2:** `unsupported` now carries `evidence` and `retrievedAt` for the claims that DID match; `unreachable` stays bare - we did not read the page, so there is nothing honest to render | 7.4 |
 | v1 commands: `check`, `harvest`, `recheck`, `reachability` | 8 |
 | Three implementation plans, not one; archive belongs to plan 3 | 8.1 |
 | `recheck` exits 1 only on `L = unsupported` with `A = supported`; the "the arms differ" table is withdrawn | 8.3 |
