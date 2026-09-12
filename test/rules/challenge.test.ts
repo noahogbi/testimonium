@@ -37,6 +37,18 @@ describe("challenge signatures", () => {
       expect(r.note.length).toBeGreaterThan(0);
     }
   });
+
+  it("matches the JavaScript-disabled shells the bundled set missed", () => {
+    const cases = [
+      "JavaScript is disabled in your browser.",
+      "Please enable JavaScript and then reload this page.",
+      "You need to enable JavaScript to run this app.",
+      "Please turn JavaScript on and reload the page.",
+    ];
+    for (const text of cases) {
+      expect(matchesChallengeSignature(text), text).not.toBeNull();
+    }
+  });
 });
 
 describe("challenge paths", () => {

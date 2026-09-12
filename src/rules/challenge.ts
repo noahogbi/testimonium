@@ -73,6 +73,10 @@ export const CHALLENGE_SIGNATURES: readonly Rule[] = [
     note: "Imperva/Incapsula." },
   { pattern: /vercel security checkpoint/, lastConfirmed: "2026-09-06",
     note: "Vercel firewall checkpoint." },
+  { pattern: /javascript is disabled/, lastConfirmed: "2026-09-11", note: "Generic JS-disabled shell." },
+  { pattern: /enable javascript and then reload/, lastConfirmed: "2026-09-11", note: "JS-disabled shell with a reload instruction." },
+  { pattern: /enable javascript to run this app/, lastConfirmed: "2026-09-11", note: "Stock React/Vite noscript shell - the JS-shell-at-200 class." },
+  { pattern: /please turn javascript on/, lastConfirmed: "2026-09-11", note: "JS-disabled shell, imperative phrasing." },
 ];
 
 /** Redirect targets that mean a challenge, not a document. Data, not a
