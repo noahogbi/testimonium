@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nextAction, type Attempt } from "../../src/fetch/ladder.js";
+import { hasUntriedClimbableRung, nextAction, type Attempt } from "../../src/fetch/ladder.js";
 
 const ALL = ["node", "curl", "pdftotext"] as const;
 // The ladder sees one bit per attempt: did that rung read the document
@@ -64,5 +64,25 @@ describe("nextAction", () => {
   it("never escalates a PDF, flag or not", () => {
     const history = [{ rung: "pdftotext" as const, readable: true }];
     expect(nextAction(history, ["pdftotext"] as const, true, true)).toEqual({ kind: "stop" });
+  });
+});
+
+describe("hasUntriedClimbableRung", () => {
+  // Fix round 2, Task 9: this predicate used to be a second copy of "which
+  // rungs are climbable", reimplemented inline in check.ts. That copy's wrong
+  // form (counting ANY rung the fetcher offers, `pdftotext` included, as
+  // untried) turned out to be unobservable through check() end to end -
+  // nextAction above already restricts its own candidates to HTML_ORDER, so
+  // the wrong form cost one no-op call and nothing else (see
+  // task-9-report.md's fix-round-1 section for the mutation proof). Moving
+  // the question here, against the one HTML_ORDER this module owns, is what
+  // makes the wrong form directly observable as a boolean - the first
+  // assertion below is exactly that boolean, and fix-round-2 in
+  // task-9-report.md pastes the mutation that reddens it.
+  it("does not count a rung the HTML ladder would never climb to", () => {
+    // Both HTML rungs tried, pdftotext available but never climbable from HTML.
+    expect(hasUntriedClimbableRung(["node", "curl"], ["node", "curl", "pdftotext"], false)).toBe(false);
+    expect(hasUntriedClimbableRung(["node"], ["node", "curl"], false)).toBe(true);
+    expect(hasUntriedClimbableRung([], ["pdftotext"], true)).toBe(false);
   });
 });

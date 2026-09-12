@@ -1,13 +1,12 @@
 import { isBlocked, verdict, type Verdict } from "./classify/verdict.js";
 import { defaultFetcher } from "./fetch/default-fetcher.js";
-import { HTML_ORDER } from "./fetch/ladder.js";
+import { hasUntriedClimbableRung } from "./fetch/ladder.js";
 import {
   bestReadable,
   continueReading,
   readSource,
   type Read,
   type ReadSourceOptions,
-  type SourceReads,
 } from "./fetch/read-source.js";
 import type { Fetcher } from "./fetch/types.js";
 import { dedupeEvidence, excerptFor, type Evidence } from "./text/excerpt.js";
@@ -138,25 +137,6 @@ function assemble(
 }
 
 /**
- * Whether the ladder still has an HTML rung this fetcher offers but has not
- * tried. A PDF URL's ladder is one rung, `pdftotext`, picked by URL shape
- * before any fetch (fetch/ladder.ts) - there is never a second rung to climb
- * to, so this is unconditionally `false` for one.
- *
- * Intersected with `HTML_ORDER` DELIBERATELY: `source.attempted` can contain
- * `pdftotext` too (the HTML-rung-served-a-PDF re-route in read-source.ts), and
- * no HTML ladder ever tries it as a fallback rung. Counting it here would make
- * this `true` on every `unsupported` verdict on any machine with poppler
- * installed, `continueReading` would fetch nothing new because there is
- * nothing left for it to try, and the escalation this task adds would run
- * with zero effect while looking, from its return value, like it had climbed.
- */
-function hasUntriedRung(source: SourceReads, fetcher: Fetcher): boolean {
-  if (source.pdfUrl) return false;
-  return HTML_ORDER.some((r) => fetcher.rungs.includes(r) && !source.attempted.includes(r));
-}
-
-/**
  * THE FRONT DOOR. It owns the verdict.
  *
  * There is deliberately no fetch-level public entry point that returns text and
@@ -245,7 +225,7 @@ export async function check(
   // This fires on EVERY unsupported with a rung untried, which includes the
   // ordinary healthy-page case, not just a shell. That cost is accepted; the
   // origin retried on every miss too.
-  if (a.v === "unsupported" && hasUntriedRung(source, fetcher)) {
+  if (a.v === "unsupported" && hasUntriedClimbableRung(source.attempted, fetcher.rungs, source.pdfUrl)) {
     const more = await continueReading(url, claims, readOpts, source);
     reads = more.reads;
     attempted = more.attempted;

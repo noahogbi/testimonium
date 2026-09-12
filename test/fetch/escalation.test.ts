@@ -114,20 +114,27 @@ describe("escalate before accusing", () => {
     expect(calls).toEqual(["node", "curl"]);
   });
 
-  // --- Fix round 1: hasUntriedRung's HTML_ORDER intersection ---------------
+  // --- Fix round 1: documenting the HTML_ORDER-intersection contract -------
   //
-  // Neither test below can be observed through the VERDICT: both were
-  // designed, per fix-round review, to catch the mistake `check.ts:131-137`
-  // warns about (counting `pdftotext` - or any rung outside HTML_ORDER - as
-  // "untried"). The assertion has to be on FETCH COUNT instead. See
-  // task-9-report.md's fix-round-1 section for the mutation proof: applying
-  // exactly that mistake (`fetcher.rungs.some((r) => !source.attempted
-  // .includes(r))` in place of the HTML_ORDER-intersected form) leaves BOTH
-  // tests green, and the report explains why in full. They are pinned anyway
-  // as a contract: if a future change to `nextAction` or the PDF guard ever
-  // makes the mistake observable, one of these two catches it.
+  // NEITHER TEST BELOW IS A GUARD. Both were written, per fix-round-1
+  // review, to catch check()'s own copy of "which rungs are climbable"
+  // counting `pdftotext` (or any rung outside HTML_ORDER) as untried. Fix
+  // round 1's mutation proof showed BOTH stay green under exactly that
+  // mistake - see task-9-report.md's fix-round-1 section for the full
+  // reasoning - because `nextAction` (fetch/ladder.ts) already restricts its
+  // own candidates to HTML_ORDER regardless of what this predicate answers,
+  // so the wrong form costs one no-op call and nothing a fetch-count
+  // assertion can see. Fix round 2 moved the predicate itself to
+  // `hasUntriedClimbableRung` in fetch/ladder.ts, where the same mistake IS
+  // directly observable as a boolean - that is the real guard, pinned in
+  // `test/fetch/ladder.test.ts`. The two tests below stay only as
+  // documentation: if a future change to `nextAction` or the PDF guard ever
+  // makes this mistake observable end to end, one of them would catch it.
 
   it("never fetches pdftotext as an HTML fallback, even when the fetcher offers it and it is technically untried", async () => {
+    // Documentation, not a guard - see the block comment above. The real
+    // discriminator for this contract is test/fetch/ladder.test.ts's
+    // "hasUntriedClimbableRung" describe block.
     const calls: string[] = [];
     const fetcher: Fetcher = {
       rungs: ["node", "curl", "pdftotext"],
@@ -144,6 +151,11 @@ describe("escalate before accusing", () => {
   });
 
   it("never escalates a PDF citation, whatever else the fetcher offers", async () => {
+    // Documentation, not a guard - see the block comment above. This one
+    // cannot discriminate the fetch-round-1 mutation even in principle: that
+    // mutation only ever touched the HTML_ORDER-intersection line, never the
+    // `if (isPdfUrl) return false` guard above it, which short-circuits
+    // every PDF URL before the mutated line is reached.
     const calls: string[] = [];
     const fetcher: Fetcher = {
       rungs: ["pdftotext"],
