@@ -51,6 +51,21 @@ export interface CheckOptions {
  * trigger can call it twice - once on the first climb's reads, once more on
  * the reads after one more rung is tried - without duplicating the reduction
  * itself. Logic unchanged from the pre-Task-9 body.
+ *
+ * ONE MORE CONSEQUENCE OF THE SECOND CALL, worth naming because the spec's
+ * "escalation cannot make a verdict worse" argument does not mention it:
+ * `firedRule` can change between the two calls even when `v` does NOT - stays
+ * `unsupported` on both. `won` is free to move to the new, second read (it can
+ * be more readable, or carry more prose) while the verdict itself is
+ * unaffected, and that second read can itself carry a non-null `firedRule`: a
+ * body that matches a bundled challenge signature is vetoed by it only below
+ * `THRESHOLDS.maxChallengeChars` (800 chars) - so a signature-matching body
+ * padded past the 4,500-char floor passes every veto, reads as an ordinary
+ * readable document, and still carries the signature match as reported
+ * provenance. The result stays coherent (provenance always follows the read
+ * the verdict was actually computed from), so this is not a defect - only a
+ * visible field the escalation call can move without moving the verdict that
+ * licenses it.
  */
 function assemble(
   claims: readonly string[],

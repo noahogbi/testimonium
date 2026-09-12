@@ -17,8 +17,36 @@ import type { Fetcher, RawResponse } from "../../src/fetch/types.js";
 // and escalation could never change a verdict on it. shell-node.html is over
 // 4,500 extracted characters of chrome carrying NONE of the claims;
 // document-curl.html carries them.
-
+//
+// Fixture bodies are read ONCE here, at module load, rather than inside each
+// fetcher callback. `climb` (src/fetch/read-source.ts) catches anything a
+// Fetcher throws and degrades it to EMPTY_RESPONSE with a console.warn - so a
+// missing or renamed fixture file, read inside the callback, would not fail
+// loudly as ENOENT. It would surface as `expected 'unsupported' to be
+// 'supported'` plus an easy-to-miss warning, which is a much harder failure
+// to diagnose than a read that throws at collection time.
 const CLAIM = "the regulator imposed a fine of 290 million euros";
+const SHELL_NODE_BODY = readFileSync("fixtures/paired/shell-node.html", "utf8");
+const DOCUMENT_CURL_BODY = readFileSync("fixtures/paired/document-curl.html", "utf8");
+
+/** Sub-floor and claim-free, so the ORDINARY (non-escalated) first climb
+ *  keeps going past this read to the next HTML rung on its own - the
+ *  ladder's existing "climb unless readable" rule (fetch/ladder.ts), nothing
+ *  Task 9 added. Used as `node`'s read in the two fix-round tests below,
+ *  where the point is to reach "both HTML rungs already attempted" WITHOUT
+ *  invoking check()'s escalation trigger, so the trigger's own behavior -
+ *  never a fallback the ordinary ladder would have taken anyway - is what
+ *  is under test. */
+const SUB_FLOOR_NO_CLAIM_BODY = "<html><body><p>A brief procedural note with nothing else to report here today.</p></body></html>";
+
+/** Over the floor, no veto, claim-free. 6,321 extracted characters (measured
+ *  via the real toText, same as the paired fixtures above) - comfortably
+ *  readable, so a rung reading this settles the ladder without needing a
+ *  second look. */
+const LONG_NO_CLAIM_BODY = `<html><title>Administrative Filing</title><body>${"The annual filing describes routine administrative matters with no disputed items at all. ".repeat(70)}</body></html>`;
+
+/** A claim present in neither body above. */
+const MISSING_CLAIM = "the parliamentary committee recommended immediate divestment of the subsidiary";
 
 /** A bare RawResponse from a fixture body, for the tests below that only care
  *  about the bytes each rung returns, not headers or status. */
@@ -31,8 +59,7 @@ describe("escalate before accusing", () => {
     const fetcher: Fetcher = {
       rungs: ["node", "curl"],
       async fetch(_url, rung) {
-        const file = rung === "node" ? "fixtures/paired/shell-node.html" : "fixtures/paired/document-curl.html";
-        const rawBody = readFileSync(file, "utf8");
+        const rawBody = rung === "node" ? SHELL_NODE_BODY : DOCUMENT_CURL_BODY;
         return { rawBody, headers: {}, finalUrl: _url, status: 200, bytes: rawBody.length };
       },
     };
@@ -47,8 +74,7 @@ describe("escalate before accusing", () => {
       rungs: ["node", "curl"],
       async fetch(_url, rung) {
         calls.push(rung);
-        const rawBody = readFileSync("fixtures/paired/document-curl.html", "utf8");
-        return { rawBody, headers: {}, finalUrl: _url, status: 200, bytes: rawBody.length };
+        return { rawBody: DOCUMENT_CURL_BODY, headers: {}, finalUrl: _url, status: 200, bytes: DOCUMENT_CURL_BODY.length };
       },
     };
     const r = await check("https://example.com/a", [CLAIM], { fetcher });
@@ -62,7 +88,7 @@ describe("escalate before accusing", () => {
       rungs: ["node", "curl"],
       async fetch(_url, rung) {
         calls.push(rung);
-        return stub(readFileSync("fixtures/paired/shell-node.html", "utf8"));
+        return stub(SHELL_NODE_BODY);
       },
     };
     await reachability(["https://example.com/a"], { fetcher });
@@ -80,11 +106,54 @@ describe("escalate before accusing", () => {
       rungs: ["node", "curl"],
       async fetch(_url, rung) {
         calls.push(rung);
-        return stub(readFileSync("fixtures/paired/document-curl.html", "utf8"));
+        return stub(DOCUMENT_CURL_BODY);
       },
     };
     const r = await check("https://example.com/a", ["a claim this document does not contain at all"], { fetcher });
     expect(r.verdict).toBe("unsupported");
     expect(calls).toEqual(["node", "curl"]);
+  });
+
+  // --- Fix round 1: hasUntriedRung's HTML_ORDER intersection ---------------
+  //
+  // Neither test below can be observed through the VERDICT: both were
+  // designed, per fix-round review, to catch the mistake `check.ts:131-137`
+  // warns about (counting `pdftotext` - or any rung outside HTML_ORDER - as
+  // "untried"). The assertion has to be on FETCH COUNT instead. See
+  // task-9-report.md's fix-round-1 section for the mutation proof: applying
+  // exactly that mistake (`fetcher.rungs.some((r) => !source.attempted
+  // .includes(r))` in place of the HTML_ORDER-intersected form) leaves BOTH
+  // tests green, and the report explains why in full. They are pinned anyway
+  // as a contract: if a future change to `nextAction` or the PDF guard ever
+  // makes the mistake observable, one of these two catches it.
+
+  it("never fetches pdftotext as an HTML fallback, even when the fetcher offers it and it is technically untried", async () => {
+    const calls: string[] = [];
+    const fetcher: Fetcher = {
+      rungs: ["node", "curl", "pdftotext"],
+      async fetch(_url, rung) {
+        calls.push(rung);
+        const rawBody = rung === "node" ? SUB_FLOOR_NO_CLAIM_BODY : LONG_NO_CLAIM_BODY;
+        return { rawBody, headers: {}, finalUrl: _url, status: 200, bytes: rawBody.length };
+      },
+    };
+    const r = await check("https://example.com/a", [MISSING_CLAIM], { fetcher });
+    expect(r.verdict).toBe("unsupported");
+    expect(calls).toHaveLength(2);
+    expect(calls).not.toContain("pdftotext");
+  });
+
+  it("never escalates a PDF citation, whatever else the fetcher offers", async () => {
+    const calls: string[] = [];
+    const fetcher: Fetcher = {
+      rungs: ["pdftotext"],
+      async fetch(_url, rung) {
+        calls.push(rung);
+        return { rawBody: LONG_NO_CLAIM_BODY, headers: {}, finalUrl: _url, status: 200, bytes: LONG_NO_CLAIM_BODY.length };
+      },
+    };
+    const r = await check("https://example.com/report.pdf", [MISSING_CLAIM], { fetcher });
+    expect(r.verdict).toBe("unsupported");
+    expect(calls).toHaveLength(1);
   });
 });
