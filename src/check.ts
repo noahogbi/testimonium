@@ -184,12 +184,12 @@ export async function check(
   // is the same silent-no-op failure that signatures/paths had (Critical 1).
   // buildFetcher (Task 16) is the ONE construction shared with harvest(),
   // reachability() and recheck()'s live arm - see its own docstring for why
-  // this used to be four hand-copied calls.
-  const fetcher = buildFetcher({
-    ...(opts.fetcher ? { fetcher: opts.fetcher } : {}),
-    ...(opts.rules ? { rules: opts.rules } : {}),
-    ...(opts.identity ? { identity: opts.identity } : {}),
-  });
+  // this used to be four hand-copied calls. `opts` is passed straight
+  // through rather than rebuilt into a fresh object here: `CheckOptions` is a
+  // structural superset of `BuildFetcherOptions` (fix round 1, Important 1) -
+  // rebuilding it field-by-field at this call site is exactly the kind of
+  // second copy that drifts when a field is added to one but not the other.
+  const fetcher = buildFetcher(opts);
   // THE ONE LADDER (spec 6.6). Every rung's read comes back, in order, with
   // its rung attached - the rung is carried WITH the signals, not read off the
   // end of the history, because taking the last attempted rung mis-attributes

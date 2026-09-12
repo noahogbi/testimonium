@@ -99,12 +99,13 @@ export interface HarvestReport {
  */
 export async function harvest(doc: Document, opts: HarvestOptions = {}): Promise<HarvestReport> {
   // buildFetcher (Task 16): the ONE construction shared with check(),
-  // reachability() and recheck()'s live arm - see its own docstring.
-  const fetcher = buildFetcher({
-    ...(opts.fetcher ? { fetcher: opts.fetcher } : {}),
-    ...(opts.rules ? { rules: opts.rules } : {}),
-    ...(opts.identity ? { identity: opts.identity } : {}),
-  });
+  // reachability() and recheck()'s live arm - see its own docstring. `opts`
+  // is passed straight through rather than rebuilt field-by-field (fix round
+  // 1, Important 1): `HarvestOptions` is a structural superset of
+  // `BuildFetcherOptions`, and rebuilding it here would be a second copy of
+  // the forwarding logic that drifts the moment a field is added to one
+  // interface and not mirrored to the other.
+  const fetcher = buildFetcher(opts);
   const scan = await scanSources(doc.footnotes, {
     fetcher,
     ...(opts.rules ? { rules: opts.rules } : {}),

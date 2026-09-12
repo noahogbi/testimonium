@@ -8,6 +8,11 @@ import type { FetcherOptions } from "../src/fetch/default-fetcher.js";
 import type { Fetcher } from "../src/fetch/types.js";
 import type { HostRule } from "../src/rules/hosts.js";
 import type { RuleSet } from "../src/rules/load.js";
+import type { ReachabilityResult, ReachabilityOptions } from "../src/reachability.js";
+import type { HarvestReport, HarvestOptions } from "../src/harvest.js";
+import type { CitationResult } from "../src/io/evidence.js";
+import type { CheckOptions } from "../src/check.js";
+import type { Document } from "../src/adapters/types.js";
 import {
   archiveContextFor,
   archivePathFor,
@@ -121,9 +126,13 @@ describe("the usage string", () => {
     }
   });
 
-  it("names --identity, and --help as an escape hatch", () => {
+  it("names --identity, and both --help and -h as escape hatches (fix round 1, Minor 7)", () => {
+    // -h works exactly as --help does (see the main() describe block below)
+    // but was missing from USAGE until this fix - a usage string is where an
+    // author would look to learn the short form exists at all.
     expect(USAGE).toContain("--identity");
     expect(USAGE).toContain("--help");
+    expect(USAGE).toContain("-h");
   });
 });
 
@@ -587,5 +596,206 @@ describe("main(): --identity value parsing", () => {
         err.mockRestore();
       }
     }),
+  );
+
+  it(
+    "refuses an empty --identity value, the exact silent-no-op the guard exists to catch (fix round 1, Minor 5)",
+    withDoc(async (doc) => {
+      const err = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        const code = await main(["reachability", doc, "--identity", ""]);
+        expect(code).toBe(2);
+        expect(err).toHaveBeenCalledWith(expect.stringContaining("--identity requires a value"));
+      } finally {
+        err.mockRestore();
+      }
+    }),
+  );
+
+  it(
+    "refuses a whitespace-only --identity value too, not just a literally empty one",
+    withDoc(async (doc) => {
+      const err = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        const code = await main(["reachability", doc, "--identity", "   "]);
+        expect(code).toBe(2);
+        expect(err).toHaveBeenCalledWith(expect.stringContaining("--identity requires a value"));
+      } finally {
+        err.mockRestore();
+      }
+    }),
+  );
+});
+
+describe("main(): CLI --identity pass-through to each command (fix round 1, Important 2)", () => {
+  // THE MEASURED GAP: every existing main([...]) test above is a --help
+  // case, a bare-invocation case, or an --identity REFUSAL - all of which
+  // return before any command dispatches. Removing `identity` from bin.ts's
+  // reachability call (:387 at review time), harvest call (:434), or check
+  // call (:633) left `npx tsc --noEmit` clean and all 538 tests green - the
+  // recheck and check archiving paths are compile-enforced by
+  // archiveContextFor's required `identity` parameter, but these three
+  // pass-throughs are plain object-literal spreads with nothing pinning
+  // them. Each test below mocks the command module ONE LEVEL BELOW bin.ts,
+  // dynamic-imports a fresh bin.js so the mock takes effect, and asserts the
+  // options object the command actually received - proving the wire at the
+  // one hop these three lacked, the same way test/check.test.ts's spy on
+  // defaultFetcher proves check()'s own construction site.
+
+  const withDoc = (body: string, fn: (doc: string) => Promise<void> | void) => async () => {
+    const dir = mkdtempSync(join(tmpdir(), "testimonium-cli-identity-"));
+    const doc = join(dir, "essay.md");
+    writeFileSync(doc, body, "utf8");
+    try {
+      await fn(doc);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+
+  it(
+    "reachability: forwards --identity into reachability()'s options",
+    withDoc("No citations here.\n", async (doc) => {
+      vi.resetModules();
+      const spy = vi.fn(
+        async (_urls: readonly string[], _opts: ReachabilityOptions = {}): Promise<ReachabilityResult> => ({
+          readable: [],
+          unreadable: [],
+          rate: 1,
+        }),
+      );
+      vi.doMock("../src/reachability.js", () => ({ reachability: spy }));
+      try {
+        const { main: mainWithMockedReachability } = await import("../src/bin.js");
+        const log = vi.spyOn(console, "log").mockImplementation(() => {});
+        try {
+          const code = await mainWithMockedReachability([
+            "reachability",
+            doc,
+            "--identity",
+            "example-app contact@example.com",
+          ]);
+          expect(code).toBe(0);
+          expect(spy).toHaveBeenCalledTimes(1);
+          expect(spy.mock.calls[0]?.[1]).toEqual(
+            expect.objectContaining({ identity: "example-app contact@example.com" }),
+          );
+
+          spy.mockClear();
+          await mainWithMockedReachability(["reachability", doc]);
+          expect(spy).toHaveBeenCalledTimes(1);
+          expect(spy.mock.calls[0]?.[1]).not.toHaveProperty("identity");
+        } finally {
+          log.mockRestore();
+        }
+      } finally {
+        vi.doUnmock("../src/reachability.js");
+        vi.resetModules();
+      }
+    }),
+  );
+
+  it(
+    "harvest: forwards --identity into harvest()'s options",
+    withDoc("No citations here.\n", async (doc) => {
+      vi.resetModules();
+      const spy = vi.fn(async (_doc: Document, _opts: HarvestOptions = {}): Promise<HarvestReport> => ({
+        proposals: [],
+        unreachable: [],
+        skipped: [],
+        frequencyVacuous: true,
+      }));
+      vi.doMock("../src/harvest.js", () => ({ harvest: spy }));
+      try {
+        const { main: mainWithMockedHarvest } = await import("../src/bin.js");
+        const log = vi.spyOn(console, "log").mockImplementation(() => {});
+        try {
+          // --json: the draft prints to stdout instead of being written to
+          // disk, so this test touches nothing outside the temp doc itself.
+          const code = await mainWithMockedHarvest([
+            "harvest",
+            doc,
+            "--json",
+            "--identity",
+            "example-app contact@example.com",
+          ]);
+          expect(code).toBe(0);
+          expect(spy).toHaveBeenCalledTimes(1);
+          expect(spy.mock.calls[0]?.[1]).toEqual(
+            expect.objectContaining({ identity: "example-app contact@example.com" }),
+          );
+
+          spy.mockClear();
+          await mainWithMockedHarvest(["harvest", doc, "--json"]);
+          expect(spy).toHaveBeenCalledTimes(1);
+          expect(spy.mock.calls[0]?.[1]).not.toHaveProperty("identity");
+        } finally {
+          log.mockRestore();
+        }
+      } finally {
+        vi.doUnmock("../src/harvest.js");
+        vi.resetModules();
+      }
+    }),
+  );
+
+  it(
+    "check: forwards --identity into check()'s options on the --no-archive path",
+    withDoc(
+      "The committee's own filing says spending rose.[^1]\n\n" +
+        "[^1]: Committee Report. https://example.com/report\n",
+      async (doc) => {
+        const claimsPath = join(dirname(doc), "essay.claims.json");
+        writeFileSync(
+          claimsPath,
+          JSON.stringify({ "https://example.com/report": ["the committee's own filing says spending rose"] }),
+          "utf8",
+        );
+        vi.resetModules();
+        const spy = vi.fn(
+          async (_url: string, _claims: readonly string[], _opts: CheckOptions = {}): Promise<CitationResult> => ({
+            url: "https://example.com/report",
+            verdict: "unreachable",
+            rungsAttempted: [],
+            rungsAvailable: [],
+            ladderTruncated: false,
+          }),
+        );
+        vi.doMock("../src/check.js", () => ({ check: spy }));
+        try {
+          const { main: mainWithMockedCheck } = await import("../src/bin.js");
+          const log = vi.spyOn(console, "log").mockImplementation(() => {});
+          try {
+            // --no-archive: check()'s own construction site is what has to
+            // carry `identity` here, not archiveContextFor's (Important 1's
+            // sibling gap, already covered by Minor 6's proof) - this
+            // isolates that one call site exactly as it isolates `fetcher`.
+            const code = await mainWithMockedCheck([
+              "check",
+              doc,
+              "--no-archive",
+              "--allow-unclaimed",
+              "--identity",
+              "example-app contact@example.com",
+            ]);
+            expect(code).toBe(0);
+            expect(spy).toHaveBeenCalledTimes(1);
+            expect(spy.mock.calls[0]?.[2]).toEqual(
+              expect.objectContaining({ identity: "example-app contact@example.com" }),
+            );
+
+            spy.mockClear();
+            await mainWithMockedCheck(["check", doc, "--no-archive", "--allow-unclaimed"]);
+            expect(spy).toHaveBeenCalledTimes(1);
+            expect(spy.mock.calls[0]?.[2]).not.toHaveProperty("identity");
+          } finally {
+            log.mockRestore();
+          }
+        } finally {
+          vi.doUnmock("../src/check.js");
+          vi.resetModules();
+        }
+      },
+    ),
   );
 });

@@ -17,10 +17,15 @@ export interface BuildFetcherOptions {
 
 /**
  * ONE fetcher construction, shared by every entry point that builds a LIVE
- * fetcher: check(), harvest(), reachability(), and recheck()'s live arm
- * (recheck()'s replay arm calls replayFetcher() instead and never reaches
- * this function - it reads archived bytes, and there is no request to
- * attach a UA or an identity to).
+ * fetcher: check(), harvest(), reachability(), and recheck()'s live arm.
+ * recheck()'s REPLAY arm reaches this function too - it calls check() with
+ * `fetcher: replayFetcher(...)` already set, and that flows into a
+ * buildFetcher(opts) call same as any other - but it is returned untouched
+ * by the bring-your-own-fetcher branch below, so no default is built and no
+ * identity or host rule can attach to a read that never leaves disk (fix
+ * round 1, Minor 4 - an earlier version of this comment said replay "never
+ * reaches this function", which was false: the invariant it was protecting
+ * was true, the mechanism named for it was not).
  *
  * UNTIL TASK 16, `recheck.ts` carried this exact comment where its own copy
  * of the construction lived:

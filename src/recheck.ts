@@ -78,15 +78,21 @@ export async function recheck(
   // shared construction this file's own comment used to ask for by name,
   // back when check() was off-limits to the plan that could have written it.
   // It no longer is, so there is one construction instead of four and no
-  // comment warning about a second copy drifting from the first. Replay
-  // below is untouched: it reads archived bytes via `replayFetcher()` and
-  // never calls buildFetcher, so identity and host rules have nothing to
-  // attach to on a read that never leaves disk.
-  const live = buildFetcher({
-    ...(opts.fetcher ? { fetcher: opts.fetcher } : {}),
-    ...(opts.rules ? { rules: opts.rules } : {}),
-    ...(opts.identity ? { identity: opts.identity } : {}),
-  });
+  // comment warning about a second copy drifting from the first. `opts` is
+  // passed straight through rather than rebuilt field-by-field (fix round 1,
+  // Important 1): `RecheckOptions` is a structural superset of
+  // `BuildFetcherOptions`, and rebuilding it here would be a second copy of
+  // the forwarding logic that drifts the moment a field is added to one
+  // interface and not mirrored to the other.
+  //
+  // Replay below (further down this function) does NOT call buildFetcher
+  // directly: it calls check() with `fetcher: replayFetcher(...)` set, and
+  // check()'s OWN buildFetcher(opts) call sees that pre-built fetcher and
+  // returns it untouched via the bring-your-own-fetcher branch (fix round 1,
+  // Minor 4 - buildFetcher IS reached there; the corrected claim is that no
+  // default is built and no identity or host rule can attach, not that the
+  // function is never called).
+  const live = buildFetcher(opts);
   const archive = readArchive(opts.archiveDir);
   const index = archive.kind === "ok" ? archive.index : null;
   const archiveUnreadable = archive.kind === "unreadable" ? archive.reason : null;

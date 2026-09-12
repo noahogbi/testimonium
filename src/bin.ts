@@ -182,7 +182,7 @@ export const USAGE =
   "[--json] [--rules <path>] [--identity <app contact-email>] " +
   "(check only: [--fail-on-unreachable] [--allow-unclaimed] [--explain-fetch] [--no-archive]) " +
   "(recheck only: [--fail-on-gone]) " +
-  "| testimonium --help";
+  "| testimonium --help|-h";
 
 /**
  * The first `--flag` in argv this build does not recognize, or null when
@@ -313,13 +313,21 @@ export function archiveContextFor(
 // filesystem nor the network, which is what makes exporting main() itself
 // (rather than yet another extracted pure function) the direct way to pin it.
 export async function main(argv: string[]): Promise<number> {
-  // Checked before validateFlags, deliberately: `--help` is not in
-  // KNOWN_FLAGS's normal sense (it reaches no command), so validating flags
-  // first would reject it as unknown before this branch ever ran. Matched
-  // anywhere in argv, not just first position, so `check doc.md --help`
-  // asks for help exactly as bare `--help` does. `-h` is a single dash and
-  // validateFlags never inspects those (see its own characterization test),
-  // so it needs no KNOWN_FLAGS entry - only this direct check.
+  // Checked before validateFlags AND before the `!command || !doc` branch
+  // below, deliberately (fix round 1, Important 3 - an earlier version of
+  // this comment said `--help` "is not in KNOWN_FLAGS's normal sense", which
+  // was false: `--help` IS a KNOWN_FLAGS entry, so validateFlags alone would
+  // never reject it). The real reason for checking here, first: ordering.
+  // `check doc.md --bogus --help` must still print help rather than
+  // "unknown flag --bogus", and bare `--help` (no command, no doc) must
+  // print help rather than fall into the missing-doc branch two checks below
+  // - which is exactly where it would land if this ran after argv were
+  // destructured into `[command, doc]`, since `--help` has no doc to its
+  // right. Matched anywhere in argv, not just first position, so
+  // `check doc.md --help` asks for help exactly as bare `--help` does. `-h`
+  // is a single dash and validateFlags never inspects those (see its own
+  // characterization test), so it needs no KNOWN_FLAGS entry - only this
+  // direct check.
   if (argv.includes("--help") || argv.includes("-h")) {
     console.log(USAGE);
     return 0;
@@ -375,9 +383,24 @@ export async function main(argv: string[]): Promise<number> {
   // task exists to close (Ruling T5-R1). Unlike --rules, an absent identity
   // is not itself refused anywhere below: the fetcher warns per-host and
   // falls back to a browser UA (userAgentFor) rather than failing the run.
+  //
+  // `identity.trim() === ""` is refused for the SAME reason (fix round 1,
+  // Minor 5). Without it, `--identity ""` passed the checks above (it is not
+  // `undefined` and does not start with "--") and exited 0 having configured
+  // nothing: every downstream spread is `identity ? { identity } : {}`,
+  // falsy for "", so it was dropped silently one layer down - the CLI
+  // reported success for a flag that did exactly what omitting it does. This
+  // guard also refuses a whitespace-only value ("--identity ' '"), which
+  // would otherwise be TRUTHY and survive every downstream spread including
+  // userAgentFor's own `if (!opts.identity)` check, arriving as a garbage UA
+  // string rather than being dropped - a second, worse silent failure this
+  // one check closes at no extra cost.
   const identityIdx = argv.indexOf("--identity");
   const identity = identityIdx !== -1 ? argv[identityIdx + 1] : undefined;
-  if (identityIdx !== -1 && (identity === undefined || identity.startsWith("--"))) {
+  if (
+    identityIdx !== -1 &&
+    (identity === undefined || identity.startsWith("--") || identity.trim() === "")
+  ) {
     console.error('--identity requires a value ("<app> <contact email>")');
     return 2;
   }

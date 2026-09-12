@@ -40,12 +40,13 @@ export async function reachability(
   opts: ReachabilityOptions = {},
 ): Promise<ReachabilityResult> {
   // buildFetcher (Task 16): the ONE construction shared with check(),
-  // harvest() and recheck()'s live arm - see its own docstring.
-  const fetcher = buildFetcher({
-    ...(opts.fetcher ? { fetcher: opts.fetcher } : {}),
-    ...(opts.rules ? { rules: opts.rules } : {}),
-    ...(opts.identity ? { identity: opts.identity } : {}),
-  });
+  // harvest() and recheck()'s live arm - see its own docstring. `opts` is
+  // passed straight through rather than rebuilt field-by-field (fix round 1,
+  // Important 1): `ReachabilityOptions` is a structural superset of
+  // `BuildFetcherOptions`, and rebuilding it here would be a second copy of
+  // the forwarding logic that drifts the moment a field is added to one
+  // interface and not mirrored to the other.
+  const fetcher = buildFetcher(opts);
   const readable: ReachabilityResult["readable"][number][] = [];
   const unreadable: ReachabilityResult["unreadable"][number][] = [];
 
