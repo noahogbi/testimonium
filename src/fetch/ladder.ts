@@ -21,8 +21,14 @@ export type Action = { kind: "try"; rung: RungId } | { kind: "stop" };
  *  unvetoed sub-floor read, readable read] would assemble a cross-read
  *  union into `supported` where 6546176 answered `unreachable` - a verdict
  *  move no spec section licenses. Adding a rung requires spec 6.6 to say
- *  what rule 2 does at three reads. */
-const HTML_ORDER: readonly RungId[] = ["node", "curl"];
+ *  what rule 2 does at three reads.
+ *
+ *  Exported so check()'s escalation trigger (spec 0.2.0 section 4) can ask
+ *  "is there an HTML rung this fetcher offers that we have not tried yet"
+ *  without restating this list - a second copy is exactly how a caller could
+ *  count `pdftotext`, which no HTML ladder ever tries, and fire on every
+ *  machine with poppler installed. */
+export const HTML_ORDER: readonly RungId[] = ["node", "curl"];
 
 /**
  * Pure ladder policy. Attempt history in, next action out.
