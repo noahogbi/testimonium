@@ -1,0 +1,114 @@
+name: Publish to npm
+
+# Trusted publishing (OIDC), the same shape urtext uses. No token exists
+# anywhere - not in a repository secret, not on a maintainer's disk. npm
+# verifies this workflow's identity directly, so there is nothing to leak,
+# rotate, or forget to revoke.
+#
+# The tag filter is `v*.*.*` rather than `v*`. This package is not a GitHub
+# Action and publishes no moving major tag today, but two dots is what
+# separates a release version from an interface tag, and the narrower filter
+# costs nothing while leaving room for one later.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  # An escape hatch for a publish that failed after its tag was pushed. Safe
+  # to leave open: npm refuses a version it already has, so the worst a stray
+  # run can do is fail.
+  workflow_dispatch:
+
+permissions:
+  id-token: write # OIDC - this is what authenticates the publish
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Node 24 for its npm. Trusted publishing needs npm 11.5.1 or later and
+      # staging needs 11.15.0; the guard below enforces the higher floor. This
+      # version answers the registry's requirement and is unrelated to the
+      # `engines` floor (>=20) this package supports for consumers.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - run: npm ci
+
+      # A tag says which version it is; package.json decides what actually
+      # publishes. When they disagree the tag is a lie, and npm would publish
+      # the package.json version under it without complaint.
+      - name: Refuse a tag that disagrees with package.json
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          tagged="${GITHUB_REF_NAME#v}"
+          declared="$(node -p "require('./package.json').version")"
+          if [ "$tagged" != "$declared" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME claims version $tagged, but package.json declares $declared. Nothing published."
+            exit 1
+          fi
+          echo "Tag and package.json agree on $declared."
+
+      # src/version.ts is the source of truth for the VERSION export and
+      # test/exports.test.ts pins it equal to package.json. That test would
+      # catch a mismatch, but failing here names the problem directly.
+      - name: Refuse a VERSION export that disagrees with package.json
+        run: |
+          declared="$(node -p "require('./package.json').version")"
+          exported="$(node -p "require('fs').readFileSync('src/version.ts','utf8').match(/\"([0-9][^\"]*)\"/)[1]")"
+          if [ "$exported" != "$declared" ]; then
+            echo "::error::src/version.ts exports $exported, package.json declares $declared. Nothing published."
+            exit 1
+          fi
+          echo "VERSION and package.json agree on $declared."
+
+      # The gates this project runs before every commit, run again before the
+      # one action that cannot be undone. A published version is permanent; a
+      # red check here costs nothing. `prepublishOnly` runs typecheck and the
+      # suite again at publish time - the duplication is deliberate, because
+      # this job should fail before it reaches the registry, not during.
+      - run: npx tsc --noEmit
+      - run: npm test
+      - run: npm run build
+
+      # What ships must be only the built artifact. fixtures/, docs/, test/,
+      # src/ and scripts/ are all excluded by `files: ["dist"]`, and this
+      # asserts it rather than trusting it - fixtures/paired/ was added by
+      # 0.2.0 and a `files` regression would ship a corpus.
+      - name: Refuse a tarball carrying anything but dist
+        run: |
+          listing="$(npm pack --dry-run 2>&1)"
+          if printf '%s' "$listing" | grep -qE 'fixtures/|docs/|test/|src/|scripts/'; then
+            echo "::error::npm pack would ship files outside dist/. Nothing published."
+            printf '%s\n' "$listing"
+            exit 1
+          fi
+          rm -f ./*.tgz
+          echo "Tarball carries dist/ and package metadata only."
+
+      # Staging needs npm 11.15.0 or later, above the 11.5.1 that trusted
+      # publishing alone requires. This guard exists because the obvious
+      # future edit is lowering node-version to match the `engines` floor,
+      # which would quietly ship an npm too old and fail far less legibly.
+      - name: Refuse an npm too old to stage
+        run: |
+          need=11.15.0
+          have="$(npm --version)"
+          if [ "$(printf '%s\n%s\n' "$need" "$have" | sort -V | head -n 1)" != "$need" ]; then
+            echo "::error::npm $have cannot stage a publish; 11.15.0 or later is required. Raise node-version."
+            exit 1
+          fi
+          echo "npm $have can stage."
+
+      # `npm stage publish`, not `npm publish`. The trusted publisher on
+      # npmjs.com grants this workflow permission to STAGE a release, not to
+      # put one live: publishing is the only irreversible step here, so a
+      # human approves it with 2FA after seeing what was built. A direct
+      # publish from this job is refused by the registry, which is it
+      # enforcing the same rule this repository would.
+      - run: npm stage publish
