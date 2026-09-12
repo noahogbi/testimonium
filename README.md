@@ -75,9 +75,13 @@ the phrase, fix the citation, or mark the footnote `{"notApplicable":
 "<reason>"}` if it deliberately rests on something other than the cited
 outlet.
 
-Global flags: `--json`, `--rules <path>`. `check` additionally takes
-`--allow-unclaimed`, `--fail-on-unreachable`, `--explain-fetch` and
-`--no-archive`, and `recheck` takes `--fail-on-gone`; none of the five is
+Global flags: `--json`, `--rules <path>`, `--identity <app contact-email>`
+(declares a UA for hosts that require one, e.g. sec.gov's "`<app> <contact
+email>`" - omit it and such a host gets a warning and a browser UA, which it
+will likely refuse), and `--help`/`-h` (prints this usage and exits 0 from
+any position in argv). `check` additionally takes `--allow-unclaimed`,
+`--fail-on-unreachable`, `--explain-fetch` and `--no-archive`, and `recheck`
+takes `--fail-on-gone`; none of the five is
 **global** - but the flag validator does not know that. It is
 command-agnostic, so `harvest essay.md --fail-on-unreachable` and
 `reachability essay.md --explain-fetch` are accepted and then silently

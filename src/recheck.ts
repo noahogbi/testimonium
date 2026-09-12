@@ -5,7 +5,7 @@ import { replayFetcher } from "./archive/replay.js";
 import { readArchive, readBlob } from "./archive/store.js";
 import { check } from "./check.js";
 import type { Verdict } from "./classify/verdict.js";
-import { defaultFetcher } from "./fetch/default-fetcher.js";
+import { buildFetcher } from "./fetch/build-fetcher.js";
 import type { Fetcher } from "./fetch/types.js";
 import type { CitationResult } from "./io/evidence.js";
 import type { RuleSet } from "./rules/load.js";
@@ -24,6 +24,15 @@ export interface RecheckOptions {
   /** The LIVE fetcher, BEFORE recording - this function wraps it itself.
    *  Bring your own reader, exactly as CheckOptions does. */
   readonly fetcher?: Fetcher;
+  /** Declared identity for hosts that require one, e.g. sec.gov's
+   *  "<app> <contact email>". testimonium ships no identity of its own, and
+   *  before Task 16 this option existed on FetcherOptions but was reachable
+   *  from nowhere: recheck() never passed it, so every such citation took
+   *  the warn-and-use-a-browser-UA branch. Matches CheckOptions.identity.
+   *  Feeds only the LIVE fetcher built below - the replay arm reads archived
+   *  bytes via `replayFetcher()` and never sends a request, so there is
+   *  nothing for an identity to attach to on that side. */
+  readonly identity?: string;
   readonly localRulesHash?: string | null;
   readonly pdftotextVersion?: string | null;
   readonly toolVersion?: string;
@@ -65,13 +74,19 @@ export async function recheck(
   citations: readonly RecheckCitation[],
   opts: RecheckOptions,
 ): Promise<RecheckReport> {
-  // PAIRED WITH check.ts:74's identical `defaultFetcher(opts.rules ? { hosts:
-  // opts.rules.hosts } : {})` call. check() is off-limits to this plan, so
-  // this is a second copy of the host-rule wiring rather than a shared
-  // helper - an edit to one call that is not mirrored in the other silently
-  // drops local host rules from whichever side got missed (Critical 1's
-  // failure shape: a rule that loads and validates but is never consulted).
-  const live = opts.fetcher ?? defaultFetcher(opts.rules ? { hosts: opts.rules.hosts } : {});
+  // THE LIVE FETCHER, built through fetch/build-fetcher.ts (Task 16) - the
+  // shared construction this file's own comment used to ask for by name,
+  // back when check() was off-limits to the plan that could have written it.
+  // It no longer is, so there is one construction instead of four and no
+  // comment warning about a second copy drifting from the first. Replay
+  // below is untouched: it reads archived bytes via `replayFetcher()` and
+  // never calls buildFetcher, so identity and host rules have nothing to
+  // attach to on a read that never leaves disk.
+  const live = buildFetcher({
+    ...(opts.fetcher ? { fetcher: opts.fetcher } : {}),
+    ...(opts.rules ? { rules: opts.rules } : {}),
+    ...(opts.identity ? { identity: opts.identity } : {}),
+  });
   const archive = readArchive(opts.archiveDir);
   const index = archive.kind === "ok" ? archive.index : null;
   const archiveUnreadable = archive.kind === "unreadable" ? archive.reason : null;

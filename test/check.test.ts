@@ -742,11 +742,13 @@ describe("check with a local RuleSet (Task 15)", () => {
 });
 
 describe("check: identity wiring (CheckOptions -> FetcherOptions)", () => {
-  // A stub fetcher on CheckOptions.fetcher bypasses defaultFetcher entirely
-  // (src/check.ts:74), so a test that exercises check() with a stub fetcher
-  // can never observe whether the identity wire exists. These tests assert
-  // against defaultFetcher/userAgentFor directly, and pin the wire itself:
-  // a value set on CheckOptions must arrive at FetcherOptions unchanged.
+  // A stub fetcher on CheckOptions.fetcher bypasses buildFetcher's
+  // defaultFetcher branch entirely (src/fetch/build-fetcher.ts - shared with
+  // harvest(), reachability() and recheck()'s live arm since Task 16), so a
+  // test that exercises check() with a stub fetcher can never observe
+  // whether the identity wire exists. These tests assert against
+  // defaultFetcher/userAgentFor directly, and pin the wire itself: a value
+  // set on CheckOptions must arrive at FetcherOptions unchanged.
 
   it("supplies the declared identity to a host that requires one", () => {
     const withId = defaultFetcher({ identity: "example-app contact@example.com" });
@@ -769,8 +771,8 @@ describe("check: identity wiring (CheckOptions -> FetcherOptions)", () => {
   it("CheckOptions.identity reaches FetcherOptions", async () => {
     // The wire itself: a value set on CheckOptions must arrive at
     // defaultFetcher. Assert by type and by construction - check() must
-    // accept the field and must not drop it. Read src/check.ts:74 and pin
-    // the object it builds.
+    // accept the field and must not drop it. Read check()'s buildFetcher(...)
+    // call (src/check.ts) and pin the object it forwards.
     const opts: CheckOptions = { identity: "example-app contact@example.com" };
     expect(opts.identity).toBe("example-app contact@example.com");
   });
@@ -782,7 +784,9 @@ describe("check: identity wiring (CheckOptions -> FetcherOptions)", () => {
     // regression THERE specifically. This test replaces the real
     // defaultFetcher with a spy and drives it through the public check()
     // entry point with no opts.fetcher override, so the only path an
-    // identity can travel is src/check.ts:74 itself.
+    // identity can travel is check()'s call into buildFetcher
+    // (src/fetch/build-fetcher.ts), which is what actually calls
+    // defaultFetcher.
     //
     // The spy's fetcher reports zero rungs, so ladder.ts's nextAction never
     // finds a rung to try and readSource never calls fetch() - this proves

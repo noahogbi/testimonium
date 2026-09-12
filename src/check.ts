@@ -1,5 +1,5 @@
 import { isBlocked, verdict, type Verdict } from "./classify/verdict.js";
-import { defaultFetcher } from "./fetch/default-fetcher.js";
+import { buildFetcher } from "./fetch/build-fetcher.js";
 import { hasUntriedClimbableRung } from "./fetch/ladder.js";
 import {
   bestReadable,
@@ -182,12 +182,14 @@ export async function check(
   // The local `rules.hosts` must reach the default fetcher's UA/identity
   // logic - a local host rule that loads and validates but is never consulted
   // is the same silent-no-op failure that signatures/paths had (Critical 1).
-  const fetcher =
-    opts.fetcher ??
-    defaultFetcher({
-      ...(opts.rules ? { hosts: opts.rules.hosts } : {}),
-      ...(opts.identity ? { identity: opts.identity } : {}),
-    });
+  // buildFetcher (Task 16) is the ONE construction shared with harvest(),
+  // reachability() and recheck()'s live arm - see its own docstring for why
+  // this used to be four hand-copied calls.
+  const fetcher = buildFetcher({
+    ...(opts.fetcher ? { fetcher: opts.fetcher } : {}),
+    ...(opts.rules ? { rules: opts.rules } : {}),
+    ...(opts.identity ? { identity: opts.identity } : {}),
+  });
   // THE ONE LADDER (spec 6.6). Every rung's read comes back, in order, with
   // its rung attached - the rung is carried WITH the signals, not read off the
   // end of the history, because taking the last attempted rung mis-attributes

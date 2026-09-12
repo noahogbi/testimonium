@@ -9,6 +9,7 @@ import { archiveIndexPath, writeArchive } from "../src/archive/store.js";
 import { VERSION } from "../src/version.js";
 import type { Fetcher, RawResponse, RungId } from "../src/fetch/types.js";
 import type { RuleSet } from "../src/rules/load.js";
+import type { FetcherOptions } from "../src/fetch/default-fetcher.js";
 
 const CLAIM = "spending rose sharply";
 const body = (sentence: string) =>
@@ -261,5 +262,44 @@ describe("recheck", () => {
     // The one assertion a leak would break: a status leaked from citation one
     // would make this "gone" instead.
     expect(r.outcomes[1]?.category).toBe("unreachable");
+  });
+});
+
+describe("recheck: identity wiring (RecheckOptions -> FetcherOptions, live arm only)", () => {
+  // Task 16's fourth and final wire proof - the twin of test/check.test.ts's
+  // "check() itself forwards CheckOptions.identity" test, against recheck()
+  // instead. An empty citation list still builds the LIVE fetcher
+  // (buildFetcher runs before the per-citation loop), so this never touches
+  // the network and never reaches replayFetcher() - proving the live arm's
+  // wire without the replay arm's absence of one confounding the result.
+  it("forwards RecheckOptions.identity into the defaultFetcher(...) call for the live fetcher, and omits it when absent", async () => {
+    vi.resetModules();
+    const defaultFetcherSpy = vi.fn((_opts: FetcherOptions = {}) => ({
+      rungs: [] as RungId[],
+      fetch: async () => {
+        throw new Error("must not be called: rungs is empty");
+      },
+    }));
+    vi.doMock("../src/fetch/default-fetcher.js", () => ({ defaultFetcher: defaultFetcherSpy }));
+    try {
+      const { recheck: recheckWithMockedFetcher } = await import("../src/recheck.js");
+
+      await recheckWithMockedFetcher([], {
+        archiveDir: tmpArchive(),
+        identity: "example-app contact@example.com",
+      });
+      expect(defaultFetcherSpy).toHaveBeenCalledTimes(1);
+      expect(defaultFetcherSpy.mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({ identity: "example-app contact@example.com" }),
+      );
+
+      defaultFetcherSpy.mockClear();
+      await recheckWithMockedFetcher([], { archiveDir: tmpArchive() });
+      expect(defaultFetcherSpy).toHaveBeenCalledTimes(1);
+      expect(defaultFetcherSpy.mock.calls[0]?.[0]).not.toHaveProperty("identity");
+    } finally {
+      vi.doUnmock("../src/fetch/default-fetcher.js");
+      vi.resetModules();
+    }
   });
 });

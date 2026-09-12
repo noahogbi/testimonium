@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
@@ -18,6 +18,7 @@ import {
   evidencePathFor,
   harvestSummaryLine,
   jsonOutcome,
+  main,
   renderOutcome,
   USAGE,
   validateFlags,
@@ -119,6 +120,25 @@ describe("the usage string", () => {
       expect(USAGE, command).toContain(command);
     }
   });
+
+  it("names --identity, and --help as an escape hatch", () => {
+    expect(USAGE).toContain("--identity");
+    expect(USAGE).toContain("--help");
+  });
+});
+
+describe("validateFlags and identity", () => {
+  it("accepts --identity <value> on every command", () => {
+    // Task 16: identity is global, like --rules and --json - not
+    // command-scoped like --fail-on-unreachable or --fail-on-gone.
+    for (const command of ["check", "harvest", "recheck", "reachability"]) {
+      expect(validateFlags([command, "doc.md", "--identity", "example-app contact@example.com"])).toBeNull();
+    }
+  });
+
+  it("accepts --help without a value, alongside every other known flag", () => {
+    expect(validateFlags(["check", "doc.md", "--help"])).toBeNull();
+  });
 });
 
 describe("validateFlags and harvest", () => {
@@ -191,7 +211,7 @@ describe("archiveContextFor", () => {
     // a --rules file that loads, validates and is never consulted. The
     // mutation this catches: `make({})`.
     let seen: FetcherOptions | undefined;
-    const ctx = archiveContextFor(rules([RULE]), undefined, {
+    const ctx = archiveContextFor(rules([RULE]), undefined, undefined, {
       make: (o) => { seen = o; return fetcher(["node"]); },
       version: () => null,
     });
@@ -202,9 +222,33 @@ describe("archiveContextFor", () => {
     expect(seen?.hosts).toEqual([RULE]);
   });
 
+  it("passes a declared --identity into the fetcher it builds, and omits the key when absent (Task 16)", () => {
+    // Twin of the host-rules test above, for the same reason: `check`'s
+    // command hands THIS function's fetcher to `check()` whenever archiving
+    // is on (the default), and `recheck`'s command always does - so an
+    // `identity` that stops here never reaches a citation at all on either
+    // command, regardless of what `check()`/`recheck()`'s own options carry.
+    let seen: FetcherOptions | undefined;
+    const withId = archiveContextFor(rules(), undefined, "example-app contact@example.com", {
+      make: (o) => { seen = o; return fetcher(["node"]); },
+      version: () => null,
+    });
+    expect(withId).not.toBeNull();
+    expect(seen).toBeDefined();
+    expect(seen?.identity).toBe("example-app contact@example.com");
+
+    seen = undefined;
+    archiveContextFor(rules(), undefined, undefined, {
+      make: (o) => { seen = o; return fetcher(["node"]); },
+      version: () => null,
+    });
+    expect(seen).toBeDefined();
+    expect(seen).not.toHaveProperty("identity");
+  });
+
   it("probes the pdftotext version only when the fetcher advertises that rung", () => {
     let probes = 0;
-    const withRung = archiveContextFor(rules(), undefined, {
+    const withRung = archiveContextFor(rules(), undefined, undefined, {
       make: () => fetcher(["node", "curl", "pdftotext"]),
       version: () => { probes++; return "pdftotext version 4.00"; },
     });
@@ -214,7 +258,7 @@ describe("archiveContextFor", () => {
 
   it("does not spawn a probe on a machine whose ladder has no pdftotext rung", () => {
     let probes = 0;
-    const withoutRung = archiveContextFor(rules(), undefined, {
+    const withoutRung = archiveContextFor(rules(), undefined, undefined, {
       make: () => fetcher(["node"]),
       version: () => { probes++; return "should not be reached"; },
     });
@@ -225,13 +269,13 @@ describe("archiveContextFor", () => {
   it("hashes the --rules file's bytes when one was passed", () => {
     const f = join(mkdtempSync(join(tmpdir(), "testimonium-rules-")), "local.json");
     writeFileSync(f, '{"signatures":[]}', "utf8");
-    const ctx = archiveContextFor(rules(), f, { make: () => fetcher(["node"]), version: () => null });
+    const ctx = archiveContextFor(rules(), f, undefined, { make: () => fetcher(["node"]), version: () => null });
     expect(ctx?.localRulesHash).toBe(sha256Hex(readFileSync(f)));
     rmSync(dirname(f), { recursive: true, force: true });
   });
 
   it("records null, not a hash, when no --rules file was passed", () => {
-    const ctx = archiveContextFor(rules(), undefined, { make: () => fetcher(["node"]), version: () => null });
+    const ctx = archiveContextFor(rules(), undefined, undefined, { make: () => fetcher(["node"]), version: () => null });
     expect(ctx?.localRulesHash).toBeNull();
   });
 
@@ -240,7 +284,7 @@ describe("archiveContextFor", () => {
     // baseline that mis-reports the local-rules confound forever. Archiving
     // must never fail a run, so the answer is to skip archiving, not to throw
     // and not to guess.
-    const ctx = archiveContextFor(rules(), "no/such/rules.json", { make: () => fetcher(["node"]), version: () => null });
+    const ctx = archiveContextFor(rules(), "no/such/rules.json", undefined, { make: () => fetcher(["node"]), version: () => null });
     expect(ctx).toBeNull();
   });
 });
@@ -428,4 +472,120 @@ describe("archiveUnreadableNotice", () => {
     expect(lines).toContain("doc.archive/index.json is not valid JSON");
     expect(lines).toContain("not because check was never run");
   });
+});
+
+describe("main(): --help and -h (Ruling T11-R1)", () => {
+  // THE MEASURED BUG, pinned by exit code rather than by printed text: before
+  // this task, `node dist/bin.js --help` printed "unknown flag --help" and
+  // exited 2 - the most-typed flag on a published CLI erroring on first
+  // contact. A usage string printed with exit 2 looks IDENTICAL to one
+  // printed with exit 0 in a terminal, so a test that only checked what was
+  // printed would still pass on the broken behaviour; `0` versus `2` is the
+  // whole point, so every case here asserts the numeric return value.
+  //
+  // Neither branch touches the filesystem or the network - it returns before
+  // argv is even destructured into a command and a document - which is what
+  // makes driving the exported main() directly (rather than spawning
+  // dist/bin.js, which the rest of this CLI's tests deliberately avoid; see
+  // test/library-parity.test.ts's docstring) both safe and hermetic here.
+  it("--help prints the usage string and exits 0", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const code = await main(["--help"]);
+      expect(code).toBe(0);
+      expect(log).toHaveBeenCalledWith(USAGE);
+      expect(err).not.toHaveBeenCalled();
+    } finally {
+      log.mockRestore();
+      err.mockRestore();
+    }
+  });
+
+  it("-h prints the usage string and exits 0, exactly as --help does", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const code = await main(["-h"]);
+      expect(code).toBe(0);
+      expect(log).toHaveBeenCalledWith(USAGE);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it("--help anywhere in argv still wins, ahead of validateFlags and the command dispatch", () => {
+    return (async () => {
+      const log = vi.spyOn(console, "log").mockImplementation(() => {});
+      try {
+        // Neither "check" nor "no/such/doc.md" is ever reached: if they were,
+        // this would try to read a file that does not exist and reject
+        // instead of resolving, which is itself evidence the short-circuit
+        // failed to fire before the document read.
+        const code = await main(["check", "no/such/doc.md", "--help"]);
+        expect(code).toBe(0);
+        expect(log).toHaveBeenCalledWith(USAGE);
+      } finally {
+        log.mockRestore();
+      }
+    })();
+  });
+
+  it("CHARACTERIZATION: bare invocation (no arguments) still exits 2, unlike --help - it is a usage ERROR, not a request for help", async () => {
+    // Distinguishes the fix from "any time USAGE is printed, exit 0": a run
+    // missing its required <command> <doc.md> is still author-fixable-by-
+    // reading-the-usage-string, but it is not what the user ASKED for, so it
+    // keeps failing the naive `set -e` gate exactly as before this task.
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const code = await main([]);
+      expect(code).toBe(2);
+      expect(err).toHaveBeenCalledWith(USAGE);
+    } finally {
+      err.mockRestore();
+    }
+  });
+});
+
+describe("main(): --identity value parsing", () => {
+  const withDoc = (fn: (doc: string) => Promise<void> | void) => async () => {
+    const dir = mkdtempSync(join(tmpdir(), "testimonium-identity-"));
+    const doc = join(dir, "essay.md");
+    // No footnotes: this test only needs main() to reach the --identity
+    // parsing block, which runs after the document is read and before any
+    // command dispatches, fetches, or writes.
+    writeFileSync(doc, "No citations here.\n", "utf8");
+    try {
+      await fn(doc);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+
+  it(
+    "refuses a trailing --identity with no value, the same silent-no-op guard --rules has",
+    withDoc(async (doc) => {
+      const err = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        const code = await main(["reachability", doc, "--identity"]);
+        expect(code).toBe(2);
+        expect(err).toHaveBeenCalledWith(expect.stringContaining("--identity requires a value"));
+      } finally {
+        err.mockRestore();
+      }
+    }),
+  );
+
+  it(
+    "refuses --identity immediately followed by another flag, rather than swallowing it as the value",
+    withDoc(async (doc) => {
+      const err = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        const code = await main(["reachability", doc, "--identity", "--json"]);
+        expect(code).toBe(2);
+        expect(err).toHaveBeenCalledWith(expect.stringContaining("--identity requires a value"));
+      } finally {
+        err.mockRestore();
+      }
+    }),
+  );
 });

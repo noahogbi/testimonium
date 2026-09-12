@@ -1,5 +1,5 @@
 import type { Document } from "./adapters/types.js";
-import { defaultFetcher } from "./fetch/default-fetcher.js";
+import { buildFetcher } from "./fetch/build-fetcher.js";
 import type { Fetcher, RungId } from "./fetch/types.js";
 import { applyFilters, type FilterDrops } from "./harvest/filters.js";
 import { commonSpans, dropContained } from "./harvest/spans.js";
@@ -11,6 +11,12 @@ export interface HarvestOptions {
   /** Bring your own reader, exactly as CheckOptions does. */
   readonly fetcher?: Fetcher;
   readonly rules?: RuleSet;
+  /** Declared identity for hosts that require one, e.g. sec.gov's
+   *  "<app> <contact email>". testimonium ships no identity of its own, and
+   *  before Task 16 this option existed on FetcherOptions but was reachable
+   *  from nowhere: harvest() never passed it, so every such citation took
+   *  the warn-and-use-a-browser-UA branch. Matches CheckOptions.identity. */
+  readonly identity?: string;
   /** The existing `<doc>.claims.json`, when the author has one. Absent is
    *  the ordinary case for a document harvest is being run on for the first
    *  time, and is NOT an error. */
@@ -92,7 +98,13 @@ export interface HarvestReport {
  * says so, and her confirmation is what makes a proposal a claim.
  */
 export async function harvest(doc: Document, opts: HarvestOptions = {}): Promise<HarvestReport> {
-  const fetcher = opts.fetcher ?? defaultFetcher(opts.rules ? { hosts: opts.rules.hosts } : {});
+  // buildFetcher (Task 16): the ONE construction shared with check(),
+  // reachability() and recheck()'s live arm - see its own docstring.
+  const fetcher = buildFetcher({
+    ...(opts.fetcher ? { fetcher: opts.fetcher } : {}),
+    ...(opts.rules ? { rules: opts.rules } : {}),
+    ...(opts.identity ? { identity: opts.identity } : {}),
+  });
   const scan = await scanSources(doc.footnotes, {
     fetcher,
     ...(opts.rules ? { rules: opts.rules } : {}),
