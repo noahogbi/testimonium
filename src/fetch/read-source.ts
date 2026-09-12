@@ -75,6 +75,42 @@ export async function readSource(url: string, claims: readonly string[], opts: R
       ...(opts.rules ? { rules: opts.rules } : {}),
     });
     reads.push({ rung: action.rung, computed });
+
+    // A PDF served from a URL with no .pdf extension. The rung was picked from
+    // URL shape before any fetch, so N5 vetoes these bytes as not-text and the
+    // document reads `unreachable`. The HOST has now told us what it is, so
+    // one pdftotext attempt is licensed - the direction that cannot libel HTML
+    // as a PDF. The pick-before-fetch invariant still forbids falling through
+    // to curl on a FAILED PDF fetch; this is the other direction.
+    // Header keys are case-insensitive by contract (src/fetch/types.ts:23-31):
+    // a fetcher "may pass a server's own casing straight through". Reading
+    // headers["content-type"] raw would silently miss `Content-Type` and leave
+    // the document `unreachable` - this task's own defect, recurring by casing.
+    const ctype = Object.entries(response.headers).find(
+      ([k]) => k.toLowerCase() === "content-type",
+    )?.[1];
+    if (
+      !pdfUrl &&
+      isPdf(url, ctype) &&
+      opts.fetcher.rungs.includes("pdftotext") &&
+      !attempted.includes("pdftotext")
+    ) {
+      const pdfRead = await opts.fetcher.fetch(url, "pdftotext");
+      attempted.push("pdftotext");
+      const pdfComputed = computeSignals({
+        rawBody: pdfRead.rawBody,
+        headers: pdfRead.headers,
+        finalUrl: pdfRead.finalUrl || url,
+        status: pdfRead.status,
+        claims,
+        sourceLabel: opts.sourceLabel ?? "",
+        ...(opts.rules ? { rules: opts.rules } : {}),
+      });
+      reads.push({ rung: "pdftotext", computed: pdfComputed });
+      history.push({ rung: "pdftotext", readable: isReadable(pdfComputed.signals) });
+      break;
+    }
+
     history.push({ rung: action.rung, readable: isReadable(computed.signals) });
   }
 

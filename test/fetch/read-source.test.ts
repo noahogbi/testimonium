@@ -93,6 +93,34 @@ describe("readSource", () => {
     expect(r.reads).toEqual([]);
   });
 
+  it("re-routes to the PDF rung when an HTML rung returns application/pdf", async () => {
+    // fixtures/documents/sample.pdf does not exist; the body is built here
+    // instead. The PDF magic prefix followed by C0 control bytes is what
+    // makes this "not text" on its own bytes, independent of the
+    // content-type header also tripping N5's other branch - the point is a
+    // body that is not text arriving with a PDF content-type, same as a real
+    // PDF served without a .pdf URL would.
+    const pdfBody = "%PDF-1.4" + "\u0000\u0000\u0000" + "not-text-stream-data";
+    const extracted = "The quick brown fox jumps over the lazy dog.";
+    const fetcher: Fetcher = {
+      rungs: ["node", "curl", "pdftotext"],
+      async fetch(url, rung) {
+        if (rung === "pdftotext") {
+          return { rawBody: extracted, status: 200, headers: {}, finalUrl: url, bytes: extracted.length };
+        }
+        return {
+          rawBody: pdfBody,
+          status: 200,
+          headers: { "content-type": "application/pdf" },
+          finalUrl: url,
+          bytes: pdfBody.length,
+        };
+      },
+    };
+    const out = await readSource("https://example.com/doc", ["quick brown fox jumps"], { fetcher });
+    expect(out.attempted).toContain("pdftotext");
+  });
+
   it("carries the finalUrl each read was classified under", async () => {
     // RawResponse has always carried it and computeSignals has always
     // received it; nothing could read it back. Harvest needs it to report a
