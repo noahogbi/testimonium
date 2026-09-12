@@ -134,6 +134,43 @@ describe("readSource", () => {
     expect(out.attempted).toEqual(["node", "pdftotext"]);
   });
 
+  it("degrades a throwing fetcher on the PDF re-route's own fetch, warns, and resolves instead of rejecting", async () => {
+    // I1: the re-route call site (climb(), below the ladder's own rung fetch)
+    // used to call opts.fetcher.fetch(url, "pdftotext") unguarded - a
+    // third-party fetcher that throws there rejected the whole climb() call,
+    // and bin.ts turns that rejection into exit 2 for the entire document.
+    // The ladder's own rung fetch a few lines above already has this same
+    // try/catch + console.warn + EMPTY_RESPONSE degradation (see "degrades a
+    // throwing fetcher to an unread rung" above); this pins that the
+    // re-route site now matches it, in wording and in shape.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const pdfBody = "%PDF-1.4" + "\u0000\u0000\u0000" + "not-text-stream-data";
+      const url = "https://example.com/doc";
+      const fetcher: Fetcher = {
+        rungs: ["node", "curl", "pdftotext"],
+        async fetch(_url, rung) {
+          if (rung === "pdftotext") throw new Error("boom on pdftotext");
+          return {
+            rawBody: pdfBody,
+            status: 200,
+            headers: { "content-type": "application/pdf" },
+            finalUrl: _url,
+            bytes: pdfBody.length,
+          };
+        },
+      };
+      const out = await readSource(url, ["quick brown fox jumps"], { fetcher });
+      expect(out.attempted).toEqual(["node", "pdftotext"]);
+      expect(out.reads.map((r) => r.rung)).toEqual(["node", "pdftotext"]);
+      expect(out.reads[1]?.computed.signals.proseChars).toBe(0);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]?.[0])).toContain(`rung "pdftotext" threw for ${url}: boom on pdftotext`);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("re-routes on a capitalised Content-Type header with a parameterised value", async () => {
     // Same shape as the test above, but the header key arrives as the server
     // might actually case it, and the value carries a charset parameter.

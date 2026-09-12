@@ -168,4 +168,40 @@ describe("escalate before accusing", () => {
     expect(r.verdict).toBe("unsupported");
     expect(calls).toHaveLength(1);
   });
+
+  it("I2: never walks through the PDF re-route's break to escalate into curl", async () => {
+    // A GUARD, unlike the two "documentation" tests above: this is the exact
+    // shape fix-round I2 measured broken. The URL is NOT .pdf-shaped, so
+    // `source.pdfUrl` (isPdfUrl) is false - only the re-route (triggered by
+    // node's application/pdf content-type) puts "pdftotext" in `attempted`.
+    // pdftotext's own read is readable and claim-free, so the verdict is
+    // `unsupported` and check()'s escalation trigger (spec 0.2.0 section 4)
+    // fires. Before the fix, `hasUntriedClimbableRung` saw isPdfUrl=false and
+    // "curl" untried in HTML_ORDER and answered true, so `continueReading`
+    // fetched curl anyway - measured as fetch calls
+    // ["node","pdftotext","curl"], the exact rung the re-route's own `break`
+    // (src/fetch/read-source.ts) exists to prevent.
+    const pdfBody = "%PDF-1.4" + "\u0000\u0000\u0000" + "not-text-stream-data";
+    const calls: string[] = [];
+    const fetcher: Fetcher = {
+      rungs: ["node", "curl", "pdftotext"],
+      async fetch(url, rung) {
+        calls.push(rung);
+        if (rung === "pdftotext") {
+          return { rawBody: LONG_NO_CLAIM_BODY, headers: {}, finalUrl: url, status: 200, bytes: LONG_NO_CLAIM_BODY.length };
+        }
+        return {
+          rawBody: pdfBody,
+          headers: { "content-type": "application/pdf" },
+          finalUrl: url,
+          status: 200,
+          bytes: pdfBody.length,
+        };
+      },
+    };
+    const r = await check("https://example.com/doc", [MISSING_CLAIM], { fetcher });
+    expect(calls).toEqual(["node", "pdftotext"]);
+    expect(r.rungsAttempted).toEqual(["node", "pdftotext"]);
+    expect(r.verdict).toBe("unsupported");
+  });
 });

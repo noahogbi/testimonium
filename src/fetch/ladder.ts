@@ -54,7 +54,13 @@ export function hasUntriedClimbableRung(
   available: readonly RungId[],
   isPdfUrl: boolean,
 ): boolean {
-  if (isPdfUrl) return false;
+  // A `pdftotext` attempt in the history - even when `isPdfUrl` is false -
+  // means the PDF re-route fired (src/fetch/read-source.ts): the HOST told us
+  // the body is a PDF, so no HTML rung is climbable, same as a document whose
+  // URL said PDF up front. Without this, check()'s escalation trigger walked
+  // straight through the re-route's own `break` and fetched curl anyway -
+  // the rung the break exists to prevent (fix round, I2).
+  if (isPdfUrl || attempted.includes("pdftotext")) return false;
   return HTML_ORDER.some((r) => available.includes(r) && !attempted.includes(r));
 }
 

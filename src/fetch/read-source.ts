@@ -98,8 +98,15 @@ async function climb(
     // URL shape before any fetch, so N5 vetoes these bytes as not-text and the
     // document reads `unreachable`. The HOST has now told us what it is, so
     // one pdftotext attempt is licensed - the direction that cannot libel HTML
-    // as a PDF. The pick-before-fetch invariant still forbids falling through
-    // to curl on a FAILED PDF fetch; this is the other direction.
+    // as a PDF. Falling through to curl on a FAILED PDF fetch is forbidden by
+    // TWO things now, not one: this loop's own `break` below stops the climb
+    // the instant the re-route is taken, readable or not, and
+    // `hasUntriedClimbableRung` (src/fetch/ladder.ts) refuses to call a rung
+    // climbable once `pdftotext` is in the attempted list, so check()'s
+    // escalation trigger (spec 0.2.0 section 4) cannot walk through the break
+    // either. Before that guard existed this held anyway, but only by
+    // coincidence of N5's veto leaving no readable read and the verdict
+    // landing on `unreachable`, where the trigger never fires - not by design.
     // Header keys are case-insensitive by contract (src/fetch/types.ts:23-31):
     // a fetcher "may pass a server's own casing straight through". Reading
     // headers["content-type"] raw would silently miss `Content-Type` and leave
@@ -113,7 +120,18 @@ async function climb(
       opts.fetcher.rungs.includes("pdftotext") &&
       !attempted.includes("pdftotext")
     ) {
-      const pdfRead = await opts.fetcher.fetch(url, "pdftotext");
+      // Same contract as the ladder's own rung fetch above: a Fetcher must not
+      // throw, but a third-party one that does degrades to an unread rung
+      // rather than aborting the whole check() call for the entire document.
+      let pdfRead: RawResponse;
+      try {
+        pdfRead = await opts.fetcher.fetch(url, "pdftotext");
+      } catch (e) {
+        console.warn(
+          `warn fetcher rung "pdftotext" threw for ${url}: ${e instanceof Error ? e.message : String(e)}`,
+        );
+        pdfRead = EMPTY_RESPONSE;
+      }
       attempted.push("pdftotext");
       const pdfComputed = computeFor(pdfRead);
       reads.push({ rung: "pdftotext", computed: pdfComputed });

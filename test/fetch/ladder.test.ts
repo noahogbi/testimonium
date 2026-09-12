@@ -85,4 +85,19 @@ describe("hasUntriedClimbableRung", () => {
     expect(hasUntriedClimbableRung(["node"], ["node", "curl"], false)).toBe(true);
     expect(hasUntriedClimbableRung([], ["pdftotext"], true)).toBe(false);
   });
+
+  it("I2: refuses to call curl climbable once the PDF re-route has fired, even though isPdfUrl is false", () => {
+    // The re-route (src/fetch/read-source.ts) fires on a URL that did NOT
+    // look like a PDF by shape - isPdfUrl (source.pdfUrl) stays false - so
+    // before this guard, check()'s escalation trigger read attempted =
+    // ["node", "pdftotext"], available = ["node", "curl", "pdftotext"],
+    // isPdfUrl = false, and answered true: "curl" is in HTML_ORDER, in
+    // available, and not in attempted. That is exactly the rung the
+    // re-route's own `break` exists to prevent (measured through check():
+    // fetch calls ["node","pdftotext","curl"]). A `pdftotext` attempt in the
+    // history is the only signal available here that the re-route happened,
+    // since `isPdfUrl` alone cannot distinguish "URL looked like a PDF" from
+    // "the host told us at fetch time" - both must return false.
+    expect(hasUntriedClimbableRung(["node", "pdftotext"], ["node", "curl", "pdftotext"], false)).toBe(false);
+  });
 });

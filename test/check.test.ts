@@ -450,6 +450,36 @@ describe("check", () => {
     expect(r.evidence?.[0]?.rung).toBe("curl");
   });
 
+  it("I1: resolves rather than rejects when the PDF re-route's own fetch throws", async () => {
+    // Measured before the fix: a fetcher that throws on the "pdftotext" rung
+    // during the PDF re-route (src/fetch/read-source.ts's climb(), the
+    // second fetch site) rejected check()'s returned promise outright -
+    // "REJECTED: boom on pdftotext - the whole check() throws" - which
+    // bin.ts turns into exit 2 for the entire document, not just this one
+    // citation. The ladder's own rung fetch already degrades a throwing
+    // fetcher to EMPTY_RESPONSE with a warning; the re-route now matches it.
+    const pdfBody = "%PDF-1.4" + "   " + "not-text-stream-data";
+    const fetcher: Fetcher = {
+      rungs: ["node", "curl", "pdftotext"],
+      async fetch(url, rung) {
+        if (rung === "pdftotext") throw new Error("boom on pdftotext");
+        return {
+          rawBody: pdfBody,
+          status: 200,
+          headers: { "content-type": "application/pdf" },
+          finalUrl: url,
+          bytes: pdfBody.length,
+        };
+      },
+    };
+    // The await itself is the resolves-not-rejects assertion: were check()
+    // still rejecting here, this test would fail with an unhandled rejection
+    // rather than reach the expectations below.
+    const r = await check("https://example.com/doc", ["quick brown fox jumps"], { fetcher });
+    expect(r.rungsAttempted).toEqual(["node", "pdftotext"]);
+    expect(r.verdict).toBe("unreachable");
+  });
+
   it("climbs past a first rung vetoed only by N4 and ACCUSES from the readable second read", async () => {
     // The same escalation, where the readable second read carries only some
     // of the claims. This is the one place Task 2 moves a verdict toward an
