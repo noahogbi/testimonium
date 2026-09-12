@@ -249,7 +249,7 @@ Added to base spec 9 and the README:
 **The goal is stated as a goal, with a known gap named**, because
 `src/classify/signals.ts:167-179` already records the counterexample: a wall
 matching a signature but padded past roughly 4,500 characters is caught by
-neither the signature (`maxChallengeChars` is 800, `thresholds.ts:54`) nor the
+neither the signature (`maxChallengeChars` is 800, `thresholds.ts:62`) nor the
 floor - "a known, accepted gap", with a `known-gap` fixture. Section 4's
 escalation closes it only where the other rung serves the document; a fat wall
 on both rungs still returns `unsupported`. Publishing the absolute form would
