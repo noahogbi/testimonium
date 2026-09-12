@@ -55,11 +55,20 @@ const npmCmd = "npm";
 const gitCmd = "git";
 
 function run(cmd, args, cwd) {
-  // On Windows, npm resolves to npm.cmd - a batch file, which execFileSync
-  // cannot spawn directly (EINVAL) without shell:true. Enabling it only on
-  // win32 keeps the POSIX path exactly as before; every argument here is an
-  // internal path or a fixed flag, never unsanitized input.
-  execFileSync(cmd, args, { cwd, stdio: "inherit", shell: process.platform === "win32" });
+  execFileSync(cmd, args, { cwd, stdio: "inherit" });
+}
+
+/** npm resolves to npm.cmd on Windows - a batch file, which execFileSync
+ *  cannot spawn directly (EINVAL) without shell:true. Scoped to the npm
+ *  invocation alone: `run` above (used for every `git` call too) does NOT set
+ *  shell:true, because with shell:true Node joins argv into one command line
+ *  without quoting it, and a temp path containing a space - mkdtempSync's
+ *  default TMPDIR on a machine with a space in the username, for one - would
+ *  silently corrupt `git worktree add <path> <commit>` into two arguments.
+ *  git.exe has no such spawn problem, so it never needed shell:true and must
+ *  not carry the risk that comes with it. */
+function runNpm(args, cwd) {
+  execFileSync(npmCmd, args, { cwd, stdio: "inherit", shell: process.platform === "win32" });
 }
 
 /** Adds the throwaway worktree at RELEASE_COMMIT and returns
@@ -101,7 +110,7 @@ function addZeroOneZeroWorktree() {
  *  side of the try/finally boundary in main(). */
 function buildZeroOneZero(worktreeDir) {
   console.log('Running npm ci (runs the build via its own "prepare" script) ...');
-  run(npmCmd, ["ci", "--no-audit", "--no-fund"], worktreeDir);
+  runNpm(["ci", "--no-audit", "--no-fund"], worktreeDir);
   return join(worktreeDir, "dist", "index.js");
 }
 
@@ -206,8 +215,8 @@ async function main() {
   try {
     const oldDistIndexPath = providedOldDist ?? buildZeroOneZero(worktree.worktreeDir);
 
-    console.log("Building current HEAD (0.2.0-in-progress) ...");
-    run(npmCmd, ["run", "build"], repoRoot);
+    console.log("Building current HEAD ...");
+    runNpm(["run", "build"], repoRoot);
 
     const oldMod = await import(pathToFileURL(oldDistIndexPath).href);
     const newMod = await import(pathToFileURL(join(repoRoot, "dist", "index.js")).href);
@@ -222,8 +231,8 @@ async function main() {
     }
     console.log(`0.1.0 side confirmed: VERSION = ${oldMod.VERSION} (${oldDistIndexPath})`);
     console.log(
-      `0.2.0 side: current HEAD build (dist/index.js; its VERSION export still reads ` +
-        `${JSON.stringify(newMod.VERSION)} - the bump to 0.2.0 has not landed yet, see the report)`,
+      `0.2.0 side: current HEAD build (dist/index.js; its VERSION export reads ` +
+        `${JSON.stringify(newMod.VERSION)})`,
     );
 
     const corpus = JSON.parse(readFileSync(join(repoRoot, "fixtures", "corpus.json"), "utf8"));
@@ -284,18 +293,32 @@ async function main() {
         `0.2.0 rungsAttempted: [${newPaired.rungsAttempted.join(", ")}]`,
     );
 
+    const pairedMoved = oldPaired.verdict === newPaired.verdict ? 0 : 1;
+
     console.log("\n=== summary ===");
     console.log(`corpus:  ${corpusMoved} / ${rows.length} moved (expected: 0 - see script/report docstring)`);
-    console.log(
-      `paired:  ${oldPaired.verdict === newPaired.verdict ? 0 : 1} / 1 moved ` +
-        `(expected: 1 - this is the escalation fixture)`,
-    );
+    console.log(`paired:  ${pairedMoved} / 1 moved (expected: 1 - this is the escalation fixture)`);
 
     if (corpusMoved > 0) {
       console.error(
         "\nCORPUS MOVEMENT DETECTED. The corpus is single-bodied per row and cannot exercise escalation, " +
           "so this means something OTHER than escalation changed between 0.1.0 and 0.2.0. " +
           "Stop and investigate before writing this up as the verdict-movement report.",
+      );
+      process.exitCode = 1;
+    }
+
+    // THE VACUITY GAP. corpusMoved > 0 gates; the paired row never did - a
+    // regression in escalation (0.2.0 no longer climbing, or climbing but
+    // landing on the same verdict) would print "paired: 0 / 1 moved" right
+    // next to "(expected: 1 ...)" and still exit 0. The paired fixture exists
+    // ONLY to prove escalation moves this exact verdict, so failing to move
+    // it is exactly as much a finding as unexpected corpus movement is.
+    if (pairedMoved === 0) {
+      console.error(
+        "\nPAIRED FIXTURE DID NOT MOVE. shell-node.html + document-curl.html exists to exercise " +
+          "escalation (spec 0.2.0 section 4); a verdict that fails to move here means escalation " +
+          "regressed. Stop and investigate before writing this up as the verdict-movement report.",
       );
       process.exitCode = 1;
     }

@@ -400,7 +400,9 @@ describe("check", () => {
   it("INVARIANT: an unsupported verdict always names at least one missed claim", async () => {
     // `unsupported` fails a build. A CI failure that names nothing is worse
     // than no check at all, and the schema cannot express the reason anywhere
-    // else - `evidence` is gated off on a non-supported verdict. Asserted as a
+    // else: `evidence` - present on `unsupported` too, since 0.2.0 section 2 -
+    // names only the claims that DID match, never the ones that failed, so
+    // `missed` is the only field that can name a failure. Asserted as a
     // property over the ladder shapes that produce it, not one example.
     const c1 = "spending rose sharply";
     const c2 = "the review is ongoing";
@@ -752,7 +754,7 @@ describe("check with a local RuleSet (Task 15)", () => {
     expect(withRules.verdict).toBe("unreachable");
   });
 
-  it("carries firedRule as provenance on a non-supported verdict, with no renderable evidence", async () => {
+  it("carries firedRule as provenance on an unreachable verdict, with no renderable evidence", async () => {
     const r = await check("https://e.com/a", [CLAIM], {
       fetcher: stub({ node: { rawBody: SHORT_WALL_BODY, status: 200 } }),
       rules: RULES_WITH_LOCAL_SIGNATURE,

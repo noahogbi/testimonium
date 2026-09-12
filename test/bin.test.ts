@@ -539,6 +539,28 @@ describe("main(): --help and -h (Ruling T11-R1)", () => {
     })();
   });
 
+  it("--help wins over an actual unknown flag too, not just over the command dispatch", async () => {
+    // The comment above main() names this exact case by name: "check doc.md
+    // --bogus --help must still print help rather than 'unknown flag
+    // --bogus'". Every test above puts --help alongside a KNOWN flag or none
+    // at all; none of them drives an argv validateFlags would actually
+    // reject, so none of them can tell "--help is checked first" apart from
+    // "there was never anything for validateFlags to reject in the first
+    // place". --bogus is not in KNOWN_FLAGS, so this is the one input where
+    // the ordering claim and its absence produce different exit codes.
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const code = await main(["check", "doc.md", "--bogus", "--help"]);
+      expect(code).toBe(0);
+      expect(log).toHaveBeenCalledWith(USAGE);
+      expect(err).not.toHaveBeenCalled();
+    } finally {
+      log.mockRestore();
+      err.mockRestore();
+    }
+  });
+
   it("CHARACTERIZATION: bare invocation (no arguments) still exits 2, unlike --help - it is a usage ERROR, not a request for help", async () => {
     // Distinguishes the fix from "any time USAGE is printed, exit 0": a run
     // missing its required <command> <doc.md> is still author-fixable-by-

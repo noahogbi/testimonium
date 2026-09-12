@@ -31,8 +31,12 @@ export interface HarvestSource {
    *  only these vote (spec 6.6, "Harvest reads only what is readable").
    *
    *  With the shipped ladder this list holds AT MOST ONE read, because
-   *  `nextAction` stops the moment a read is readable (fetch/ladder.ts). It
-   *  is a list because spec 8.2 says "reads", plural, and because the shape
+   *  `nextAction` stops the moment a read is readable UNLESS `exhaustive` is
+   *  set (fetch/ladder.ts) - and harvest never sets it: `scanSources` below
+   *  calls `readSource`, never `continueReading`, so check()'s escalation
+   *  exception (spec 0.2.0 section 4), which looks past a readable read
+   *  before accusing, never reaches this path. It is a list because spec 8.2
+   *  says "reads", plural, and because the shape
    *  is what keeps harvest correct if the stop rule ever changes - the same
    *  defensiveness `bestReadable` carries in read-source.ts. Task 8 pins the
    *  at-most-one property as a characterization, so a change to the ladder

@@ -8,7 +8,7 @@ import type { Rule } from "../rules/challenge.js";
  *  it may appear on every verdict, including `unreachable` and `unclaimed`,
  *  without violating the rule that those two carry no renderable evidence.
  *  (Amended 2026-09-12, 0.2.0 section 2: `unsupported` now carries renderable
- *  evidence too, for the claims that DID match - see `:27-35` below - but
+ *  evidence too, for the claims that DID match - see `:45` below - but
  *  `firedRule` was never gated on that boundary in the first place, so this
  *  interface is unaffected either way.) The pattern itself is dropped - a
  *  RegExp does not survive JSON.stringify, and callers only ever want to know
@@ -29,9 +29,11 @@ export interface CitationResult {
   readonly ladderTruncated: boolean;
   /** PRESENT ONLY WHEN verdict === "unsupported". The most accusatory field in
    *  the schema - it names the claims the author allegedly failed to support -
-   *  so it is gated the same way evidence and retrievedAt below are, and for
-   *  the same reason: the schema must be structurally unable to express an
-   *  accusation on a verdict that is not accusing. */
+   *  so it is gated NARROWER than evidence and retrievedAt below: those two
+   *  render on both "supported" and "unsupported" (0.2.0 section 2), while
+   *  `missed` renders on "unsupported" alone, for the same underlying reason:
+   *  the schema must be structurally unable to express an accusation on a
+   *  verdict that is not accusing. */
   readonly missed?: readonly string[];
   /** PRESENT WHEN verdict === "supported" OR "unsupported" - never on
    *  `unreachable` or `unclaimed`, because we did not read the page and there

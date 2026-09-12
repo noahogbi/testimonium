@@ -120,9 +120,12 @@ export async function harvest(doc: Document, opts: HarvestOptions = {}): Promise
     // Task 5 extracted `dropContained` instead of inlining it.
     //
     // NO FIXTURE CAN EXERCISE THE UNION TODAY, and that is a fact about the
-    // ladder rather than about this loop: `nextAction` stops the moment a
-    // read is readable, so `source.reads` holds at most one entry and
-    // `commonSpans` has already deduped it. Removing the `dropContained`
+    // ladder rather than about this loop: on harvest's path `nextAction`
+    // stops the moment a read is readable - check()'s continueReading
+    // escalation (spec 0.2.0 section 4) is the one exception, and harvest
+    // never takes it (src/harvest/sources.ts) - so `source.reads` holds at
+    // most one entry and `commonSpans` has already deduped it. Removing the
+    // `dropContained`
     // call below therefore breaks no test, so it was verified by injecting
     // the second read instead - duplicating `readable` in `scanSources`
     // makes this loop propose the same span twice without it and once with

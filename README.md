@@ -135,7 +135,7 @@ before you trust a green run to mean more than it does.
   length threshold on the extracted text, a match against the bundled
   challenge-signature list, the response's **`content-type`**, and whether
   the raw body looks like binary. The fifth of those *is* a search of the
-  prose - twelve regexes over the normalized extracted text
+  prose - sixteen regexes over the normalized extracted text
   (`src/rules/challenge.ts`), and a hit feeds the blocked decision directly.
   The last two are **N5**, and they are independent of each other: either one
   alone vetoes the read. A vetoed read is never judged as a document; the
@@ -257,8 +257,8 @@ will eventually surprise a real user if it isn't said here first.
   `fixtures/corpus.json` files the real ECB error capture a second time at
   status 200 (`"kind": "known-gap"`), where its 13,216 characters of intact
   navigation chrome clear the prose floor and reach an accusation. That page
-  matches **none** of the twelve bundled challenge signatures - verified, 0
-  of 12 - so at its real 404 the status veto is the *only* thing rejecting
+  matches **none** of the sixteen bundled challenge signatures - verified, 0
+  of 16 - so at its real 404 the status veto is the *only* thing rejecting
   it, and nothing about the body would.
 - **A gone document whose error chrome is served at 200 to a later rung
   reaches the same accusation through the ladder.** If the node rung is

@@ -1,6 +1,6 @@
 # testimonium 0.2.0: closing the gaps a real integration found
 
-**Status:** design, revised 2026-09-11 after review. Not yet implemented.
+**Status:** implemented, testimonium 0.2.0 (released 2026-09-12; see CHANGELOG.md). This document is retained as the design record; where it and the shipped code disagree, the code and CHANGELOG.md govern.
 
 **This document AMENDS `2026-09-06-testimonium-design.md`.** That spec remains
 the binding authority for everything this one does not name. Section 2 lists
@@ -322,7 +322,7 @@ The evidence-shape change is additive in JSON (`unsupported` rows gain two
 fields) and a **doctrine reversal** at the spec level; section 2 records it as
 such.
 
-The four new exports are additive, and `test/exports.test.ts` moves with them.
+The five new exports are additive, and `test/exports.test.ts` moves with them.
 
 ## 10. Follow-on projects
 

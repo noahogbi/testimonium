@@ -52,6 +52,13 @@ behavioral comparison below is still valid, because it compares the ACTUAL
 CODE at 47620c6 against the ACTUAL CODE at HEAD, not against a version
 string - the string just does not yet say what the code now does.
 
+**Amended 2026-09-12.** The release task landed after this report was
+written: `src/version.ts` and `package.json` now both read `"0.2.0"`
+(`chore(release): 0.2.0`, commit `9cd9bc3`). The paragraph above describes
+the state at `c1ed17b`, the commit this report's comparison actually ran
+against, and is left as written for that reason - the version strings have
+since caught up to it.
+
 **The claims the corpus does not carry.** `fixtures/corpus.json` rows are
 `{path, kind, url, title, status}` - no claims. Calling `check(url, [])`
 reads `unclaimed` on every row in BOTH versions, so "zero corpus movement"

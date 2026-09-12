@@ -2001,6 +2001,12 @@ parser; the output schema.
 renderable field. This is the keystone enforced mechanically rather than by
 review.
 
+**Amended 2026-09-12, testimonium 0.2.0 section 2.** This property test is now
+false of `unsupported`, which is non-`supported` but carries `evidence` and
+`retrievedAt` for the claims that DID match (section 7.4's amendment). The
+property 0.2.0 still enforces mechanically is narrower: no `unreachable` or
+`unclaimed` result may carry a renderable field.
+
 **The fixture bestiary.** Every recorded challenge body becomes a test. This is
 the one commons a small community can realistically sustain: a behavioural rule
 ("axios 403s UA-only curl, intermittently") is hard to verify and easy to get
@@ -2175,6 +2181,7 @@ Recorded so they are not relitigated without new information.
 | TypeScript, npm, Node >= 20 | header |
 | README leads with the argument; AI-drafted prose is a named section, not the headline | 4 |
 | `check()` owns the verdict; primitives sealed behind `exports` | 5.1, 5.3 |
+| **Amended 2026-09-12, testimonium 0.2.0 section 5.3:** `norm` and `defaultFetcher` are now runtime exports from `src/index.ts` - `norm` as a documented compatibility surface, `defaultFetcher` so a caller can wrap or compose the bundled ladder; `toText`, `isPdf`, and the per-host helpers stay genuinely sealed | 5.1, 5.3 |
 | Three layers: fetcher, pure classifier, pure ladder reducer | 5 |
 | Burden-of-proof inversion; a veto withholds an accusation from the read it vetoes, and can supply one from a later readable read through the union | 6, 6.3 |
 | Accusation requires body-derived proof; head markers never license one | 6.2 |
@@ -2183,6 +2190,7 @@ Recorded so they are not relitigated without new information.
 | Calibration precedes the verdict reducer, bound by an acceptance test | 6.3 |
 | `unreachable` is silent to the reader, never to the author | 6.4 |
 | One readability predicate (`isReadable`), one reader (`readSource`), one aggregation; the ladder climbs unless the last read is readable | 6.6 |
+| **Amended 2026-09-12, testimonium 0.2.0 section 4:** `check` may climb past a readable read when the verdict it would otherwise issue is `unsupported` and an HTML rung remains untried, via `continueReading`; `reachability` and `harvest` never set the exception and stop exactly as before | 6.6 |
 | Harvest proposes only from readable reads, and only readable reads vote | 6.6, 8.2 |
 | Claims below `minClaimChars` are refused, uniformly, at every entry | 7.3, 13 Q3 |
 | Harvest filters: floor, cross-source frequency, author rules, already-claimed, in that order | 8.2, 13 Q5 |

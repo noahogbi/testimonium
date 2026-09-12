@@ -27,9 +27,12 @@ export interface ClaimProblem {
  * day it landed. Because the predicate is shared, an empty result here is a
  * guarantee: `check()` cannot throw on any claim this function passed.
  *
- * Same two refusals as `check()`, checked in the same order: a non-string is
- * reported first, so `belowClaimFloor` - which calls `norm()` - is never
- * handed one.
+ * Same two refusals as `check()`, but not the same order end-to-end: `check()`
+ * scans the WHOLE array for any non-string claim before scanning for any
+ * below-floor claim, while this function checks both refusals PER CLAIM, in
+ * that order (so `belowClaimFloor` - which calls `norm()` - is never handed a
+ * non-string), before moving to the next claim - so on an array mixing both
+ * problems, the two can disagree about which one surfaces first.
  */
 export function validateClaims(claims: readonly unknown[]): ClaimProblem[] {
   const problems: ClaimProblem[] = [];
