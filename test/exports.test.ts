@@ -39,14 +39,19 @@ describe("package surface", () => {
     // - part of this list.
     const api = await import("../src/index.js");
     expect(Object.keys(api).sort()).toEqual([
+      "THRESHOLDS",
       "VERSION",
       "check",
+      "classifyRun",
+      "defaultFetcher",
       "joinClaims",
       "loadRules",
+      "norm",
       "normalizeUrl",
       "parseClaimsFile",
       "parseGfmFootnotes",
       "reachability",
+      "validateClaims",
     ]);
   });
 

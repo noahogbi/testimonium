@@ -7,3 +7,8 @@ export type { Fetcher, RawResponse, RungId } from "./fetch/types.js";
 export { parseGfmFootnotes } from "./adapters/gfm-footnotes.js";
 export { parseClaimsFile, normalizeUrl, joinClaims } from "./io/claims.js";
 export { VERSION } from "./version.js";
+export { defaultFetcher, type FetcherOptions } from "./fetch/default-fetcher.js";
+export { norm } from "./text/normalize.js";
+export { THRESHOLDS } from "./classify/thresholds.js";
+export { validateClaims, type ClaimProblem } from "./io/validate.js";
+export { classifyRun, type RunTally, type FailOn } from "./run/classify.js";
