@@ -118,7 +118,41 @@ describe("readSource", () => {
       },
     };
     const out = await readSource("https://example.com/doc", ["quick brown fox jumps"], { fetcher });
-    expect(out.attempted).toContain("pdftotext");
+    // toEqual, not toContain: toContain cannot see an extra live fetch after
+    // the re-route. Without the loop's break, attempted silently becomes
+    // ["node","pdftotext","curl"] - a real climb past the rung that already
+    // read the document - and toContain("pdftotext") still passes, missing
+    // exactly the loop-termination regression this task guards against.
+    expect(out.attempted).toEqual(["node", "pdftotext"]);
+  });
+
+  it("re-routes on a capitalised Content-Type header with a parameterised value", async () => {
+    // Same shape as the test above, but the header key arrives as the server
+    // might actually case it, and the value carries a charset parameter.
+    // A naive response.headers["content-type"] lookup misses this silently -
+    // ctype ends up undefined, isPdf(url, undefined) is false, and the read
+    // never re-routes - the exact defect class the comment above names as
+    // "recurring by casing". A lowercase-only test cannot tell that lookup
+    // apart from the case-insensitive one; this one can.
+    const pdfBody = "%PDF-1.4" + "\u0000\u0000\u0000" + "not-text-stream-data";
+    const extracted = "The quick brown fox jumps over the lazy dog.";
+    const fetcher: Fetcher = {
+      rungs: ["node", "curl", "pdftotext"],
+      async fetch(url, rung) {
+        if (rung === "pdftotext") {
+          return { rawBody: extracted, status: 200, headers: {}, finalUrl: url, bytes: extracted.length };
+        }
+        return {
+          rawBody: pdfBody,
+          status: 200,
+          headers: { "Content-Type": "application/pdf; charset=binary" },
+          finalUrl: url,
+          bytes: pdfBody.length,
+        };
+      },
+    };
+    const out = await readSource("https://example.com/doc", ["quick brown fox jumps"], { fetcher });
+    expect(out.attempted).toEqual(["node", "pdftotext"]);
   });
 
   it("carries the finalUrl each read was classified under", async () => {

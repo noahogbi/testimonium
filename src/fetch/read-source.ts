@@ -46,6 +46,21 @@ export async function readSource(url: string, claims: readonly string[], opts: R
   const attempted: RungId[] = [];
   const reads: Read[] = [];
 
+  // One shape, one place. Both the ladder's own rung and the PDF re-route
+  // below feed a RawResponse through the identical seven fields; a field
+  // added to that input later needs updating here once, not in two call
+  // sites that could silently drift apart.
+  const computeFor = (raw: RawResponse) =>
+    computeSignals({
+      rawBody: raw.rawBody,
+      headers: raw.headers,
+      finalUrl: raw.finalUrl || url,
+      status: raw.status,
+      claims,
+      sourceLabel: opts.sourceLabel ?? "",
+      ...(opts.rules ? { rules: opts.rules } : {}),
+    });
+
   for (;;) {
     const action = nextAction(history, opts.fetcher.rungs, pdfUrl);
     if (action.kind === "stop") break;
@@ -65,15 +80,7 @@ export async function readSource(url: string, claims: readonly string[], opts: R
       response = EMPTY_RESPONSE;
     }
     attempted.push(action.rung);
-    const computed = computeSignals({
-      rawBody: response.rawBody,
-      headers: response.headers,
-      finalUrl: response.finalUrl || url,
-      status: response.status,
-      claims,
-      sourceLabel: opts.sourceLabel ?? "",
-      ...(opts.rules ? { rules: opts.rules } : {}),
-    });
+    const computed = computeFor(response);
     reads.push({ rung: action.rung, computed });
 
     // A PDF served from a URL with no .pdf extension. The rung was picked from
@@ -97,15 +104,7 @@ export async function readSource(url: string, claims: readonly string[], opts: R
     ) {
       const pdfRead = await opts.fetcher.fetch(url, "pdftotext");
       attempted.push("pdftotext");
-      const pdfComputed = computeSignals({
-        rawBody: pdfRead.rawBody,
-        headers: pdfRead.headers,
-        finalUrl: pdfRead.finalUrl || url,
-        status: pdfRead.status,
-        claims,
-        sourceLabel: opts.sourceLabel ?? "",
-        ...(opts.rules ? { rules: opts.rules } : {}),
-      });
+      const pdfComputed = computeFor(pdfRead);
       reads.push({ rung: "pdftotext", computed: pdfComputed });
       history.push({ rung: "pdftotext", readable: isReadable(pdfComputed.signals) });
       break;
