@@ -201,6 +201,19 @@ before you trust a green run to mean more than it does.
   cannot reach; legal writers have perma.cc and authenticated databases;
   newsroom fact desks verify inside closed CMSes with people, not a Node CLI.
   If that isn't your workflow, this probably isn't your tool.
+- **testimonium does not defeat paywalls, bot walls, or consent walls.** Its
+  design goal is that a source it cannot legitimately read reads
+  `unreachable`, never `unsupported`, enforced by the five vetoes and the
+  prose floor. A caller with legitimate access - a subscription, an
+  institutional proxy, an authenticated session - supplies it through
+  `CheckOptions.fetcher`. That is a goal, not an invariant: a wall that
+  matches a bundled signature but is padded past roughly 4,500 extracted
+  characters clears the signature (which only fires under 800 characters)
+  and the prose floor both, and reads `unsupported` - a known, accepted gap
+  with its own fixture (see "What none of the seven involve is a model",
+  above, and `src/classify/signals.ts`). Publishing this as an absolute
+  would state as always-true something the code records as a known
+  exception.
 
 ## Measured limits
 

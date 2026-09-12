@@ -36,6 +36,13 @@ export interface SourceReads {
  * on different predicates - three vetoes in one, five in the other - so the
  * preflight climbed past a 404 that ended the gate's ladder. No test noticed.
  *
+ * Amended in 0.2.0 (spec 6.6, escalation exception): "until the ladder
+ * stops" now has one exception. When `exhaustive` is set, `nextAction`
+ * suspends the early stop even after a readable read, so the loop climbs one
+ * rung further - `continueReading`, below, is the only caller that sets it,
+ * and only check() calls continueReading, only when the verdict would be
+ * `unsupported` and a rung is untried (spec 0.2.0 section 4).
+ *
  * Shared by readSource and continueReading (Task 8): both mutate the same
  * three arrays and differ only in what they start from and whether
  * `exhaustive` is set, so the loop itself lives once, here.

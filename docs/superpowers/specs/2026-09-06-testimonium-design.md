@@ -256,10 +256,14 @@ history, which rule fired, matched and missed per claim - that no caller has a
 ### 5.3 Primitives are sealed, not discouraged
 
 Node's `package.json` `exports` map makes a deep import of an internal module
-throw `ERR_PACKAGE_PATH_NOT_EXPORTED`. The primitives (`norm`, `toText`,
-`isPdf`, per-host helpers) are genuinely unavailable to consumers, not merely
-advised against. The test suite imports source modules by path (`../src/...`);
-there is no internal entry point, and `test/exports.test.ts` pins the exports map
+throw `ERR_PACKAGE_PATH_NOT_EXPORTED`. **Amended in 0.2.0:** `norm` and
+`defaultFetcher` are now runtime exports (`src/index.ts`) - `norm` as a
+documented compatibility surface, `defaultFetcher` so a caller can wrap or
+compose the bundled ladder through `CheckOptions.fetcher` instead of
+hand-rolling one. `toText`, `isPdf`, and the per-host helpers stay genuinely
+unavailable to consumers, not merely advised against. The test suite imports
+source modules by path (`../src/...`); there is no internal entry point for
+the sealed primitives, and `test/exports.test.ts` pins the exports map
 to `.` and `./package.json` alone. (This paragraph said "exported to the test
 suite through a separate internal entry point" from draft 2 until 2026-09-07;
 no such entry point ever existed.)
@@ -760,7 +764,15 @@ merge of two loops that do not behave the same.
 
 **Escalation: climb unless the last read is readable.** The ladder stops when
 the most recent read is readable, and otherwise tries the next rung until none
-remain. At 6546176 `check` climbed on N1, N2, N3 or a sub-floor body, while
+remain. **Amended in 0.2.0:** this stop rule now has one exception. `check`
+may also escalate past a readable read when the verdict it would otherwise
+issue is `unsupported` and an HTML rung remains untried - one more attempt
+before this package accuses an author's citation. The exception is a flag on
+the ladder's own stop condition (`nextAction`'s `exhaustive` parameter,
+`src/fetch/ladder.ts`), but only `check` ever sets it true, via
+`continueReading` (`src/fetch/read-source.ts`); `reachability` and `harvest`
+never do, so their ladders stop exactly as before (0.2.0 section 4). At
+6546176 `check` climbed on N1, N2, N3 or a sub-floor body, while
 `reachability` climbed on any of the five vetoes or a sub-floor body; so a URL
 whose first rung returned a 404 carrying 13,216 characters of navigation
 chrome (N4), or a PDF served as bytes (N5), stopped climbing in `check` and
@@ -1929,6 +1941,46 @@ And one addition specific to being a package rather than an in-repo script:
 
 - It does not guarantee that a `supported` verdict from a truncated ladder means
   the same thing as one from a full ladder. It reports which rungs ran instead.
+
+And one added in 0.2.0, stated as a design goal with its own named exception
+rather than as an absolute - because publishing the absolute form would state
+as always-true something the code records as a known, accepted gap:
+
+- **testimonium does not defeat paywalls, bot walls, or consent walls.** Its
+  design goal is that a source it cannot legitimately read reads
+  `unreachable`, never `unsupported`, enforced by the five vetoes (section
+  6.2) and the prose floor. A caller with legitimate access - a
+  subscription, an institutional proxy, an authenticated session - supplies
+  it through `CheckOptions.fetcher` (section 7.1). The goal is stated as a
+  goal, with a known gap named, because `src/classify/signals.ts:167-179`
+  already records the counterexample: a wall matching a signature but
+  padded past roughly 4,500 characters is caught by neither the signature
+  (`maxChallengeChars` is 800, `thresholds.ts:62`) nor the floor - "a known,
+  accepted gap", with a `known-gap` fixture. 6.6's escalation exception
+  closes it only where the other rung serves the document; a fat wall on
+  both rungs still returns `unsupported`.
+
+  Two capabilities were considered and declined on this ground, recorded so
+  a later reader does not helpfully complete the port:
+
+  - **A publisher-specific body extractor** recovering full article text
+    from a page's embedded JSON state, defeating paywall truncation. In a
+    private tool, checking one's own citations against a publication one
+    subscribes to is a defensible gray area. Distributing it in a free
+    public package is not: it ships circumvention for a named publisher to
+    everyone, against that publisher's terms - and it contradicts this
+    package's own stance, since a tool arguing that citations must be
+    verifiable should not ship a bypass for the one case where the honest
+    answer is "I could not read this."
+  - **A publisher-pinned user agent** for the same host. Identifying as a
+    browser is general and already supported; pinning an old browser
+    version at one publisher is defeat-shaped. It is also dead capability -
+    that host has been a hard block since 2026-08-24 (`rules/hosts.ts:26-34`).
+
+  Both remain available to a caller with legitimate access: the extractor
+  through `CheckOptions.fetcher` (section 7.1), and the user agent through a
+  local `--rules` host entry (`rules/hosts.ts:3`) - no custom fetcher
+  required for the latter.
 
 ---
 
