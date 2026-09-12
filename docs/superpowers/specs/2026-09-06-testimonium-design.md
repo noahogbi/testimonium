@@ -256,10 +256,14 @@ history, which rule fired, matched and missed per claim - that no caller has a
 ### 5.3 Primitives are sealed, not discouraged
 
 Node's `package.json` `exports` map makes a deep import of an internal module
-throw `ERR_PACKAGE_PATH_NOT_EXPORTED`. The primitives (`norm`, `toText`,
-`isPdf`, per-host helpers) are genuinely unavailable to consumers, not merely
-advised against. The test suite imports source modules by path (`../src/...`);
-there is no internal entry point, and `test/exports.test.ts` pins the exports map
+throw `ERR_PACKAGE_PATH_NOT_EXPORTED`. **Amended in 0.2.0:** `norm` and
+`defaultFetcher` are now runtime exports (`src/index.ts`) - `norm` as a
+documented compatibility surface, `defaultFetcher` so a caller can wrap or
+compose the bundled ladder through `CheckOptions.fetcher` instead of
+hand-rolling one. `toText`, `isPdf`, and the per-host helpers stay genuinely
+unavailable to consumers, not merely advised against. The test suite imports
+source modules by path (`../src/...`); there is no internal entry point for
+the sealed primitives, and `test/exports.test.ts` pins the exports map
 to `.` and `./package.json` alone. (This paragraph said "exported to the test
 suite through a separate internal entry point" from draft 2 until 2026-09-07;
 no such entry point ever existed.)
@@ -760,7 +764,15 @@ merge of two loops that do not behave the same.
 
 **Escalation: climb unless the last read is readable.** The ladder stops when
 the most recent read is readable, and otherwise tries the next rung until none
-remain. At 6546176 `check` climbed on N1, N2, N3 or a sub-floor body, while
+remain. **Amended in 0.2.0:** this stop rule now has one exception. `check`
+may also escalate past a readable read when the verdict it would otherwise
+issue is `unsupported` and an HTML rung remains untried - one more attempt
+before this package accuses an author's citation. The exception is a flag on
+the ladder's own stop condition (`nextAction`'s `exhaustive` parameter,
+`src/fetch/ladder.ts`), but only `check` ever sets it true, via
+`continueReading` (`src/fetch/read-source.ts`); `reachability` and `harvest`
+never do, so their ladders stop exactly as before (0.2.0 section 4). At
+6546176 `check` climbed on N1, N2, N3 or a sub-floor body, while
 `reachability` climbed on any of the five vetoes or a sub-floor body; so a URL
 whose first rung returned a 404 carrying 13,216 characters of navigation
 chrome (N4), or a PDF served as bytes (N5), stopped climbing in `check` and
@@ -995,6 +1007,14 @@ to match, which is the clause this sentence promised.
 **Non-`supported` results carry no renderable fields at all** - no excerpt, no
 `retrievedAt`. The render half of the keystone rule becomes structural rather
 than promised.
+
+**Amended 2026-09-12, testimonium 0.2.0 section 2.** The clause above is now
+false of `unsupported`: it carries `evidence` and `retrievedAt` for the claims
+that DID match, so an author fixing four-of-five claims does not lose the one
+passage that already landed. `unreachable` is unaffected and stays exactly as
+stated above - bare, because we did not read the page and there is nothing
+honest to render. The keystone rule this section names is unchanged; only
+`unsupported`'s render surface widens.
 
 This generalizes a deliberate omission the origin gate already makes on its
 unreachable write path (`citation-check.mjs`, the unreachable branch, which
@@ -1922,6 +1942,46 @@ And one addition specific to being a package rather than an in-repo script:
 - It does not guarantee that a `supported` verdict from a truncated ladder means
   the same thing as one from a full ladder. It reports which rungs ran instead.
 
+And one added in 0.2.0, stated as a design goal with its own named exception
+rather than as an absolute - because publishing the absolute form would state
+as always-true something the code records as a known, accepted gap:
+
+- **testimonium does not defeat paywalls, bot walls, or consent walls.** Its
+  design goal is that a source it cannot legitimately read reads
+  `unreachable`, never `unsupported`, enforced by the five vetoes (section
+  6.2) and the prose floor. A caller with legitimate access - a
+  subscription, an institutional proxy, an authenticated session - supplies
+  it through `CheckOptions.fetcher` (section 7.1). The goal is stated as a
+  goal, with a known gap named, because `src/classify/signals.ts:167-179`
+  already records the counterexample: a wall matching a signature but
+  padded past roughly 4,500 characters is caught by neither the signature
+  (`maxChallengeChars` is 800, `thresholds.ts:62`) nor the floor - "a known,
+  accepted gap", with a `known-gap` fixture. 6.6's escalation exception
+  closes it only where the other rung serves the document; a fat wall on
+  both rungs still returns `unsupported`.
+
+  Two capabilities were considered and declined on this ground, recorded so
+  a later reader does not helpfully complete the port:
+
+  - **A publisher-specific body extractor** recovering full article text
+    from a page's embedded JSON state, defeating paywall truncation. In a
+    private tool, checking one's own citations against a publication one
+    subscribes to is a defensible gray area. Distributing it in a free
+    public package is not: it ships circumvention for a named publisher to
+    everyone, against that publisher's terms - and it contradicts this
+    package's own stance, since a tool arguing that citations must be
+    verifiable should not ship a bypass for the one case where the honest
+    answer is "I could not read this."
+  - **A publisher-pinned user agent** for the same host. Identifying as a
+    browser is general and already supported; pinning an old browser
+    version at one publisher is defeat-shaped. It is also dead capability -
+    that host has been a hard block since 2026-08-24 (`rules/hosts.ts:26-34`).
+
+  Both remain available to a caller with legitimate access: the extractor
+  through `CheckOptions.fetcher` (section 7.1), and the user agent through a
+  local `--rules` host entry (`rules/hosts.ts:3`) - no custom fetcher
+  required for the latter.
+
 ---
 
 ## 10. Testing
@@ -1940,6 +2000,12 @@ parser; the output schema.
 **A property test the schema must pass:** no non-`supported` result may carry a
 renderable field. This is the keystone enforced mechanically rather than by
 review.
+
+**Amended 2026-09-12, testimonium 0.2.0 section 2.** This property test is now
+false of `unsupported`, which is non-`supported` but carries `evidence` and
+`retrievedAt` for the claims that DID match (section 7.4's amendment). The
+property 0.2.0 still enforces mechanically is narrower: no `unreachable` or
+`unclaimed` result may carry a renderable field.
 
 **The fixture bestiary.** Every recorded challenge body becomes a test. This is
 the one commons a small community can realistically sustain: a behavioural rule
@@ -2115,6 +2181,7 @@ Recorded so they are not relitigated without new information.
 | TypeScript, npm, Node >= 20 | header |
 | README leads with the argument; AI-drafted prose is a named section, not the headline | 4 |
 | `check()` owns the verdict; primitives sealed behind `exports` | 5.1, 5.3 |
+| **Amended 2026-09-12, testimonium 0.2.0 section 5.3:** `norm` and `defaultFetcher` are now runtime exports from `src/index.ts` - `norm` as a documented compatibility surface, `defaultFetcher` so a caller can wrap or compose the bundled ladder; `toText`, `isPdf`, and the per-host helpers stay genuinely sealed | 5.1, 5.3 |
 | Three layers: fetcher, pure classifier, pure ladder reducer | 5 |
 | Burden-of-proof inversion; a veto withholds an accusation from the read it vetoes, and can supply one from a later readable read through the union | 6, 6.3 |
 | Accusation requires body-derived proof; head markers never license one | 6.2 |
@@ -2123,6 +2190,7 @@ Recorded so they are not relitigated without new information.
 | Calibration precedes the verdict reducer, bound by an acceptance test | 6.3 |
 | `unreachable` is silent to the reader, never to the author | 6.4 |
 | One readability predicate (`isReadable`), one reader (`readSource`), one aggregation; the ladder climbs unless the last read is readable | 6.6 |
+| **Amended 2026-09-12, testimonium 0.2.0 section 4:** `check` may climb past a readable read when the verdict it would otherwise issue is `unsupported` and an HTML rung remains untried, via `continueReading`; `reachability` and `harvest` never set the exception and stop exactly as before | 6.6 |
 | Harvest proposes only from readable reads, and only readable reads vote | 6.6, 8.2 |
 | Claims below `minClaimChars` are refused, uniformly, at every entry | 7.3, 13 Q3 |
 | Harvest filters: floor, cross-source frequency, author rules, already-claimed, in that order | 8.2, 13 Q5 |
@@ -2131,6 +2199,7 @@ Recorded so they are not relitigated without new information.
 | Host rules are dated, additive-only, locally overridable data | 7.2 |
 | Claims key by URL, with declared join semantics | 7.3 |
 | Non-`supported` results carry no renderable fields | 7.4 |
+| **Amended 2026-09-12, testimonium 0.2.0 section 2:** `unsupported` now carries `evidence` and `retrievedAt` for the claims that DID match; `unreachable` stays bare - we did not read the page, so there is nothing honest to render | 7.4 |
 | v1 commands: `check`, `harvest`, `recheck`, `reachability` | 8 |
 | Three implementation plans, not one; archive belongs to plan 3 | 8.1 |
 | `recheck` exits 1 only on `L = unsupported` with `A = supported`; the "the arms differ" table is withdrawn | 8.3 |

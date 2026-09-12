@@ -73,6 +73,10 @@ export const CHALLENGE_SIGNATURES: readonly Rule[] = [
     note: "Imperva/Incapsula." },
   { pattern: /vercel security checkpoint/, lastConfirmed: "2026-09-06",
     note: "Vercel firewall checkpoint." },
+  { pattern: /javascript is disabled in your browser/, lastConfirmed: "2026-09-11", note: "Generic JS-disabled shell. Qualified rather than bare: extract.ts does not strip <noscript>, so a bare 'javascript is disabled' would match CMS boilerplate on a genuine short document." },
+  { pattern: /enable javascript and then reload/, lastConfirmed: "2026-09-11", note: "JS-disabled shell with a reload instruction." },
+  { pattern: /enable javascript to run this app/, lastConfirmed: "2026-09-11", note: "Stock React/Vite noscript shell - the JS-shell-at-200 class." },
+  { pattern: /please turn javascript on/, lastConfirmed: "2026-09-11", note: "JS-disabled shell, imperative phrasing." },
 ];
 
 /** Redirect targets that mean a challenge, not a document. Data, not a
@@ -81,7 +85,7 @@ export const CHALLENGE_PATHS: readonly Rule[] = [
   { pattern: /\/cdn-cgi\/challenge-platform\//, lastConfirmed: "2026-09-06", note: "Cloudflare challenge platform." },
   { pattern: /\/sorry\/index/, lastConfirmed: "2026-09-06", note: "Google sorry redirect." },
   { pattern: /\/(captcha|challenge|px-captcha)(\/|$|\?)/, lastConfirmed: "2026-09-06", note: "Generic captcha paths." },
-  { pattern: /\/consent(\/|$|\?)/, lastConfirmed: "2026-09-06", note: "Consent-wall redirect, e.g. consent.youtube.com." },
+  { pattern: /^https?:\/\/consent\.[^/?#]+([/?#]|$)/, lastConfirmed: "2026-09-11", note: "Consent-wall redirect host, e.g. consent.youtube.com. Anchored to the HOST: the previous path form vetoed any URL containing a /consent/ segment, including a regulator's own guidance on consent, which is a document and not a wall. The tail accepts a path, query, fragment or end-of-string, because curl's url_effective need not add a normalizing slash." },
 ];
 
 export function matchesChallengeSignature(text: string, signatures: readonly Rule[] = CHALLENGE_SIGNATURES): Rule | null {

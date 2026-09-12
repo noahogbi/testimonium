@@ -46,7 +46,10 @@ export function pdfFetch(url: string, userAgent: string): RawResponse {
     // trip that veto - this is honest rather than lossy, and it is not a
     // fabricated 200.
     return { rawBody: text, status: 0, headers: {}, finalUrl: url, bytes: text.length };
-  } catch {
+  } catch (e) {
+    console.warn(
+      `warn pdf rung failed for ${url}: ${e instanceof Error ? e.message : String(e)}`,
+    );
     return EMPTY_RESPONSE;
   } finally {
     try {

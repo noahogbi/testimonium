@@ -1,11 +1,12 @@
-import { describe, expect, it } from "vitest";
-import { check } from "../src/check.js";
+import { describe, expect, it, vi } from "vitest";
+import { check, type CheckOptions } from "../src/check.js";
 import { THRESHOLDS, proseVolume } from "../src/classify/thresholds.js";
 import { toText } from "../src/text/extract.js";
 import type { Fetcher, RawResponse, RungId } from "../src/fetch/types.js";
 import { CHALLENGE_PATHS, CHALLENGE_SIGNATURES, type Rule } from "../src/rules/challenge.js";
 import { HOST_RULES } from "../src/rules/hosts.js";
 import type { RuleSet } from "../src/rules/load.js";
+import { defaultFetcher, userAgentFor, type FetcherOptions } from "../src/fetch/default-fetcher.js";
 
 // Deliberately NO fixture reads here. These tests exercise check() against a
 // stub fetcher and must not depend on Task 3's manually captured corpus - a
@@ -60,7 +61,9 @@ describe("check", () => {
     });
     expect(r.verdict).toBe("unsupported");
     expect(r.missed).toEqual(["no such phrase appears here"]);
-    expect(r).not.toHaveProperty("evidence");
+    // 0.2.0: an unsupported result now keeps the passage that DID match, so an
+    // author fixing the miss can see what already landed.
+    expect(r.evidence?.[0]?.claims).toEqual(["spending rose sharply"]);
   });
 
   it("falls through to curl when the node rung is challenged", async () => {
@@ -397,7 +400,9 @@ describe("check", () => {
   it("INVARIANT: an unsupported verdict always names at least one missed claim", async () => {
     // `unsupported` fails a build. A CI failure that names nothing is worse
     // than no check at all, and the schema cannot express the reason anywhere
-    // else - `evidence` is gated off on a non-supported verdict. Asserted as a
+    // else: `evidence` - present on `unsupported` too, since 0.2.0 section 2 -
+    // names only the claims that DID match, never the ones that failed, so
+    // `missed` is the only field that can name a failure. Asserted as a
     // property over the ladder shapes that produce it, not one example.
     const c1 = "spending rose sharply";
     const c2 = "the review is ongoing";
@@ -447,6 +452,36 @@ describe("check", () => {
     expect(r.evidence?.[0]?.rung).toBe("curl");
   });
 
+  it("I1: resolves rather than rejects when the PDF re-route's own fetch throws", async () => {
+    // Measured before the fix: a fetcher that throws on the "pdftotext" rung
+    // during the PDF re-route (src/fetch/read-source.ts's climb(), the
+    // second fetch site) rejected check()'s returned promise outright -
+    // "REJECTED: boom on pdftotext - the whole check() throws" - which
+    // bin.ts turns into exit 2 for the entire document, not just this one
+    // citation. The ladder's own rung fetch already degrades a throwing
+    // fetcher to EMPTY_RESPONSE with a warning; the re-route now matches it.
+    const pdfBody = "%PDF-1.4" + "   " + "not-text-stream-data";
+    const fetcher: Fetcher = {
+      rungs: ["node", "curl", "pdftotext"],
+      async fetch(url, rung) {
+        if (rung === "pdftotext") throw new Error("boom on pdftotext");
+        return {
+          rawBody: pdfBody,
+          status: 200,
+          headers: { "content-type": "application/pdf" },
+          finalUrl: url,
+          bytes: pdfBody.length,
+        };
+      },
+    };
+    // The await itself is the resolves-not-rejects assertion: were check()
+    // still rejecting here, this test would fail with an unhandled rejection
+    // rather than reach the expectations below.
+    const r = await check("https://example.com/doc", ["quick brown fox jumps"], { fetcher });
+    expect(r.rungsAttempted).toEqual(["node", "pdftotext"]);
+    expect(r.verdict).toBe("unreachable");
+  });
+
   it("climbs past a first rung vetoed only by N4 and ACCUSES from the readable second read", async () => {
     // The same escalation, where the readable second read carries only some
     // of the claims. This is the one place Task 2 moves a verdict toward an
@@ -469,7 +504,8 @@ describe("check", () => {
     expect(r.rungsAttempted).toEqual(["node", "curl"]);
     expect(r.verdict).toBe("unsupported");
     expect(r.missed).toEqual(["revenue fell in the fourth quarter"]);
-    expect(r).not.toHaveProperty("evidence");
+    // 0.2.0: the claim that DID match is still carried as evidence.
+    expect(r.evidence?.[0]?.claims).toEqual(["spending rose sharply"]);
   });
 
   it("a readable read outranks a LARGER vetoed one, and names what it did not carry (rule 2)", async () => {
@@ -501,9 +537,9 @@ describe("check", () => {
     expect(r.rungsAttempted).toEqual(["node", "curl"]);
     expect(r.verdict).toBe("unsupported");
     expect(r.missed).toEqual(["no such phrase appears here"]);
-    // An unsupported result carries no evidence (io/evidence.ts): the miss
-    // list is the whole report.
-    expect(r).not.toHaveProperty("evidence");
+    // 0.2.0 (io/evidence.ts): an unsupported result now keeps the passage
+    // that DID match, alongside the miss list.
+    expect(r.evidence?.[0]?.claims).toEqual(["spending rose sharply"]);
     // At 6546176 the wall won and its Cloudflare path rule rode along as
     // provenance; the readable read fired no rule, so none is reported.
     expect(r).not.toHaveProperty("firedRule");
@@ -650,10 +686,11 @@ describe("N3 through the cross-read union (spec 6.3; plan 1.2 ledger R13)", () =
     expect(r.verdict).toBe("unsupported");
     expect(r.missed).toEqual([A]);
     // The wall leaves no trace on the result it caused: `won` is the readable
-    // read, which fired no rule, and an unsupported result carries no
-    // renderable field at all (spec 7.4).
+    // read, which fired no rule. 0.2.0 (amends spec 7.4): an unsupported
+    // result now carries evidence for the claim that DID match (B), even
+    // though A is the one named as missed.
     expect(r).not.toHaveProperty("firedRule");
-    expect(r).not.toHaveProperty("evidence");
+    expect(r.evidence?.[0]?.claims).toEqual([B]);
   });
 
   it("the same body without the signature phrase is supported, from the same two responses", async () => {
@@ -717,7 +754,7 @@ describe("check with a local RuleSet (Task 15)", () => {
     expect(withRules.verdict).toBe("unreachable");
   });
 
-  it("carries firedRule as provenance on a non-supported verdict, with no renderable evidence", async () => {
+  it("carries firedRule as provenance on an unreachable verdict, with no renderable evidence", async () => {
     const r = await check("https://e.com/a", [CLAIM], {
       fetcher: stub({ node: { rawBody: SHORT_WALL_BODY, status: 200 } }),
       rules: RULES_WITH_LOCAL_SIGNATURE,
@@ -733,5 +770,85 @@ describe("check with a local RuleSet (Task 15)", () => {
     // provenance, not evidence.
     expect(r).not.toHaveProperty("evidence");
     expect(r).not.toHaveProperty("retrievedAt");
+  });
+});
+
+describe("check: identity wiring (CheckOptions -> FetcherOptions)", () => {
+  // A stub fetcher on CheckOptions.fetcher bypasses buildFetcher's
+  // defaultFetcher branch entirely (src/fetch/build-fetcher.ts - shared with
+  // harvest(), reachability() and recheck()'s live arm since Task 16), so a
+  // test that exercises check() with a stub fetcher can never observe
+  // whether the identity wire exists. These tests assert against
+  // defaultFetcher/userAgentFor directly, and pin the wire itself: a value
+  // set on CheckOptions must arrive at FetcherOptions unchanged.
+
+  it("supplies the declared identity to a host that requires one", () => {
+    const withId = defaultFetcher({ identity: "example-app contact@example.com" });
+    const withoutId = defaultFetcher({});
+    // userAgentFor warns and falls back to a browser UA when identity is absent.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const a = userAgentFor("https://www.sec.gov/some/filing", { identity: "example-app contact@example.com" });
+      const b = userAgentFor("https://www.sec.gov/some/filing", {});
+      expect(a).toBe("example-app contact@example.com");
+      expect(b).not.toBe(a);
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+    expect(withId).toBeDefined();
+    expect(withoutId).toBeDefined();
+  });
+
+  it("CheckOptions.identity reaches FetcherOptions", async () => {
+    // The wire itself: a value set on CheckOptions must arrive at
+    // defaultFetcher. Assert by type and by construction - check() must
+    // accept the field and must not drop it. Read check()'s buildFetcher(...)
+    // call (src/check.ts) and pin the object it forwards.
+    const opts: CheckOptions = { identity: "example-app contact@example.com" };
+    expect(opts.identity).toBe("example-app contact@example.com");
+  });
+
+  it("check() itself forwards CheckOptions.identity into the defaultFetcher(...) call at the construction site", async () => {
+    // The two tests above pin the two halves (userAgentFor's behavior given
+    // an identity, and that CheckOptions can carry one) but neither one
+    // actually runs check()'s construction line, so neither can catch a
+    // regression THERE specifically. This test replaces the real
+    // defaultFetcher with a spy and drives it through the public check()
+    // entry point with no opts.fetcher override, so the only path an
+    // identity can travel is check()'s call into buildFetcher
+    // (src/fetch/build-fetcher.ts), which is what actually calls
+    // defaultFetcher.
+    //
+    // The spy's fetcher reports zero rungs, so ladder.ts's nextAction never
+    // finds a rung to try and readSource never calls fetch() - this proves
+    // the wire without ever touching the network.
+    vi.resetModules();
+    const defaultFetcherSpy = vi.fn((_opts: FetcherOptions = {}) => ({
+      rungs: [] as RungId[],
+      fetch: async () => {
+        throw new Error("must not be called: rungs is empty");
+      },
+    }));
+    vi.doMock("../src/fetch/default-fetcher.js", () => ({ defaultFetcher: defaultFetcherSpy }));
+    try {
+      const { check: checkWithMockedFetcher } = await import("../src/check.js");
+
+      await checkWithMockedFetcher("https://e.com/a", [], {
+        identity: "example-app contact@example.com",
+      });
+      expect(defaultFetcherSpy).toHaveBeenCalledTimes(1);
+      expect(defaultFetcherSpy.mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({ identity: "example-app contact@example.com" }),
+      );
+
+      defaultFetcherSpy.mockClear();
+      await checkWithMockedFetcher("https://e.com/a", []);
+      expect(defaultFetcherSpy).toHaveBeenCalledTimes(1);
+      expect(defaultFetcherSpy.mock.calls[0]?.[0]).not.toHaveProperty("identity");
+    } finally {
+      vi.doUnmock("../src/fetch/default-fetcher.js");
+      vi.resetModules();
+    }
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { bestReadable, readSource, type Read } from "../../src/fetch/read-source.js";
+import { bestReadable, continueReading, readSource, type Read } from "../../src/fetch/read-source.js";
 import { computeSignals } from "../../src/classify/signals.js";
 import type { Fetcher, RawResponse, RungId } from "../../src/fetch/types.js";
 
@@ -21,6 +21,14 @@ const SENTENCE = "The committee report states that spending rose sharply. ";
 const LONG_PROSE = `<html><title>The Committee Report</title><body>${SENTENCE.repeat(120)}</body></html>`;
 const SMALLER_PROSE = `<html><title>The Committee Report</title><body>${SENTENCE.repeat(90)}</body></html>`;
 const WALL = "<html><body>Verifying you are human.</body></html>";
+// Two more bodies, each well past the 4,500-char floor, for the
+// continueReading test below: a first (node) read must be readable on its
+// own so the ladder would otherwise stop there, and a second (curl) read
+// must also be readable so resuming has somewhere to land.
+const SHELL_SENTENCE = "The shell document repeats placeholder text for length only. ";
+const DOC_SENTENCE = "The full document repeats placeholder text for length only. ";
+const LONG_SHELL = `<html><title>Shell Document</title><body>${SHELL_SENTENCE.repeat(120)}</body></html>`;
+const LONG_DOCUMENT = `<html><title>Full Document</title><body>${DOC_SENTENCE.repeat(120)}</body></html>`;
 
 describe("readSource", () => {
   it("returns every rung's read in the order attempted, vetoed reads included", async () => {
@@ -93,6 +101,105 @@ describe("readSource", () => {
     expect(r.reads).toEqual([]);
   });
 
+  it("re-routes to the PDF rung when an HTML rung returns application/pdf", async () => {
+    // fixtures/documents/sample.pdf does not exist; the body is built here
+    // instead. The PDF magic prefix followed by C0 control bytes is what
+    // makes this "not text" on its own bytes, independent of the
+    // content-type header also tripping N5's other branch - the point is a
+    // body that is not text arriving with a PDF content-type, same as a real
+    // PDF served without a .pdf URL would.
+    const pdfBody = "%PDF-1.4" + "\u0000\u0000\u0000" + "not-text-stream-data";
+    const extracted = "The quick brown fox jumps over the lazy dog.";
+    const fetcher: Fetcher = {
+      rungs: ["node", "curl", "pdftotext"],
+      async fetch(url, rung) {
+        if (rung === "pdftotext") {
+          return { rawBody: extracted, status: 200, headers: {}, finalUrl: url, bytes: extracted.length };
+        }
+        return {
+          rawBody: pdfBody,
+          status: 200,
+          headers: { "content-type": "application/pdf" },
+          finalUrl: url,
+          bytes: pdfBody.length,
+        };
+      },
+    };
+    const out = await readSource("https://example.com/doc", ["quick brown fox jumps"], { fetcher });
+    // toEqual, not toContain: toContain cannot see an extra live fetch after
+    // the re-route. Without the loop's break, attempted silently becomes
+    // ["node","pdftotext","curl"] - a real climb past the rung that already
+    // read the document - and toContain("pdftotext") still passes, missing
+    // exactly the loop-termination regression this task guards against.
+    expect(out.attempted).toEqual(["node", "pdftotext"]);
+  });
+
+  it("degrades a throwing fetcher on the PDF re-route's own fetch, warns, and resolves instead of rejecting", async () => {
+    // I1: the re-route call site (climb(), below the ladder's own rung fetch)
+    // used to call opts.fetcher.fetch(url, "pdftotext") unguarded - a
+    // third-party fetcher that throws there rejected the whole climb() call,
+    // and bin.ts turns that rejection into exit 2 for the entire document.
+    // The ladder's own rung fetch a few lines above already has this same
+    // try/catch + console.warn + EMPTY_RESPONSE degradation (see "degrades a
+    // throwing fetcher to an unread rung" above); this pins that the
+    // re-route site now matches it, in wording and in shape.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const pdfBody = "%PDF-1.4" + "\u0000\u0000\u0000" + "not-text-stream-data";
+      const url = "https://example.com/doc";
+      const fetcher: Fetcher = {
+        rungs: ["node", "curl", "pdftotext"],
+        async fetch(_url, rung) {
+          if (rung === "pdftotext") throw new Error("boom on pdftotext");
+          return {
+            rawBody: pdfBody,
+            status: 200,
+            headers: { "content-type": "application/pdf" },
+            finalUrl: _url,
+            bytes: pdfBody.length,
+          };
+        },
+      };
+      const out = await readSource(url, ["quick brown fox jumps"], { fetcher });
+      expect(out.attempted).toEqual(["node", "pdftotext"]);
+      expect(out.reads.map((r) => r.rung)).toEqual(["node", "pdftotext"]);
+      expect(out.reads[1]?.computed.signals.proseChars).toBe(0);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]?.[0])).toContain(`rung "pdftotext" threw for ${url}: boom on pdftotext`);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("re-routes on a capitalised Content-Type header with a parameterised value", async () => {
+    // Same shape as the test above, but the header key arrives as the server
+    // might actually case it, and the value carries a charset parameter.
+    // A naive response.headers["content-type"] lookup misses this silently -
+    // ctype ends up undefined, isPdf(url, undefined) is false, and the read
+    // never re-routes - the exact defect class the comment above names as
+    // "recurring by casing". A lowercase-only test cannot tell that lookup
+    // apart from the case-insensitive one; this one can.
+    const pdfBody = "%PDF-1.4" + "\u0000\u0000\u0000" + "not-text-stream-data";
+    const extracted = "The quick brown fox jumps over the lazy dog.";
+    const fetcher: Fetcher = {
+      rungs: ["node", "curl", "pdftotext"],
+      async fetch(url, rung) {
+        if (rung === "pdftotext") {
+          return { rawBody: extracted, status: 200, headers: {}, finalUrl: url, bytes: extracted.length };
+        }
+        return {
+          rawBody: pdfBody,
+          status: 200,
+          headers: { "Content-Type": "application/pdf; charset=binary" },
+          finalUrl: url,
+          bytes: pdfBody.length,
+        };
+      },
+    };
+    const out = await readSource("https://example.com/doc", ["quick brown fox jumps"], { fetcher });
+    expect(out.attempted).toEqual(["node", "pdftotext"]);
+  });
+
   it("carries the finalUrl each read was classified under", async () => {
     // RawResponse has always carried it and computeSignals has always
     // received it; nothing could read it back. Harvest needs it to report a
@@ -115,6 +222,29 @@ describe("readSource", () => {
       },
     });
     expect(reads[0]!.computed.finalUrl).toBe("https://e.com/elsewhere");
+  });
+
+  it("resumes the ladder without re-fetching the rung already read", async () => {
+    const calls: string[] = [];
+    const fetcher: Fetcher = {
+      rungs: ["node", "curl"],
+      async fetch(_url, rung) {
+        calls.push(rung);
+        return {
+          rawBody: rung === "curl" ? LONG_DOCUMENT : LONG_SHELL,
+          headers: {},
+          finalUrl: _url,
+          status: 200,
+          bytes: 0,
+        };
+      },
+    };
+    const first = await readSource("https://example.com/a", ["a claim not in the shell"], { fetcher });
+    expect(calls).toEqual(["node"]);
+    const second = await continueReading("https://example.com/a", ["a claim not in the shell"], { fetcher }, first);
+    expect(calls).toEqual(["node", "curl"]);
+    expect(second.reads).toHaveLength(2);
+    expect(second.attempted).toEqual(["node", "curl"]);
   });
 });
 

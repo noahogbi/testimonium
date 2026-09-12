@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { harvest } from "../src/harvest.js";
 import { parseGfmFootnotes } from "../src/adapters/gfm-footnotes.js";
 import { parseClaimsFile } from "../src/io/claims.js";
@@ -6,6 +6,8 @@ import { THRESHOLDS, proseVolume } from "../src/classify/thresholds.js";
 import { documentMismatchNote, normBoundaryNote } from "../src/harvest/spans.js";
 import { toText } from "../src/text/extract.js";
 import type { Fetcher, RawResponse, RungId } from "../src/fetch/types.js";
+import type { FetcherOptions } from "../src/fetch/default-fetcher.js";
+import type { Document } from "../src/adapters/types.js";
 
 // No fixture reads, as in test/check.test.ts.
 function stub(per: Partial<Record<string, Partial<RawResponse>>>, rungs: RungId[] = ["node", "curl"]): Fetcher {
@@ -290,5 +292,45 @@ describe("harvest", () => {
     expect(first.bugs).toEqual([documentMismatchNote(BOUNDARY_SPAN)]);
     expect(first.bugs[0]).toContain("a BUG if");
     expect(first.bugs[0]).toContain("NOT a bug if");
+  });
+});
+
+describe("harvest: identity wiring (HarvestOptions -> FetcherOptions)", () => {
+  // Task 16's second wire proof - the twin of test/check.test.ts's "check()
+  // itself forwards CheckOptions.identity" test, against harvest() instead.
+  // A stub fetcher on HarvestOptions.fetcher bypasses buildFetcher's
+  // defaultFetcher branch entirely, so this replaces the real defaultFetcher
+  // with a spy and drives it through the public harvest() entry point with
+  // no opts.fetcher override - the only path an identity can travel is
+  // harvest()'s own call into buildFetcher.
+  it("forwards HarvestOptions.identity into the defaultFetcher(...) call at the construction site, and omits it when absent", async () => {
+    vi.resetModules();
+    const defaultFetcherSpy = vi.fn((_opts: FetcherOptions = {}) => ({
+      rungs: [] as RungId[],
+      fetch: async () => {
+        throw new Error("must not be called: rungs is empty");
+      },
+    }));
+    vi.doMock("../src/fetch/default-fetcher.js", () => ({ defaultFetcher: defaultFetcherSpy }));
+    try {
+      const { harvest: harvestWithMockedFetcher } = await import("../src/harvest.js");
+      // Empty footnotes: buildFetcher runs before scanSources ever looks at
+      // them, so no rung is ever tried and this never touches the network.
+      const doc: Document = { footnotes: [], body: "", prose: "" };
+
+      await harvestWithMockedFetcher(doc, { identity: "example-app contact@example.com" });
+      expect(defaultFetcherSpy).toHaveBeenCalledTimes(1);
+      expect(defaultFetcherSpy.mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({ identity: "example-app contact@example.com" }),
+      );
+
+      defaultFetcherSpy.mockClear();
+      await harvestWithMockedFetcher(doc, {});
+      expect(defaultFetcherSpy).toHaveBeenCalledTimes(1);
+      expect(defaultFetcherSpy.mock.calls[0]?.[0]).not.toHaveProperty("identity");
+    } finally {
+      vi.doUnmock("../src/fetch/default-fetcher.js");
+      vi.resetModules();
+    }
   });
 });

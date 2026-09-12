@@ -37,6 +37,18 @@ describe("challenge signatures", () => {
       expect(r.note.length).toBeGreaterThan(0);
     }
   });
+
+  it("matches the JavaScript-disabled shells the bundled set missed", () => {
+    const cases = [
+      "JavaScript is disabled in your browser.",
+      "Please enable JavaScript and then reload this page.",
+      "You need to enable JavaScript to run this app.",
+      "Please turn JavaScript on and reload the page.",
+    ];
+    for (const text of cases) {
+      expect(matchesChallengeSignature(text), text).not.toBeNull();
+    }
+  });
 });
 
 describe("challenge paths", () => {
@@ -46,6 +58,21 @@ describe("challenge paths", () => {
 
   it("ignores an ordinary article path", () => {
     expect(matchesChallengePath("https://example.com/2026/09/an-article")).toBeNull();
+  });
+
+  it("vetoes a consent-wall redirect but not a page about consent", () => {
+    // Must still be vetoed - the redirect the rule was written for.
+    expect(matchesChallengePath("https://consent.youtube.com/m?continue=x")).not.toBeNull();
+    expect(matchesChallengePath("https://consent.google.com/ml?continue=x")).not.toBeNull();
+    // Additional consent-wall shapes - bare host, query-only, fragment-only.
+    expect(matchesChallengePath("https://consent.google.com")).not.toBeNull();
+    expect(matchesChallengePath("https://consent.google.com?done=x")).not.toBeNull();
+    expect(matchesChallengePath("https://consent.yahoo.com#x")).not.toBeNull();
+    // Must NOT be vetoed - a document whose subject is consent.
+    expect(matchesChallengePath("https://www.autoriteitpersoonsgegevens.nl/en/themes/consent")).toBeNull();
+    expect(matchesChallengePath("https://ico.org.uk/for-organisations/guide/consent/")).toBeNull();
+    // Host anchor should not over-match hosts merely starting with "consent".
+    expect(matchesChallengePath("https://consenting.example.com/article")).toBeNull();
   });
 });
 

@@ -1,5 +1,5 @@
 import type { Document } from "./adapters/types.js";
-import { defaultFetcher } from "./fetch/default-fetcher.js";
+import { buildFetcher } from "./fetch/build-fetcher.js";
 import type { Fetcher, RungId } from "./fetch/types.js";
 import { applyFilters, type FilterDrops } from "./harvest/filters.js";
 import { commonSpans, dropContained } from "./harvest/spans.js";
@@ -11,6 +11,12 @@ export interface HarvestOptions {
   /** Bring your own reader, exactly as CheckOptions does. */
   readonly fetcher?: Fetcher;
   readonly rules?: RuleSet;
+  /** Declared identity for hosts that require one, e.g. sec.gov's
+   *  "<app> <contact email>". testimonium ships no identity of its own, and
+   *  before Task 16 this option existed on FetcherOptions but was reachable
+   *  from nowhere: harvest() never passed it, so every such citation took
+   *  the warn-and-use-a-browser-UA branch. Matches CheckOptions.identity. */
+  readonly identity?: string;
   /** The existing `<doc>.claims.json`, when the author has one. Absent is
    *  the ordinary case for a document harvest is being run on for the first
    *  time, and is NOT an error. */
@@ -92,7 +98,14 @@ export interface HarvestReport {
  * says so, and her confirmation is what makes a proposal a claim.
  */
 export async function harvest(doc: Document, opts: HarvestOptions = {}): Promise<HarvestReport> {
-  const fetcher = opts.fetcher ?? defaultFetcher(opts.rules ? { hosts: opts.rules.hosts } : {});
+  // buildFetcher (Task 16): the ONE construction shared with check(),
+  // reachability() and recheck()'s live arm - see its own docstring. `opts`
+  // is passed straight through rather than rebuilt field-by-field (fix round
+  // 1, Important 1): `HarvestOptions` is a structural superset of
+  // `BuildFetcherOptions`, and rebuilding it here would be a second copy of
+  // the forwarding logic that drifts the moment a field is added to one
+  // interface and not mirrored to the other.
+  const fetcher = buildFetcher(opts);
   const scan = await scanSources(doc.footnotes, {
     fetcher,
     ...(opts.rules ? { rules: opts.rules } : {}),
@@ -107,9 +120,12 @@ export async function harvest(doc: Document, opts: HarvestOptions = {}): Promise
     // Task 5 extracted `dropContained` instead of inlining it.
     //
     // NO FIXTURE CAN EXERCISE THE UNION TODAY, and that is a fact about the
-    // ladder rather than about this loop: `nextAction` stops the moment a
-    // read is readable, so `source.reads` holds at most one entry and
-    // `commonSpans` has already deduped it. Removing the `dropContained`
+    // ladder rather than about this loop: on harvest's path `nextAction`
+    // stops the moment a read is readable - check()'s continueReading
+    // escalation (spec 0.2.0 section 4) is the one exception, and harvest
+    // never takes it (src/harvest/sources.ts) - so `source.reads` holds at
+    // most one entry and `commonSpans` has already deduped it. Removing the
+    // `dropContained`
     // call below therefore breaks no test, so it was verified by injecting
     // the second read instead - duplicating `readable` in `scanSources`
     // makes this loop propose the same span twice without it and once with

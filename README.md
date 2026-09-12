@@ -75,9 +75,13 @@ the phrase, fix the citation, or mark the footnote `{"notApplicable":
 "<reason>"}` if it deliberately rests on something other than the cited
 outlet.
 
-Global flags: `--json`, `--rules <path>`. `check` additionally takes
-`--allow-unclaimed`, `--fail-on-unreachable`, `--explain-fetch` and
-`--no-archive`, and `recheck` takes `--fail-on-gone`; none of the five is
+Global flags: `--json`, `--rules <path>`, `--identity <app contact-email>`
+(declares a UA for hosts that require one, e.g. sec.gov's "`<app> <contact
+email>`" - omit it and such a host gets a warning and a browser UA, which it
+will likely refuse), and `--help`/`-h` (prints this usage and exits 0 from
+any position in argv). `check` additionally takes `--allow-unclaimed`,
+`--fail-on-unreachable`, `--explain-fetch` and `--no-archive`, and `recheck`
+takes `--fail-on-gone`; none of the five is
 **global** - but the flag validator does not know that. It is
 command-agnostic, so `harvest essay.md --fail-on-unreachable` and
 `reachability essay.md --explain-fetch` are accepted and then silently
@@ -131,7 +135,7 @@ before you trust a green run to mean more than it does.
   length threshold on the extracted text, a match against the bundled
   challenge-signature list, the response's **`content-type`**, and whether
   the raw body looks like binary. The fifth of those *is* a search of the
-  prose - twelve regexes over the normalized extracted text
+  prose - sixteen regexes over the normalized extracted text
   (`src/rules/challenge.ts`), and a hit feeds the blocked decision directly.
   The last two are **N5**, and they are independent of each other: either one
   alone vetoes the read. A vetoed read is never judged as a document; the
@@ -201,6 +205,19 @@ before you trust a green run to mean more than it does.
   cannot reach; legal writers have perma.cc and authenticated databases;
   newsroom fact desks verify inside closed CMSes with people, not a Node CLI.
   If that isn't your workflow, this probably isn't your tool.
+- **testimonium does not defeat paywalls, bot walls, or consent walls.** Its
+  design goal is that a source it cannot legitimately read reads
+  `unreachable`, never `unsupported`, enforced by the five vetoes and the
+  prose floor. A caller with legitimate access - a subscription, an
+  institutional proxy, an authenticated session - supplies it through
+  `CheckOptions.fetcher`. That is a goal, not an invariant: a wall that
+  matches a bundled signature but is padded past roughly 4,500 extracted
+  characters clears the signature (which only fires under 800 characters)
+  and the prose floor both, and reads `unsupported` - a known, accepted gap
+  with its own fixture (see "What none of the seven involve is a model",
+  above, and `src/classify/signals.ts`). Publishing this as an absolute
+  would state as always-true something the code records as a known
+  exception.
 
 ## Measured limits
 
@@ -240,8 +257,8 @@ will eventually surprise a real user if it isn't said here first.
   `fixtures/corpus.json` files the real ECB error capture a second time at
   status 200 (`"kind": "known-gap"`), where its 13,216 characters of intact
   navigation chrome clear the prose floor and reach an accusation. That page
-  matches **none** of the twelve bundled challenge signatures - verified, 0
-  of 12 - so at its real 404 the status veto is the *only* thing rejecting
+  matches **none** of the sixteen bundled challenge signatures - verified, 0
+  of 16 - so at its real 404 the status veto is the *only* thing rejecting
   it, and nothing about the body would.
 - **A gone document whose error chrome is served at 200 to a later rung
   reaches the same accusation through the ladder.** If the node rung is

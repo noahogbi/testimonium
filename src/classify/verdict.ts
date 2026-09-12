@@ -90,6 +90,14 @@ export function isBlocked(
  * all five vetoes and fail only the floor (docs/calibration-2026-09.md, "Read
  * together"). A caller that asks `!isBlocked` when it means "readable" will
  * treat a wall as a document.
+ *
+ * Amended in 0.2.0 (spec 6.6, escalation exception): "escalates until a read
+ * is readable" is check()'s common case, not its whole rule. check() may
+ * climb past a readable read when the verdict it would otherwise issue is
+ * `unsupported` and an HTML rung remains untried, via continueReading()
+ * (spec 0.2.0 section 4). This function's own definition of readable is
+ * unchanged - the exception is in when the ladder is willing to keep
+ * climbing past one, not in what counts as one.
  */
 export function isReadable(
   s: Pick<Signals, "challengeHeader" | "challengePath" | "challengeSignature" | "documentGone" | "notText" | "proseChars">,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nextAction, type Attempt } from "../../src/fetch/ladder.js";
+import { hasUntriedClimbableRung, nextAction, type Attempt } from "../../src/fetch/ladder.js";
 
 const ALL = ["node", "curl", "pdftotext"] as const;
 // The ladder sees one bit per attempt: did that rung read the document
@@ -44,5 +44,60 @@ describe("nextAction", () => {
 
   it("never retries a rung it has already attempted", () => {
     expect(nextAction([unread, { ...unread, rung: "curl" }], ALL, false)).toEqual({ kind: "stop" });
+  });
+
+  it("climbs past a readable read only when told to exhaust the ladder", () => {
+    const history = [{ rung: "node" as const, readable: true }];
+    const rungs = ["node", "curl"] as const;
+    expect(nextAction(history, rungs, false)).toEqual({ kind: "stop" });
+    expect(nextAction(history, rungs, false, true)).toEqual({ kind: "try", rung: "curl" });
+  });
+
+  it("stops when exhausted even under the flag", () => {
+    const history = [
+      { rung: "node" as const, readable: true },
+      { rung: "curl" as const, readable: true },
+    ];
+    expect(nextAction(history, ["node", "curl"] as const, false, true)).toEqual({ kind: "stop" });
+  });
+
+  it("never escalates a PDF, flag or not", () => {
+    const history = [{ rung: "pdftotext" as const, readable: true }];
+    expect(nextAction(history, ["pdftotext"] as const, true, true)).toEqual({ kind: "stop" });
+  });
+});
+
+describe("hasUntriedClimbableRung", () => {
+  // Fix round 2, Task 9: this predicate used to be a second copy of "which
+  // rungs are climbable", reimplemented inline in check.ts. That copy's wrong
+  // form (counting ANY rung the fetcher offers, `pdftotext` included, as
+  // untried) turned out to be unobservable through check() end to end -
+  // nextAction above already restricts its own candidates to HTML_ORDER, so
+  // the wrong form cost one no-op call and nothing else (see
+  // task-9-report.md's fix-round-1 section for the mutation proof). Moving
+  // the question here, against the one HTML_ORDER this module owns, is what
+  // makes the wrong form directly observable as a boolean - the first
+  // assertion below is exactly that boolean, and fix-round-2 in
+  // task-9-report.md pastes the mutation that reddens it.
+  it("does not count a rung the HTML ladder would never climb to", () => {
+    // Both HTML rungs tried, pdftotext available but never climbable from HTML.
+    expect(hasUntriedClimbableRung(["node", "curl"], ["node", "curl", "pdftotext"], false)).toBe(false);
+    expect(hasUntriedClimbableRung(["node"], ["node", "curl"], false)).toBe(true);
+    expect(hasUntriedClimbableRung([], ["pdftotext"], true)).toBe(false);
+  });
+
+  it("I2: refuses to call curl climbable once the PDF re-route has fired, even though isPdfUrl is false", () => {
+    // The re-route (src/fetch/read-source.ts) fires on a URL that did NOT
+    // look like a PDF by shape - isPdfUrl (source.pdfUrl) stays false - so
+    // before this guard, check()'s escalation trigger read attempted =
+    // ["node", "pdftotext"], available = ["node", "curl", "pdftotext"],
+    // isPdfUrl = false, and answered true: "curl" is in HTML_ORDER, in
+    // available, and not in attempted. That is exactly the rung the
+    // re-route's own `break` exists to prevent (measured through check():
+    // fetch calls ["node","pdftotext","curl"]). A `pdftotext` attempt in the
+    // history is the only signal available here that the re-route happened,
+    // since `isPdfUrl` alone cannot distinguish "URL looked like a PDF" from
+    // "the host told us at fetch time" - both must return false.
+    expect(hasUntriedClimbableRung(["node", "pdftotext"], ["node", "curl", "pdftotext"], false)).toBe(false);
   });
 });

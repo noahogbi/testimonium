@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   isPdf,
+  pdfFetch,
   pdfRungAvailable,
   pdftotextVersion,
   toVersionProbe,
@@ -54,6 +55,23 @@ describe("isPdf", () => {
     expect(isPdf("https://x.com/doc.pdf?v=2")).toBe(true);
     expect(isPdf("https://x.com/doc.pdf#page=4")).toBe(true);
     expect(isPdf("https://arxiv.org/pdf/1706.03762v7?download=1")).toBe(true);
+  });
+});
+
+describe("pdfFetch", () => {
+  it("warns when the PDF rung fails instead of returning empty in silence", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      // A URL that cannot be downloaded: the failure path, whichever stage owns it.
+      // pdfFetch(url, userAgent) - both parameters are required (src/fetch/pdf.ts:35).
+      pdfFetch("https://example.invalid/nope.pdf", "testimonium-test");
+      expect(warn).toHaveBeenCalled();
+      const msg = warn.mock.calls.map((c) => String(c[0])).join("\n");
+      expect(msg).toMatch(/^warn /);
+      expect(msg).toContain("example.invalid");
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 

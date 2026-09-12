@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
@@ -8,53 +8,27 @@ import type { FetcherOptions } from "../src/fetch/default-fetcher.js";
 import type { Fetcher } from "../src/fetch/types.js";
 import type { HostRule } from "../src/rules/hosts.js";
 import type { RuleSet } from "../src/rules/load.js";
+import type { ReachabilityResult, ReachabilityOptions } from "../src/reachability.js";
+import type { HarvestReport, HarvestOptions } from "../src/harvest.js";
+import type { CitationResult } from "../src/io/evidence.js";
+import type { CheckOptions } from "../src/check.js";
+import type { Document } from "../src/adapters/types.js";
 import {
   archiveContextFor,
   archivePathFor,
   archiveUnreadableNotice,
   classifyRecheckRun,
-  classifyRun,
   claimsPathFor,
   draftPathFor,
   evidencePathFor,
   harvestSummaryLine,
   jsonOutcome,
+  main,
   renderOutcome,
   USAGE,
   validateFlags,
 } from "../src/bin.js";
-
-describe("exit codes", () => {
-  it("exits 0 when everything is supported", () => {
-    expect(classifyRun({ unsupported: 0, unclaimed: 0, unreachable: 0, orphaned: 0, infrastructure: false }, {})).toBe(0);
-  });
-
-  it("exits 1 on an unsupported citation - an author-fixable defect", () => {
-    expect(classifyRun({ unsupported: 1, unclaimed: 0, unreachable: 0, orphaned: 0, infrastructure: false }, {})).toBe(1);
-  });
-
-  it("exits 1 on an unclaimed citation, because a gate that checks nothing must not pass", () => {
-    expect(classifyRun({ unsupported: 0, unclaimed: 1, unreachable: 0, orphaned: 0, infrastructure: false }, {})).toBe(1);
-  });
-
-  it("exits 0 on unreachable by default", () => {
-    expect(classifyRun({ unsupported: 0, unclaimed: 0, unreachable: 3, orphaned: 0, infrastructure: false }, {})).toBe(0);
-  });
-
-  it("exits 1 on unreachable when the caller opted in", () => {
-    expect(
-      classifyRun({ unsupported: 0, unclaimed: 0, unreachable: 1, orphaned: 0, infrastructure: false }, { unreachable: true }),
-    ).toBe(1);
-  });
-
-  it("exits 0 on an orphaned claim by default - a warning, not a failure", () => {
-    expect(classifyRun({ unsupported: 0, unclaimed: 0, unreachable: 0, orphaned: 2, infrastructure: false }, {})).toBe(0);
-  });
-
-  it("exits 2 on infrastructure failure, never 1", () => {
-    expect(classifyRun({ unsupported: 5, unclaimed: 0, unreachable: 0, orphaned: 0, infrastructure: true }, {})).toBe(2);
-  });
-});
+import { classifyRun } from "../src/run/classify.js";
 
 describe("validateFlags", () => {
   it("accepts a run with no flags at all", () => {
@@ -151,6 +125,29 @@ describe("the usage string", () => {
       expect(USAGE, command).toContain(command);
     }
   });
+
+  it("names --identity, and both --help and -h as escape hatches (fix round 1, Minor 7)", () => {
+    // -h works exactly as --help does (see the main() describe block below)
+    // but was missing from USAGE until this fix - a usage string is where an
+    // author would look to learn the short form exists at all.
+    expect(USAGE).toContain("--identity");
+    expect(USAGE).toContain("--help");
+    expect(USAGE).toContain("-h");
+  });
+});
+
+describe("validateFlags and identity", () => {
+  it("accepts --identity <value> on every command", () => {
+    // Task 16: identity is global, like --rules and --json - not
+    // command-scoped like --fail-on-unreachable or --fail-on-gone.
+    for (const command of ["check", "harvest", "recheck", "reachability"]) {
+      expect(validateFlags([command, "doc.md", "--identity", "example-app contact@example.com"])).toBeNull();
+    }
+  });
+
+  it("accepts --help without a value, alongside every other known flag", () => {
+    expect(validateFlags(["check", "doc.md", "--help"])).toBeNull();
+  });
 });
 
 describe("validateFlags and harvest", () => {
@@ -223,7 +220,7 @@ describe("archiveContextFor", () => {
     // a --rules file that loads, validates and is never consulted. The
     // mutation this catches: `make({})`.
     let seen: FetcherOptions | undefined;
-    const ctx = archiveContextFor(rules([RULE]), undefined, {
+    const ctx = archiveContextFor(rules([RULE]), undefined, undefined, {
       make: (o) => { seen = o; return fetcher(["node"]); },
       version: () => null,
     });
@@ -234,9 +231,33 @@ describe("archiveContextFor", () => {
     expect(seen?.hosts).toEqual([RULE]);
   });
 
+  it("passes a declared --identity into the fetcher it builds, and omits the key when absent (Task 16)", () => {
+    // Twin of the host-rules test above, for the same reason: `check`'s
+    // command hands THIS function's fetcher to `check()` whenever archiving
+    // is on (the default), and `recheck`'s command always does - so an
+    // `identity` that stops here never reaches a citation at all on either
+    // command, regardless of what `check()`/`recheck()`'s own options carry.
+    let seen: FetcherOptions | undefined;
+    const withId = archiveContextFor(rules(), undefined, "example-app contact@example.com", {
+      make: (o) => { seen = o; return fetcher(["node"]); },
+      version: () => null,
+    });
+    expect(withId).not.toBeNull();
+    expect(seen).toBeDefined();
+    expect(seen?.identity).toBe("example-app contact@example.com");
+
+    seen = undefined;
+    archiveContextFor(rules(), undefined, undefined, {
+      make: (o) => { seen = o; return fetcher(["node"]); },
+      version: () => null,
+    });
+    expect(seen).toBeDefined();
+    expect(seen).not.toHaveProperty("identity");
+  });
+
   it("probes the pdftotext version only when the fetcher advertises that rung", () => {
     let probes = 0;
-    const withRung = archiveContextFor(rules(), undefined, {
+    const withRung = archiveContextFor(rules(), undefined, undefined, {
       make: () => fetcher(["node", "curl", "pdftotext"]),
       version: () => { probes++; return "pdftotext version 4.00"; },
     });
@@ -246,7 +267,7 @@ describe("archiveContextFor", () => {
 
   it("does not spawn a probe on a machine whose ladder has no pdftotext rung", () => {
     let probes = 0;
-    const withoutRung = archiveContextFor(rules(), undefined, {
+    const withoutRung = archiveContextFor(rules(), undefined, undefined, {
       make: () => fetcher(["node"]),
       version: () => { probes++; return "should not be reached"; },
     });
@@ -257,13 +278,13 @@ describe("archiveContextFor", () => {
   it("hashes the --rules file's bytes when one was passed", () => {
     const f = join(mkdtempSync(join(tmpdir(), "testimonium-rules-")), "local.json");
     writeFileSync(f, '{"signatures":[]}', "utf8");
-    const ctx = archiveContextFor(rules(), f, { make: () => fetcher(["node"]), version: () => null });
+    const ctx = archiveContextFor(rules(), f, undefined, { make: () => fetcher(["node"]), version: () => null });
     expect(ctx?.localRulesHash).toBe(sha256Hex(readFileSync(f)));
     rmSync(dirname(f), { recursive: true, force: true });
   });
 
   it("records null, not a hash, when no --rules file was passed", () => {
-    const ctx = archiveContextFor(rules(), undefined, { make: () => fetcher(["node"]), version: () => null });
+    const ctx = archiveContextFor(rules(), undefined, undefined, { make: () => fetcher(["node"]), version: () => null });
     expect(ctx?.localRulesHash).toBeNull();
   });
 
@@ -272,7 +293,7 @@ describe("archiveContextFor", () => {
     // baseline that mis-reports the local-rules confound forever. Archiving
     // must never fail a run, so the answer is to skip archiving, not to throw
     // and not to guess.
-    const ctx = archiveContextFor(rules(), "no/such/rules.json", { make: () => fetcher(["node"]), version: () => null });
+    const ctx = archiveContextFor(rules(), "no/such/rules.json", undefined, { make: () => fetcher(["node"]), version: () => null });
     expect(ctx).toBeNull();
   });
 });
@@ -460,4 +481,343 @@ describe("archiveUnreadableNotice", () => {
     expect(lines).toContain("doc.archive/index.json is not valid JSON");
     expect(lines).toContain("not because check was never run");
   });
+});
+
+describe("main(): --help and -h (Ruling T11-R1)", () => {
+  // THE MEASURED BUG, pinned by exit code rather than by printed text: before
+  // this task, `node dist/bin.js --help` printed "unknown flag --help" and
+  // exited 2 - the most-typed flag on a published CLI erroring on first
+  // contact. A usage string printed with exit 2 looks IDENTICAL to one
+  // printed with exit 0 in a terminal, so a test that only checked what was
+  // printed would still pass on the broken behaviour; `0` versus `2` is the
+  // whole point, so every case here asserts the numeric return value.
+  //
+  // Neither branch touches the filesystem or the network - it returns before
+  // argv is even destructured into a command and a document - which is what
+  // makes driving the exported main() directly (rather than spawning
+  // dist/bin.js, which the rest of this CLI's tests deliberately avoid; see
+  // test/library-parity.test.ts's docstring) both safe and hermetic here.
+  it("--help prints the usage string and exits 0", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const code = await main(["--help"]);
+      expect(code).toBe(0);
+      expect(log).toHaveBeenCalledWith(USAGE);
+      expect(err).not.toHaveBeenCalled();
+    } finally {
+      log.mockRestore();
+      err.mockRestore();
+    }
+  });
+
+  it("-h prints the usage string and exits 0, exactly as --help does", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const code = await main(["-h"]);
+      expect(code).toBe(0);
+      expect(log).toHaveBeenCalledWith(USAGE);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it("--help anywhere in argv still wins, ahead of validateFlags and the command dispatch", () => {
+    return (async () => {
+      const log = vi.spyOn(console, "log").mockImplementation(() => {});
+      try {
+        // Neither "check" nor "no/such/doc.md" is ever reached: if they were,
+        // this would try to read a file that does not exist and reject
+        // instead of resolving, which is itself evidence the short-circuit
+        // failed to fire before the document read.
+        const code = await main(["check", "no/such/doc.md", "--help"]);
+        expect(code).toBe(0);
+        expect(log).toHaveBeenCalledWith(USAGE);
+      } finally {
+        log.mockRestore();
+      }
+    })();
+  });
+
+  it("--help wins over an actual unknown flag too, not just over the command dispatch", async () => {
+    // The comment above main() names this exact case by name: "check doc.md
+    // --bogus --help must still print help rather than 'unknown flag
+    // --bogus'". Every test above puts --help alongside a KNOWN flag or none
+    // at all; none of them drives an argv validateFlags would actually
+    // reject, so none of them can tell "--help is checked first" apart from
+    // "there was never anything for validateFlags to reject in the first
+    // place". --bogus is not in KNOWN_FLAGS, so this is the one input where
+    // the ordering claim and its absence produce different exit codes.
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const code = await main(["check", "doc.md", "--bogus", "--help"]);
+      expect(code).toBe(0);
+      expect(log).toHaveBeenCalledWith(USAGE);
+      expect(err).not.toHaveBeenCalled();
+    } finally {
+      log.mockRestore();
+      err.mockRestore();
+    }
+  });
+
+  it("CHARACTERIZATION: bare invocation (no arguments) still exits 2, unlike --help - it is a usage ERROR, not a request for help", async () => {
+    // Distinguishes the fix from "any time USAGE is printed, exit 0": a run
+    // missing its required <command> <doc.md> is still author-fixable-by-
+    // reading-the-usage-string, but it is not what the user ASKED for, so it
+    // keeps failing the naive `set -e` gate exactly as before this task.
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const code = await main([]);
+      expect(code).toBe(2);
+      expect(err).toHaveBeenCalledWith(USAGE);
+    } finally {
+      err.mockRestore();
+    }
+  });
+});
+
+describe("main(): --identity value parsing", () => {
+  const withDoc = (fn: (doc: string) => Promise<void> | void) => async () => {
+    const dir = mkdtempSync(join(tmpdir(), "testimonium-identity-"));
+    const doc = join(dir, "essay.md");
+    // No footnotes: this test only needs main() to reach the --identity
+    // parsing block, which runs after the document is read and before any
+    // command dispatches, fetches, or writes.
+    writeFileSync(doc, "No citations here.\n", "utf8");
+    try {
+      await fn(doc);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+
+  it(
+    "refuses a trailing --identity with no value, the same silent-no-op guard --rules has",
+    withDoc(async (doc) => {
+      const err = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        const code = await main(["reachability", doc, "--identity"]);
+        expect(code).toBe(2);
+        expect(err).toHaveBeenCalledWith(expect.stringContaining("--identity requires a value"));
+      } finally {
+        err.mockRestore();
+      }
+    }),
+  );
+
+  it(
+    "refuses --identity immediately followed by another flag, rather than swallowing it as the value",
+    withDoc(async (doc) => {
+      const err = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        const code = await main(["reachability", doc, "--identity", "--json"]);
+        expect(code).toBe(2);
+        expect(err).toHaveBeenCalledWith(expect.stringContaining("--identity requires a value"));
+      } finally {
+        err.mockRestore();
+      }
+    }),
+  );
+
+  it(
+    "refuses an empty --identity value, the exact silent-no-op the guard exists to catch (fix round 1, Minor 5)",
+    withDoc(async (doc) => {
+      const err = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        const code = await main(["reachability", doc, "--identity", ""]);
+        expect(code).toBe(2);
+        expect(err).toHaveBeenCalledWith(expect.stringContaining("--identity requires a value"));
+      } finally {
+        err.mockRestore();
+      }
+    }),
+  );
+
+  it(
+    "refuses a whitespace-only --identity value too, not just a literally empty one",
+    withDoc(async (doc) => {
+      const err = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        const code = await main(["reachability", doc, "--identity", "   "]);
+        expect(code).toBe(2);
+        expect(err).toHaveBeenCalledWith(expect.stringContaining("--identity requires a value"));
+      } finally {
+        err.mockRestore();
+      }
+    }),
+  );
+});
+
+describe("main(): CLI --identity pass-through to each command (fix round 1, Important 2)", () => {
+  // THE MEASURED GAP: every existing main([...]) test above is a --help
+  // case, a bare-invocation case, or an --identity REFUSAL - all of which
+  // return before any command dispatches. Removing `identity` from bin.ts's
+  // reachability call (:387 at review time), harvest call (:434), or check
+  // call (:633) left `npx tsc --noEmit` clean and all 538 tests green - the
+  // recheck and check archiving paths are compile-enforced by
+  // archiveContextFor's required `identity` parameter, but these three
+  // pass-throughs are plain object-literal spreads with nothing pinning
+  // them. Each test below mocks the command module ONE LEVEL BELOW bin.ts,
+  // dynamic-imports a fresh bin.js so the mock takes effect, and asserts the
+  // options object the command actually received - proving the wire at the
+  // one hop these three lacked, the same way test/check.test.ts's spy on
+  // defaultFetcher proves check()'s own construction site.
+
+  const withDoc = (body: string, fn: (doc: string) => Promise<void> | void) => async () => {
+    const dir = mkdtempSync(join(tmpdir(), "testimonium-cli-identity-"));
+    const doc = join(dir, "essay.md");
+    writeFileSync(doc, body, "utf8");
+    try {
+      await fn(doc);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+
+  it(
+    "reachability: forwards --identity into reachability()'s options",
+    withDoc("No citations here.\n", async (doc) => {
+      vi.resetModules();
+      const spy = vi.fn(
+        async (_urls: readonly string[], _opts: ReachabilityOptions = {}): Promise<ReachabilityResult> => ({
+          readable: [],
+          unreadable: [],
+          rate: 1,
+        }),
+      );
+      vi.doMock("../src/reachability.js", () => ({ reachability: spy }));
+      try {
+        const { main: mainWithMockedReachability } = await import("../src/bin.js");
+        const log = vi.spyOn(console, "log").mockImplementation(() => {});
+        try {
+          const code = await mainWithMockedReachability([
+            "reachability",
+            doc,
+            "--identity",
+            "example-app contact@example.com",
+          ]);
+          expect(code).toBe(0);
+          expect(spy).toHaveBeenCalledTimes(1);
+          expect(spy.mock.calls[0]?.[1]).toEqual(
+            expect.objectContaining({ identity: "example-app contact@example.com" }),
+          );
+
+          spy.mockClear();
+          await mainWithMockedReachability(["reachability", doc]);
+          expect(spy).toHaveBeenCalledTimes(1);
+          expect(spy.mock.calls[0]?.[1]).not.toHaveProperty("identity");
+        } finally {
+          log.mockRestore();
+        }
+      } finally {
+        vi.doUnmock("../src/reachability.js");
+        vi.resetModules();
+      }
+    }),
+  );
+
+  it(
+    "harvest: forwards --identity into harvest()'s options",
+    withDoc("No citations here.\n", async (doc) => {
+      vi.resetModules();
+      const spy = vi.fn(async (_doc: Document, _opts: HarvestOptions = {}): Promise<HarvestReport> => ({
+        proposals: [],
+        unreachable: [],
+        skipped: [],
+        frequencyVacuous: true,
+      }));
+      vi.doMock("../src/harvest.js", () => ({ harvest: spy }));
+      try {
+        const { main: mainWithMockedHarvest } = await import("../src/bin.js");
+        const log = vi.spyOn(console, "log").mockImplementation(() => {});
+        try {
+          // --json: the draft prints to stdout instead of being written to
+          // disk, so this test touches nothing outside the temp doc itself.
+          const code = await mainWithMockedHarvest([
+            "harvest",
+            doc,
+            "--json",
+            "--identity",
+            "example-app contact@example.com",
+          ]);
+          expect(code).toBe(0);
+          expect(spy).toHaveBeenCalledTimes(1);
+          expect(spy.mock.calls[0]?.[1]).toEqual(
+            expect.objectContaining({ identity: "example-app contact@example.com" }),
+          );
+
+          spy.mockClear();
+          await mainWithMockedHarvest(["harvest", doc, "--json"]);
+          expect(spy).toHaveBeenCalledTimes(1);
+          expect(spy.mock.calls[0]?.[1]).not.toHaveProperty("identity");
+        } finally {
+          log.mockRestore();
+        }
+      } finally {
+        vi.doUnmock("../src/harvest.js");
+        vi.resetModules();
+      }
+    }),
+  );
+
+  it(
+    "check: forwards --identity into check()'s options on the --no-archive path",
+    withDoc(
+      "The committee's own filing says spending rose.[^1]\n\n" +
+        "[^1]: Committee Report. https://example.com/report\n",
+      async (doc) => {
+        const claimsPath = join(dirname(doc), "essay.claims.json");
+        writeFileSync(
+          claimsPath,
+          JSON.stringify({ "https://example.com/report": ["the committee's own filing says spending rose"] }),
+          "utf8",
+        );
+        vi.resetModules();
+        const spy = vi.fn(
+          async (_url: string, _claims: readonly string[], _opts: CheckOptions = {}): Promise<CitationResult> => ({
+            url: "https://example.com/report",
+            verdict: "unreachable",
+            rungsAttempted: [],
+            rungsAvailable: [],
+            ladderTruncated: false,
+          }),
+        );
+        vi.doMock("../src/check.js", () => ({ check: spy }));
+        try {
+          const { main: mainWithMockedCheck } = await import("../src/bin.js");
+          const log = vi.spyOn(console, "log").mockImplementation(() => {});
+          try {
+            // --no-archive: check()'s own construction site is what has to
+            // carry `identity` here, not archiveContextFor's (Important 1's
+            // sibling gap, already covered by Minor 6's proof) - this
+            // isolates that one call site exactly as it isolates `fetcher`.
+            const code = await mainWithMockedCheck([
+              "check",
+              doc,
+              "--no-archive",
+              "--allow-unclaimed",
+              "--identity",
+              "example-app contact@example.com",
+            ]);
+            expect(code).toBe(0);
+            expect(spy).toHaveBeenCalledTimes(1);
+            expect(spy.mock.calls[0]?.[2]).toEqual(
+              expect.objectContaining({ identity: "example-app contact@example.com" }),
+            );
+
+            spy.mockClear();
+            await mainWithMockedCheck(["check", doc, "--no-archive", "--allow-unclaimed"]);
+            expect(spy).toHaveBeenCalledTimes(1);
+            expect(spy.mock.calls[0]?.[2]).not.toHaveProperty("identity");
+          } finally {
+            log.mockRestore();
+          }
+        } finally {
+          vi.doUnmock("../src/check.js");
+          vi.resetModules();
+        }
+      },
+    ),
+  );
 });

@@ -36,18 +36,44 @@ export interface SourceReads {
  * on different predicates - three vetoes in one, five in the other - so the
  * preflight climbed past a 404 that ended the gate's ladder. No test noticed.
  *
- * This module is deliberately NOT exported from src/index.ts (spec 5.3). It
- * returns raw reads, and a caller holding raw reads can assemble a verdict
- * check() never issued. The public surface stays check() and reachability().
+ * Amended in 0.2.0 (spec 6.6, escalation exception): "until the ladder
+ * stops" now has one exception. When `exhaustive` is set, `nextAction`
+ * suspends the early stop even after a readable read, so the loop climbs one
+ * rung further - `continueReading`, below, is the only caller that sets it,
+ * and only check() calls continueReading, only when the verdict would be
+ * `unsupported` and a rung is untried (spec 0.2.0 section 4).
+ *
+ * Shared by readSource and continueReading (Task 8): both mutate the same
+ * three arrays and differ only in what they start from and whether
+ * `exhaustive` is set, so the loop itself lives once, here.
  */
-export async function readSource(url: string, claims: readonly string[], opts: ReadSourceOptions): Promise<SourceReads> {
-  const pdfUrl = isPdf(url);
-  const history: Attempt[] = [];
-  const attempted: RungId[] = [];
-  const reads: Read[] = [];
+async function climb(
+  url: string,
+  claims: readonly string[],
+  opts: ReadSourceOptions,
+  pdfUrl: boolean,
+  history: Attempt[],
+  attempted: RungId[],
+  reads: Read[],
+  exhaustive: boolean,
+): Promise<void> {
+  // One shape, one place. Both the ladder's own rung and the PDF re-route
+  // below feed a RawResponse through the identical seven fields; a field
+  // added to that input later needs updating here once, not in two call
+  // sites that could silently drift apart.
+  const computeFor = (raw: RawResponse) =>
+    computeSignals({
+      rawBody: raw.rawBody,
+      headers: raw.headers,
+      finalUrl: raw.finalUrl || url,
+      status: raw.status,
+      claims,
+      sourceLabel: opts.sourceLabel ?? "",
+      ...(opts.rules ? { rules: opts.rules } : {}),
+    });
 
   for (;;) {
-    const action = nextAction(history, opts.fetcher.rungs, pdfUrl);
+    const action = nextAction(history, opts.fetcher.rungs, pdfUrl, exhaustive);
     if (action.kind === "stop") break;
 
     // A Fetcher must not throw - see the contract on the interface. The three
@@ -65,20 +91,97 @@ export async function readSource(url: string, claims: readonly string[], opts: R
       response = EMPTY_RESPONSE;
     }
     attempted.push(action.rung);
-    const computed = computeSignals({
-      rawBody: response.rawBody,
-      headers: response.headers,
-      finalUrl: response.finalUrl || url,
-      status: response.status,
-      claims,
-      sourceLabel: opts.sourceLabel ?? "",
-      ...(opts.rules ? { rules: opts.rules } : {}),
-    });
+    const computed = computeFor(response);
     reads.push({ rung: action.rung, computed });
+
+    // A PDF served from a URL with no .pdf extension. The rung was picked from
+    // URL shape before any fetch, so N5 vetoes these bytes as not-text and the
+    // document reads `unreachable`. The HOST has now told us what it is, so
+    // one pdftotext attempt is licensed - the direction that cannot libel HTML
+    // as a PDF. Falling through to curl on a FAILED PDF fetch is forbidden by
+    // TWO things now, not one: this loop's own `break` below stops the climb
+    // the instant the re-route is taken, readable or not, and
+    // `hasUntriedClimbableRung` (src/fetch/ladder.ts) refuses to call a rung
+    // climbable once `pdftotext` is in the attempted list, so check()'s
+    // escalation trigger (spec 0.2.0 section 4) cannot walk through the break
+    // either. Before that guard existed this held anyway, but only by
+    // coincidence of N5's veto leaving no readable read and the verdict
+    // landing on `unreachable`, where the trigger never fires - not by design.
+    // Header keys are case-insensitive by contract (src/fetch/types.ts:23-31):
+    // a fetcher "may pass a server's own casing straight through". Reading
+    // headers["content-type"] raw would silently miss `Content-Type` and leave
+    // the document `unreachable` - this task's own defect, recurring by casing.
+    const ctype = Object.entries(response.headers).find(
+      ([k]) => k.toLowerCase() === "content-type",
+    )?.[1];
+    if (
+      !pdfUrl &&
+      isPdf(url, ctype) &&
+      opts.fetcher.rungs.includes("pdftotext") &&
+      !attempted.includes("pdftotext")
+    ) {
+      // Same contract as the ladder's own rung fetch above: a Fetcher must not
+      // throw, but a third-party one that does degrades to an unread rung
+      // rather than aborting the whole check() call for the entire document.
+      let pdfRead: RawResponse;
+      try {
+        pdfRead = await opts.fetcher.fetch(url, "pdftotext");
+      } catch (e) {
+        console.warn(
+          `warn fetcher rung "pdftotext" threw for ${url}: ${e instanceof Error ? e.message : String(e)}`,
+        );
+        pdfRead = EMPTY_RESPONSE;
+      }
+      attempted.push("pdftotext");
+      const pdfComputed = computeFor(pdfRead);
+      reads.push({ rung: "pdftotext", computed: pdfComputed });
+      history.push({ rung: "pdftotext", readable: isReadable(pdfComputed.signals) });
+      break;
+    }
+
     history.push({ rung: action.rung, readable: isReadable(computed.signals) });
   }
+}
+
+/**
+ * This module is deliberately NOT exported from src/index.ts (spec 5.3). It
+ * returns raw reads, and a caller holding raw reads can assemble a verdict
+ * check() never issued. The public surface stays check() and reachability().
+ */
+export async function readSource(url: string, claims: readonly string[], opts: ReadSourceOptions): Promise<SourceReads> {
+  const pdfUrl = isPdf(url);
+  const history: Attempt[] = [];
+  const attempted: RungId[] = [];
+  const reads: Read[] = [];
+
+  await climb(url, claims, opts, pdfUrl, history, attempted, reads, false);
 
   return { reads, attempted, pdfUrl };
+}
+
+/**
+ * Resume a ladder that stopped at a readable read, because check() is about to
+ * accuse and a rung is untried (spec 0.2.0 section 4). The prior reads are
+ * carried forward, so the rung already fetched is not fetched again.
+ *
+ * `history` is rebuilt from `prior.reads` rather than stored on SourceReads:
+ * `readable` is `isReadable(computed.signals)`, which is exactly what the
+ * original loop pushed.
+ */
+export async function continueReading(
+  url: string,
+  claims: readonly string[],
+  opts: ReadSourceOptions,
+  prior: SourceReads,
+): Promise<SourceReads> {
+  const history: Attempt[] = prior.reads.map((r) => ({
+    rung: r.rung,
+    readable: isReadable(r.computed.signals),
+  }));
+  const attempted: RungId[] = [...prior.attempted];
+  const reads: Read[] = [...prior.reads];
+  await climb(url, claims, opts, prior.pdfUrl, history, attempted, reads, true);
+  return { reads, attempted, pdfUrl: prior.pdfUrl };
 }
 
 /**

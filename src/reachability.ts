@@ -1,5 +1,5 @@
 import { isBlocked } from "./classify/verdict.js";
-import { defaultFetcher } from "./fetch/default-fetcher.js";
+import { buildFetcher } from "./fetch/build-fetcher.js";
 import { bestReadable, readSource } from "./fetch/read-source.js";
 import type { Fetcher, RungId } from "./fetch/types.js";
 import type { RuleSet } from "./rules/load.js";
@@ -18,6 +18,12 @@ export interface ReachabilityOptions {
    *  - because one honored a local rule and the other didn't - is worse than
    *  no preflight at all. */
   readonly rules?: RuleSet;
+  /** Declared identity for hosts that require one, e.g. sec.gov's
+   *  "<app> <contact email>". testimonium ships no identity of its own, and
+   *  before Task 16 this option existed on FetcherOptions but was reachable
+   *  from nowhere: reachability() never passed it, so every such citation
+   *  took the warn-and-use-a-browser-UA branch. Matches CheckOptions.identity. */
+  readonly identity?: string;
 }
 
 /**
@@ -33,7 +39,14 @@ export async function reachability(
   urls: readonly string[],
   opts: ReachabilityOptions = {},
 ): Promise<ReachabilityResult> {
-  const fetcher = opts.fetcher ?? defaultFetcher(opts.rules ? { hosts: opts.rules.hosts } : {});
+  // buildFetcher (Task 16): the ONE construction shared with check(),
+  // harvest() and recheck()'s live arm - see its own docstring. `opts` is
+  // passed straight through rather than rebuilt field-by-field (fix round 1,
+  // Important 1): `ReachabilityOptions` is a structural superset of
+  // `BuildFetcherOptions`, and rebuilding it here would be a second copy of
+  // the forwarding logic that drifts the moment a field is added to one
+  // interface and not mirrored to the other.
+  const fetcher = buildFetcher(opts);
   const readable: ReachabilityResult["readable"][number][] = [];
   const unreadable: ReachabilityResult["unreadable"][number][] = [];
 

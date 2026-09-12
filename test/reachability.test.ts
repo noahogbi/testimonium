@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { reachability } from "../src/reachability.js";
 import type { Fetcher, RawResponse, RungId } from "../src/fetch/types.js";
+import type { FetcherOptions } from "../src/fetch/default-fetcher.js";
 import { proseVolume } from "../src/classify/thresholds.js";
 import { toText } from "../src/text/extract.js";
 
@@ -139,5 +140,39 @@ describe("reachability", () => {
     expect(r.readable).toEqual([]);
     expect(r.unreadable[0]?.reason).toBe("the origin says the document is gone (404/410)");
     expect(r.unreadable[0]?.rungsAttempted).toEqual(["node", "curl"]);
+  });
+});
+
+describe("reachability: identity wiring (ReachabilityOptions -> FetcherOptions)", () => {
+  // Task 16's third wire proof - the twin of test/check.test.ts's "check()
+  // itself forwards CheckOptions.identity" test, against reachability()
+  // instead. An empty URL list still builds the fetcher (buildFetcher runs
+  // before the per-URL loop), so this never touches the network.
+  it("forwards ReachabilityOptions.identity into the defaultFetcher(...) call at the construction site, and omits it when absent", async () => {
+    vi.resetModules();
+    const defaultFetcherSpy = vi.fn((_opts: FetcherOptions = {}) => ({
+      rungs: [] as RungId[],
+      fetch: async () => {
+        throw new Error("must not be called: rungs is empty");
+      },
+    }));
+    vi.doMock("../src/fetch/default-fetcher.js", () => ({ defaultFetcher: defaultFetcherSpy }));
+    try {
+      const { reachability: reachabilityWithMockedFetcher } = await import("../src/reachability.js");
+
+      await reachabilityWithMockedFetcher([], { identity: "example-app contact@example.com" });
+      expect(defaultFetcherSpy).toHaveBeenCalledTimes(1);
+      expect(defaultFetcherSpy.mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({ identity: "example-app contact@example.com" }),
+      );
+
+      defaultFetcherSpy.mockClear();
+      await reachabilityWithMockedFetcher([], {});
+      expect(defaultFetcherSpy).toHaveBeenCalledTimes(1);
+      expect(defaultFetcherSpy.mock.calls[0]?.[0]).not.toHaveProperty("identity");
+    } finally {
+      vi.doUnmock("../src/fetch/default-fetcher.js");
+      vi.resetModules();
+    }
   });
 });

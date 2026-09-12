@@ -19,38 +19,7 @@ import { writeArchive } from "./archive/store.js";
 import { defaultFetcher, type FetcherOptions } from "./fetch/default-fetcher.js";
 import { pdftotextVersion } from "./fetch/pdf.js";
 import type { Fetcher } from "./fetch/types.js";
-
-export interface RunTally {
-  readonly unsupported: number;
-  readonly unclaimed: number;
-  readonly unreachable: number;
-  readonly orphaned: number;
-  readonly infrastructure: boolean;
-}
-
-export interface FailOn {
-  readonly unreachable?: boolean;
-  readonly unclaimed?: boolean;
-  readonly orphanedClaims?: boolean;
-}
-
-/**
- * Exit 0 clean, 1 author-fixable defect, 2 infrastructure failure.
- *
- * An unclaimed citation fails by default: a gate that passes when nothing was
- * actually checked is the whole design's named top risk. `unreachable` does not
- * fail by default - it is an availability fact about us, not a credibility fact
- * about the claim - but a caller may opt in.
- */
-export function classifyRun(t: RunTally, failOn: FailOn): 0 | 1 | 2 {
-  if (t.infrastructure) return 2;
-  const fail =
-    t.unsupported > 0 ||
-    (t.unclaimed > 0 && failOn.unclaimed !== false) ||
-    (t.unreachable > 0 && failOn.unreachable === true) ||
-    (t.orphaned > 0 && failOn.orphanedClaims === true);
-  return fail ? 1 : 0;
-}
+import { classifyRun, type RunTally, type FailOn } from "./run/classify.js";
 
 export interface RecheckTally {
   readonly sourceDrift: number;
@@ -197,20 +166,23 @@ export function archiveUnreadableNotice(archiveUnreadable: string | null): strin
 const KNOWN_FLAGS = new Set([
   "--json",
   "--rules",
+  "--identity",
   "--fail-on-unreachable",
   "--allow-unclaimed",
   "--explain-fetch",
   "--no-archive",
   "--fail-on-gone",
+  "--help",
 ]);
 
 /** Exported so a test can assert it names every command this build has. A
  *  command the usage line does not name is a command nobody finds. */
 export const USAGE =
   "usage: testimonium <check|harvest|recheck|reachability> <doc.md> " +
-  "[--json] [--rules <path>] " +
+  "[--json] [--rules <path>] [--identity <app contact-email>] " +
   "(check only: [--fail-on-unreachable] [--allow-unclaimed] [--explain-fetch] [--no-archive]) " +
-  "(recheck only: [--fail-on-gone])";
+  "(recheck only: [--fail-on-gone]) " +
+  "| testimonium --help|-h";
 
 /**
  * The first `--flag` in argv this build does not recognize, or null when
@@ -219,8 +191,11 @@ export const USAGE =
  * Without this, `node dist/bin.js check doc.md --fail-on-unrechable` (a
  * typo) exits 0 and prints nothing: a user who believes they hardened CI has
  * not, invisibly. That is the same silent-no-op class the bare `--rules`
- * guard below already exists for. `main()` is not exported, so this is
- * exported instead - tests call it directly rather than spawning a process.
+ * guard below already exists for. Most of `main()`'s branches touch the
+ * filesystem or the network, which is why this - and the other pure pieces
+ * below it - are exported for direct testing rather than routed through a
+ * spawned process; `main()` itself is exported too (Task 16), but only for
+ * the one branch (`--help`/`-h`) that touches neither.
  */
 export function validateFlags(argv: readonly string[]): string | null {
   for (const a of argv) {
@@ -286,18 +261,29 @@ export interface ArchiveDeps {
  * Everything the archive write needs, built once per run - or null when this
  * run must not archive.
  *
- * THE `{ hosts }` ARGUMENT IS LOAD-BEARING. `check()` builds its own fetcher as
- * `defaultFetcher(opts.rules ? { hosts: opts.rules.hosts } : {})`, and a CLI
- * that builds its own and omits it gives the author a `--rules` file that
- * loads, validates and is never consulted - the silent no-op an unwired
- * `hostRuleFor` already cost this project once.
+ * THE `{ hosts }` ARGUMENT IS LOAD-BEARING, and so is `identity` beside it.
+ * `check()` and `recheck()` both build their live fetcher through
+ * `buildFetcher()` (src/fetch/build-fetcher.ts), and this function is a
+ * SECOND, CLI-ONLY construction site for that same live fetcher: `check`'s
+ * command below hands it the fetcher it uses whenever archiving is on (the
+ * default - see `--no-archive`), and `recheck`'s command hands it over
+ * unconditionally. A `--identity` value stops at check()'s or recheck()'s own
+ * options object whenever THIS function is the one that actually built the
+ * fetcher in use, exactly as a `--rules` file's host rules would - the same
+ * silent no-op an unwired `hostRuleFor` already cost this project once, and
+ * the reason `identity` is threaded all the way to this call.
  *
  * Returns null when a provenance fact cannot be established. Archiving must
  * never fail a run (13 Q4), and an entry recording `localRulesHash: null` when
  * a `--rules` file WAS passed would be a baseline that mis-reports the
  * local-rules confound for as long as it survives.
  */
-export function archiveContextFor(rules: RuleSet, rulesPath: string | undefined, deps: ArchiveDeps = {}): ArchiveContext | null {
+export function archiveContextFor(
+  rules: RuleSet,
+  rulesPath: string | undefined,
+  identity: string | undefined,
+  deps: ArchiveDeps = {},
+): ArchiveContext | null {
   let localRulesHash: string | null = null;
   if (rulesPath !== undefined) {
     try {
@@ -307,7 +293,7 @@ export function archiveContextFor(rules: RuleSet, rulesPath: string | undefined,
       return null;
     }
   }
-  const fetcher = (deps.make ?? defaultFetcher)({ hosts: rules.hosts });
+  const fetcher = (deps.make ?? defaultFetcher)({ hosts: rules.hosts, ...(identity ? { identity } : {}) });
   const probe = deps.version ?? pdftotextVersion;
   return {
     fetcher,
@@ -318,7 +304,34 @@ export function archiveContextFor(rules: RuleSet, rulesPath: string | undefined,
   };
 }
 
-async function main(argv: string[]): Promise<number> {
+// Exported so a test can pin the exit code directly (Ruling T11-R1): before
+// this, `node dist/bin.js --help` printed `unknown flag --help` and exited 2,
+// the most-typed flag on a published CLI erroring on first contact. A usage
+// string printed with exit 2 looks identical to one printed with exit 0 in a
+// terminal, so a test that only checks WHAT was printed would pass on the
+// broken behaviour; this is the one main() branch that touches neither the
+// filesystem nor the network, which is what makes exporting main() itself
+// (rather than yet another extracted pure function) the direct way to pin it.
+export async function main(argv: string[]): Promise<number> {
+  // Checked before validateFlags AND before the `!command || !doc` branch
+  // below, deliberately (fix round 1, Important 3 - an earlier version of
+  // this comment said `--help` "is not in KNOWN_FLAGS's normal sense", which
+  // was false: `--help` IS a KNOWN_FLAGS entry, so validateFlags alone would
+  // never reject it). The real reason for checking here, first: ordering.
+  // `check doc.md --bogus --help` must still print help rather than
+  // "unknown flag --bogus", and bare `--help` (no command, no doc) must
+  // print help rather than fall into the missing-doc branch two checks below
+  // - which is exactly where it would land if this ran after argv were
+  // destructured into `[command, doc]`, since `--help` has no doc to its
+  // right. Matched anywhere in argv, not just first position, so
+  // `check doc.md --help` asks for help exactly as bare `--help` does. `-h`
+  // is a single dash and validateFlags never inspects those (see its own
+  // characterization test), so it needs no KNOWN_FLAGS entry - only this
+  // direct check.
+  if (argv.includes("--help") || argv.includes("-h")) {
+    console.log(USAGE);
+    return 0;
+  }
   const unknownFlag = validateFlags(argv);
   if (unknownFlag) {
     console.error(`unknown flag ${unknownFlag}`);
@@ -362,9 +375,39 @@ async function main(argv: string[]): Promise<number> {
     return 2;
   }
 
+  // --identity <value>: declares a UA for hosts that require one (sec.gov's
+  // "<app> <contact email>"), forwarded into every command exactly as
+  // --rules is. Parsed the same way and for the same reason: a trailing
+  // --identity with no value, or one immediately followed by another flag,
+  // would otherwise silently do nothing - the exact silent-no-op class this
+  // task exists to close (Ruling T5-R1). Unlike --rules, an absent identity
+  // is not itself refused anywhere below: the fetcher warns per-host and
+  // falls back to a browser UA (userAgentFor) rather than failing the run.
+  //
+  // `identity.trim() === ""` is refused for the SAME reason (fix round 1,
+  // Minor 5). Without it, `--identity ""` passed the checks above (it is not
+  // `undefined` and does not start with "--") and exited 0 having configured
+  // nothing: every downstream spread is `identity ? { identity } : {}`,
+  // falsy for "", so it was dropped silently one layer down - the CLI
+  // reported success for a flag that did exactly what omitting it does. This
+  // guard also refuses a whitespace-only value ("--identity ' '"), which
+  // would otherwise be TRUTHY and survive every downstream spread including
+  // userAgentFor's own `if (!opts.identity)` check, arriving as a garbage UA
+  // string rather than being dropped - a second, worse silent failure this
+  // one check closes at no extra cost.
+  const identityIdx = argv.indexOf("--identity");
+  const identity = identityIdx !== -1 ? argv[identityIdx + 1] : undefined;
+  if (
+    identityIdx !== -1 &&
+    (identity === undefined || identity.startsWith("--") || identity.trim() === "")
+  ) {
+    console.error('--identity requires a value ("<app> <contact email>")');
+    return 2;
+  }
+
   if (command === "reachability") {
     const urls = document.footnotes.map((f) => f.url).filter((u): u is string => u !== null);
-    const r = await reachability(urls, { rules });
+    const r = await reachability(urls, { rules, ...(identity ? { identity } : {}) });
     if (flags.has("--json")) console.log(JSON.stringify(r, null, 2));
     else {
       for (const x of r.readable) console.log(`  readable    ${x.url} (${x.proseChars} chars via ${x.rung})`);
@@ -408,7 +451,11 @@ async function main(argv: string[]): Promise<number> {
       }
     }
 
-    const report = await harvest(document, { rules, ...(claims ? { claims } : {}) });
+    const report = await harvest(document, {
+      rules,
+      ...(claims ? { claims } : {}),
+      ...(identity ? { identity } : {}),
+    });
 
     // Under --json, stdout carries the draft and NOTHING else, so
     // `harvest doc.md --json > draft.json` produces a file `jq` and the
@@ -501,7 +548,14 @@ async function main(argv: string[]): Promise<number> {
     // could not compute would feed the local-rules confound a wrong answer, and
     // a wrong confound input is one of the few ways this command could mint an
     // exit 1 it has no licence for.
-    const ctx = archiveContextFor(rules, rulesPath);
+    //
+    // `ctx.fetcher` is what `recheck()` below receives as its LIVE fetcher, so
+    // `identity` has to reach it HERE, not just in `recheck()`'s own options
+    // object: `RecheckOptions.fetcher` is always set on this call site, and
+    // buildFetcher()'s first branch (bring-your-own-fetcher) always wins over
+    // an `identity` field sitting beside it - an option that reaches no
+    // command is this codebase's own named failure shape.
+    const ctx = archiveContextFor(rules, rulesPath, identity);
     if (ctx === null) {
       console.error("cannot establish rules provenance, so the comparison would be unsound");
       return 2;
@@ -578,7 +632,15 @@ async function main(argv: string[]): Promise<number> {
   // carries no rawBody, so the bytes exist only inside the fetcher (spec 8.3).
   // `--no-archive` means DO NOT WRAP, so the unwrapped path is byte-for-byte
   // what it was before this flag existed: check() builds its own fetcher.
-  const archive = flags.has("--no-archive") ? null : archiveContextFor(rules, rulesPath);
+  //
+  // `identity` is passed to `archiveContextFor` here for the SAME reason it is
+  // passed to `check()` below: whichever call actually builds the fetcher in
+  // use for this run is the one that has to see it. With archiving on (the
+  // default), that is this call - `check()`'s own `opts.fetcher` is set below
+  // and its own identity spread never runs. With `--no-archive`, `archive` is
+  // null, `recorder` is null, and `check()`'s own buildFetcher call is the one
+  // that has to see it instead - which is why it is ALSO passed below.
+  const archive = flags.has("--no-archive") ? null : archiveContextFor(rules, rulesPath, identity);
   const staged = new Map<string, StagedEntry>();
   for (const c of joined.checkable) {
     const recorder = archive ? recordingFetcher(archive.fetcher) : null;
@@ -587,6 +649,11 @@ async function main(argv: string[]): Promise<number> {
     const r = await check(c.url, c.claims, {
       sourceLabel: c.label,
       rules,
+      // Harmless to include even when `recorder` is also set: buildFetcher's
+      // bring-your-own-fetcher branch (opts.fetcher first) ignores `identity`
+      // entirely once a fetcher is supplied, so this only takes effect on the
+      // `--no-archive` path, where `identity` above is the one that matters.
+      ...(identity ? { identity } : {}),
       ...(recorder ? { fetcher: recorder.fetcher } : {}),
     });
     // ONLY `supported` writes a baseline. A failing check leaves the previous

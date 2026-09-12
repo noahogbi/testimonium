@@ -3,6 +3,12 @@
  * actually use. Every clause below was added because a claim demonstrably
  * present in a source reported as MISSING without it, and a false miss is
  * indistinguishable from a fabricated claim.
+ *
+ * This is now a public export: its exact output is a compatibility
+ * commitment, not just an internal helper of check(). A future tweak to any
+ * clause below - e.g. widening the abbreviation table - is a breaking change
+ * for a caller doing their own text comparisons alongside check()'s, not a
+ * safe internal edit.
  */
 export function norm(s: string): string {
   return s
