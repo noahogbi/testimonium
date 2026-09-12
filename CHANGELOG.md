@@ -1,5 +1,63 @@
 # Changelog
 
+## 0.2.0 - 2026-09-12
+
+One verdict-moving change, one additive-but-doctrine-reversing field pair on
+`unsupported` results, five new runtime exports, a stated non-circumvention
+stance with two capabilities declined, and two CLI additions. This package is
+published now, so unlike every plan before this one - each of which took a
+breaking change for free on the basis that nothing was published yet - this
+entry states plainly what moved and why.
+
+- **Verdicts move.** `check` now climbs one more rung past a
+  readable-but-`unsupported` read when an HTML rung is still untried, before
+  returning a verdict that accuses an author's citation ("escalate before
+  accusing", spec 0.2.0 section 4). This turns some `unsupported` results
+  into `supported` - away from accusation, which is the safe direction - but
+  it is still a behaviour change on a published tool: a 0.1.0 consumer's
+  cached `unsupported` results can read differently after upgrading. Every
+  verdict that actually moves - none do across the full fixture corpus (see
+  the report for why that is the expected, uninteresting result), one does
+  on the fixture built specifically to exercise this feature - is recorded
+  with its reason in `docs/verdict-movement-0-1-0-to-0-2-0.md`.
+- **`unsupported` results gain `evidence` and `retrievedAt`.** Additive in
+  JSON - no field removed or retyped - but a doctrine reversal at the spec
+  level: the binding spec stated, at two separate sites, that non-`supported`
+  results "carry no renderable fields at all"; both sites are now amended
+  (spec 0.2.0 section 2). An author who fixes four of five claims no longer
+  loses the rendered evidence for the one claim that already passed.
+  `unreachable` is unchanged and stays bare: we did not read the page, so
+  there is nothing honest to render.
+- **Five new runtime exports, plus their types.** `defaultFetcher`, `norm`,
+  `THRESHOLDS`, `validateClaims`, `classifyRun`. `THRESHOLDS` is exported
+  frozen (`Object.freeze`): it is the table that decides whether a page
+  counts as read, and an unfrozen export would have let any consumer move
+  that boundary process-wide. `toText`, `isPdf` and the per-host helpers
+  stay sealed.
+- **The non-circumvention stance, stated in the spec and the README.**
+  testimonium's design goal is that a source it cannot legitimately read
+  reads `unreachable`, never `unsupported`, stated as a goal with a named,
+  accepted exception (a wall padded past the prose floor) rather than as an
+  absolute the code cannot back. Two capabilities were considered and
+  declined on this ground: a publisher-specific body extractor recovering
+  full article text from a page's embedded JSON state, and a
+  publisher-pinned user agent for the same, already hard-blocked, host. Both
+  remain available to a caller with legitimate access, through
+  `CheckOptions.fetcher` or a local `--rules` host entry - no fork required.
+- **CLI: `--identity <app contact-email>` and `--help`/`-h`.** `--help`
+  previously printed `unknown flag --help` and exited 2; it now prints usage
+  and exits 0, whether invoked bare or alongside other flags.
+
+**If you run `recheck` against a baseline archived under 0.1.0, read this
+before filing a bug.** The live arm can now escalate on the ladder above;
+the replay/control arm built from that pre-0.2.0 archive cannot, because
+`replayFetcher` advertises only the rungs the archive actually recorded. The
+first `recheck` you run after upgrading can therefore report live/archive
+divergence on exactly the `unsupported` entries this release rescues. That
+is this release's fix surfacing at the recheck seam, not a regression - see
+"The recheck/replayFetcher interaction" in
+`docs/verdict-movement-0-1-0-to-0-2-0.md` for the full mechanism.
+
 ## 0.1.0 - 2026-09-11
 
 Initial implementation of plan 1 (`check`, `reachability`). See
