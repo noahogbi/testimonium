@@ -336,11 +336,23 @@ This document covers project 1 only.
 
 **The originality check is project 2's, and it needs the tee.** The ledger calls
 it the single largest whole-capability loss. It cannot be rebuilt on the public
-API as 0.1.0 stands, because `check()` returns no source text. This spec's
-export of `defaultFetcher` is what makes it recoverable: the caller wraps it in
-a recording tee - the `recordingFetcher` pattern, `archive/record.ts:39-52` - and
-keeps the same bytes `check()` read. Without that sentence, project 2's parity
-bar promises something it cannot deliver.
+API as 0.1.0 stands, because `check()` returns no source text.
+
+**Corrected 2026-09-12, after measurement.** An earlier version of this
+paragraph said exporting `defaultFetcher` made the check recoverable by wrapping
+it in "the `recordingFetcher` pattern, `archive/record.ts:39-52`".
+`recordingFetcher` is NOT exported - nor are `toText` or `isPdf` - and
+`CitationResult` carries excerpts, never the source text. A reader would have
+reached for an import that does not exist.
+
+What IS available: `defaultFetcher` and `norm` are exported, so a caller can
+write its own `Fetcher` wrapper keeping the bytes each rung returned, and can
+normalize with the same `norm` the matcher uses. The gap is **extraction**:
+`toText` is sealed, so a caller measuring shared runs against prose must either
+supply its own extractor - a second extractor, the divergence class this project
+has already paid for once - or `toText` must be exported. Project 2 decides
+which, deliberately; it is not a detail an implementer should settle by reaching
+for whatever compiles.
 
 **Parity bar for 2 and 3, set by the owner:** capability parity plus a
 reconciliation run. Before the old code is deleted, both implementations run
