@@ -21,7 +21,10 @@ export async function nodeFetch(url: string, userAgent: string): Promise<RawResp
       headers[k.toLowerCase()] = v;
     });
     return { rawBody, status: r.status, headers, finalUrl: r.url || url, bytes: rawBody.length };
-  } catch {
+  } catch (e) {
+    console.warn(
+      `warn node rung failed for ${url}: ${e instanceof Error ? e.message : String(e)}`,
+    );
     return EMPTY_RESPONSE;
   }
 }

@@ -59,7 +59,10 @@ export function curlFetch(url: string, userAgent: string): RawResponse {
       finalUrl: effective,
       bytes: rawBody.length,
     };
-  } catch {
+  } catch (e) {
+    console.warn(
+      `warn curl rung failed for ${url}: ${e instanceof Error ? e.message : String(e)}`,
+    );
     return EMPTY_RESPONSE;
   } finally {
     for (const f of [bodyFile, dumpFile]) {

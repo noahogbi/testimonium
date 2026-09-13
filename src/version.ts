@@ -8,4 +8,4 @@
  * something slightly untrue. `test/exports.test.ts` still holds this equal to
  * package.json - two files are still two files, and the test is the join.
  */
-export const VERSION = "0.2.0";
+export const VERSION = "0.3.0";
