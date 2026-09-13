@@ -2,7 +2,10 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { nodeFetch } from "../../src/fetch/node.js";
 import { curlFetch } from "../../src/fetch/curl.js";
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe("node rung diagnostics", () => {
   it("warns with the url and the reason when the fetch throws", async () => {

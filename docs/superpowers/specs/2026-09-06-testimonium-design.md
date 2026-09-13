@@ -260,13 +260,17 @@ throw `ERR_PACKAGE_PATH_NOT_EXPORTED`. **Amended in 0.2.0:** `norm` and
 `defaultFetcher` are now runtime exports (`src/index.ts`) - `norm` as a
 documented compatibility surface, `defaultFetcher` so a caller can wrap or
 compose the bundled ladder through `CheckOptions.fetcher` instead of
-hand-rolling one. `toText`, `isPdf`, and the per-host helpers stay genuinely
-unavailable to consumers, not merely advised against. The test suite imports
-source modules by path (`../src/...`); there is no internal entry point for
-the sealed primitives, and `test/exports.test.ts` pins the exports map
-to `.` and `./package.json` alone. (This paragraph said "exported to the test
-suite through a separate internal entry point" from draft 2 until 2026-09-07;
-no such entry point ever existed.)
+hand-rolling one. **Amended in 0.3.0:** `toText` is now a runtime export
+(`src/index.ts`) as well, joining `norm` and `defaultFetcher` - it is a pure
+html-to-prose function, so holding it lets nobody assemble a verdict, exactly
+as `norm` already does. `isPdf` and the UA and host-rule machinery
+(`src/rules/hosts.ts`) stay genuinely unavailable to consumers, not merely
+advised against. The test suite imports source modules by path
+(`../src/...`); there is no internal entry point for the sealed primitives,
+and `test/exports.test.ts` pins the exports map to `.` and `./package.json`
+alone. (This paragraph said "exported to the test suite through a separate
+internal entry point" from draft 2 until 2026-09-07; no such entry point ever
+existed.)
 
 The residual leak is vendoring or forking, which no packaging prevents. The
 defence is to make the blessed path cheapest and to say plainly in the docs that
