@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.0 - 2026-09-12
+
+Two additive changes, both in service of the first real integration replacing
+the tool this package was extracted from. Neither moves a verdict.
+
+- **`toText` is a runtime export.** A caller measuring how much of its own
+  prose it shares verbatim with a source needs the source's extracted text, and
+  `check()` returns excerpts rather than the document. `toText` is pure
+  html-to-prose: holding it lets nobody assemble a verdict, which is why it can
+  be exported while `readSource` and `computeSignals` stay sealed. Its output
+  is now a compatibility commitment — the same trade already made for `norm`.
+- **The `node` and `curl` rungs report their failures.** Both caught and
+  returned `EMPTY_RESPONSE` with no diagnostic, so a dead link and a timeout
+  were indistinguishable downstream. `read-source.ts` already warned when a
+  *third-party* fetcher threw, citing ruling C12 — the package held other
+  people's fetchers to a standard it did not hold its own to. `pdf.ts` was
+  already fixed in 0.2.0.
+
 ## 0.2.0 - 2026-09-12
 
 One verdict-moving change, one additive-but-doctrine-reversing field pair on
