@@ -9,6 +9,7 @@ export { parseClaimsFile, normalizeUrl, joinClaims } from "./io/claims.js";
 export { VERSION } from "./version.js";
 export { defaultFetcher, type FetcherOptions } from "./fetch/default-fetcher.js";
 export { norm } from "./text/normalize.js";
+export { toText } from "./text/extract.js";
 export { THRESHOLDS } from "./classify/thresholds.js";
 export { validateClaims, type ClaimProblem } from "./io/validate.js";
 export { classifyRun, type RunTally, type FailOn } from "./run/classify.js";

@@ -52,6 +52,7 @@ describe("package surface", () => {
       "parseClaimsFile",
       "parseGfmFootnotes",
       "reachability",
+      "toText",
       "validateClaims",
     ]);
   });
