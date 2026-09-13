@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0 - 2026-09-12
+## 0.3.0 - 2026-09-13
 
 Two additive changes, both in service of the first real integration replacing
 the tool this package was extracted from. Neither moves a verdict.
