@@ -59,9 +59,10 @@ Both are additive; neither moves a verdict. Minor bump.
 **Nothing in `scripts/lib/source-fetch.mjs` is deleted by this project.**
 `citation-check.mjs` still depends on most of its exports, and the cutover of
 that script is project 3. (Precisely: after this project `curlText`'s export
-becomes dead — its only consumers are srccheck and source-fetch's own
-internals — but it is left in place regardless, because deleting anything from
-that module is project 3's decision to make with project 3's evidence.) The
+becomes dead — srccheck is its only consumer, `fetchSourceText` using
+`curlWithStatus` instead — but it is left in place regardless, because deleting
+anything from that module is project 3's decision to make with project 3's
+evidence.) The
 only code this project earns the right to delete is srccheck's own inline
 ladder, and only after the reconciliation clears.
 
@@ -182,7 +183,7 @@ diagnostic value of the line the origin prints today.
 ## 5. The adapter
 
 ```
-checkIssue(issue, { fetcher, allowUnclaimed }) -> { items[], tally }
+checkIssue(issue, { fetcher }) -> { items[], tally }
 ```
 
 **`checkIssue` prints nothing.** Rendering belongs to the CLI. This is the
@@ -205,6 +206,11 @@ Each item carries:
 - `firedRule` when a rule fired
 - `originality: { words, run }`
 - `structural` — see below
+
+**`allowUnclaimed` is deliberately NOT an adapter option.** It is an exit
+policy and belongs to the CLI, which passes it to `classifyRun`. `check.ts:38`
+states the rule this follows: *an option the function ignores is worse than no
+option.* The adapter counts unclaimed items; it does not decide what they cost.
 
 **A missing `source_url` is a distinct structural status, not a verdict.**
 It must not be folded into `unreachable`: we did not fail to read a page, there
@@ -249,12 +255,26 @@ The tee is pass-through and records `{ url, rung, rawBody, status, bytes }`.
 rung, so every line in §5's `reads[]` is available — including the
 content-type PDF re-route, which goes through the same fetcher.
 
-**Originality measures per-read and takes the maximum, excluding vetoed
-reads.** Not against a concatenation: joining reads lets an n-gram span the
-seam and score a match present in neither source. The veto exclusion matters
-because the origin never measures originality on a challenge page or an
-unclaimed item — both `continue` before reaching it — so including wall bodies
-would invent runs the origin never reports.
+**Originality measures per-read and takes the maximum.** Not against a
+concatenation: joining reads lets an n-gram span the seam and score a match
+present in neither source.
+
+**Exclusion is verdict-level, not per-read, and that is a deliberate
+narrowing.** An item whose verdict is `unreachable` gets no originality
+measure, matching the origin's `continue` on a challenge page; so does an item
+with no claims. But a MIXED read set — a vetoed node read beside a clean curl
+read, verdict `supported` — still measures against both bodies, because
+`CitationResult` carries no per-read field of any kind (`url`, `verdict`,
+`rungsAttempted`, `rungsAvailable`, `ladderTruncated`, `missed`, `evidence`,
+`retrievedAt`, `firedRule`) and `computeSignals`/`isBlocked` are sealed. The
+adapter cannot know which tee record to skip.
+
+Exposing per-read provenance was considered and declined for 0.3.0: it moves
+against the sealed-reads doctrine for a measure that is warning-only. The
+residual cost is bounded — a wall body can at worst contribute a spurious
+"reword this" suggestion, never a verdict or an exit code — and wall
+boilerplate rarely shares an eight-word run with a drafter's prose. Declared as
+part of §8.3.
 
 Extraction is per-rung: `norm(toText(rawBody))` for HTML rungs,
 `norm(rawBody)` for `pdftotext`, whose body is already extracted text.
@@ -369,7 +389,10 @@ not something to absorb quietly.
 **8.2 — Unclaimed items now fail.** Policy change, §7, approved.
 
 **8.3 — Originality may report a different run.** §6, warning-only, and it can
-move in either direction rather than only upward.
+move in either direction rather than only upward. Two named sources of
+movement: the per-read maximum fixes the origin's `hay`-never-`curlHay` bug,
+and the verdict-level veto exclusion means a mixed read set can measure against
+a wall body the origin would have skipped.
 
 **8.4 — Fetch-error diagnostic text moves to a warn line.** §4.2.
 
@@ -437,9 +460,12 @@ rules keyed off hostname.
 
 1. challenge interstitial → `unreachable`
 2. node-shell paired with curl-document → escalation, `supported`
-3. PDF → matched against raw extracted text
+3. PDF → pdftotext body matched *after* `toText`, like every other rung; a
+   claim containing a tag-shaped span MISSes, pinning §8.8's fifth bullet
 4. Bloomberg **pre-wall body** → claims MISS without `bloombergBody`, pinning §8.9
-5. Bloomberg **wall body** → `unreachable` via the challenge signature
+5. Bloomberg **wall body** → `unreachable` via the challenge signature, whose
+   N3 veto is conjoined with `maxChallengeChars` (800) — so the fixture body
+   must stay under that cap, or it reads as a document instead
 6. 404 → `unreachable` via `documentGone`
 7. 403 serving full text → `supported`, pinning the §8.7 flip
 8. fetch failure at `status: 0` → `unreachable`
@@ -464,7 +490,21 @@ to prevent.
 inability to take a fetcher blocks stubbing *it*, not the comparison:
 
 1. Instrument `bulletin-srccheck.legacy.mjs` to **record** `(url, rung,
-   rawBody, status)` for every fetch it makes, and run it on the real drafts.
+   rawBody, status, headers, finalUrl)` for every fetch it makes, plus its own
+   per-item outcome, and run it on the real drafts.
+
+   **`headers` and `finalUrl` are not optional.** `computeSignals` derives N1
+   from response headers and N2 from the redirect chain, so replaying with
+   `headers: {}` makes both vetoes structurally unable to fire — and the
+   resulting §8.5 adjudications would be artifacts of the instrument, biased
+   toward the new arm. Where the legacy arm cannot supply them (its `curlText`
+   call dumps no headers), record `headers: null` and have the report bucket
+   those reads as "headers unavailable" so no N1-shaped difference is ever
+   adjudicated from them.
+
+   **Record the legacy arm's own output too** — per item, its claim tags, its
+   NOT READ state and its originality word count. A recording of fetches alone
+   gives the comparison no left-hand side.
 2. Run `checkIssue` with a **replay** `CheckOptions.fetcher` serving those exact
    bytes.
 
@@ -563,3 +603,20 @@ import list and line citations, the `buildFetcher` short-circuit, the tee's
 feasibility including the content-type PDF re-route, every field in §7's table,
 the exit mapping, `bulletin-validate.mjs:20`/`:158`, the `hay`-never-`curlHay`
 originality bug, §9A's stub-fetcher premises, and timeout parity.
+
+### Second round — what reviewing the plans changed in this spec
+
+Writing the implementation plans, and reviewing those, falsified five more
+things here. A spec only meets the code when someone tries to execute it.
+
+| finding | change |
+| --- | --- |
+| §6 told the caller to exclude vetoed reads, which `CitationResult` makes impossible | §6 — exclusion is verdict-level; the mixed-read drift is declared in §8.3 and the per-read option was considered and declined for 0.3.0 |
+| §9A shape 3 contradicted §8.8's own fifth bullet | shape 3 — the pdftotext body is matched *after* `toText` like every other rung, and the fixture pins the tag-strip drift rather than denying it |
+| §9B's recording shape blinded N1 and N2 | §9B — `headers` and `finalUrl` are recorded, `headers: null` where curl cannot supply them, and those reads are bucketed so no N1-shaped difference is adjudicated from them |
+| §9B recorded fetches but nothing to compare them against | §9B — the legacy arm records its own per-item outcome too |
+| §5 gave `checkIssue` an `allowUnclaimed` it never reads | §5 — removed; it is an exit policy and belongs to the CLI, per `check.ts:38` |
+
+Also corrected: shape 5's Bloomberg wall must stay under `maxChallengeChars`,
+since N3 is conjoined with that cap and a padded wall reads as a document; and
+§2's `curlText` parenthetical, which named a consumer that does not exist.

@@ -15,6 +15,7 @@
 ## Global Constraints
 
 - **`testimonium@0.3.0` must be published before Task 1.** The adapter imports `toText`, which does not exist in 0.2.0. Verify with `npm view testimonium version` before starting.
+- **Confirm a real-draft corpus exists before Task 1, not at Task 8.** Spec §9B requires it before Half B begins. Find the uncommitted `issue.json` files in the working directory and record their paths. If there are none, the reconciliation cannot run and the cutover cannot clear its bar — stop and report *before* rewriting the CLI, not after.
 - **`scripts/lib/source-fetch.mjs` must not be modified or deleted.** `citation-check.mjs` depends on it and is project 3. Task 8 verifies this with `git diff --stat`.
 - **Do not modify `scripts/bulletin-validate.mjs`, `scripts/bulletin-review.mjs`, or `scripts/citation-check.mjs`.**
 - The repo may have unrelated work in flight. Branch from a clean tree and confirm `git status` is clean before Task 1.
@@ -30,10 +31,20 @@
 - Create: `scripts/lib/issue-check.mjs`
 - Test: `scripts/lib/__tests__/issue-check.test.ts`
 - Create: `scripts/fixtures/srccheck/` (fixture bodies)
+- Modify: `package.json`, `package-lock.json`
+
+**Install the dependency first.** omnisscientia has no `testimonium` entry today, so without this Step 5 fails with `ERR_MODULE_NOT_FOUND` after the tests were supposed to go green:
+
+```bash
+npm install --save-exact testimonium@0.3.0
+```
+
+Include `package.json` and the lockfile in this task's commit.
 
 **Interfaces:**
 - Produces: `checkIssue(issue, opts) -> Promise<{ items, tally }>` and `teeFetcher(inner, sink) -> Fetcher`.
-  - `opts`: `{ fetcher?, allowUnclaimed?, identity?, hosts? }`. When `fetcher` is absent, build `defaultFetcher({ hosts, identity })` and wrap it in the tee.
+  - `opts`: `{ fetcher?, identity?, hosts? }`. **The tee wrap is unconditional** — whatever inner fetcher is in play, provided or default, gets wrapped, with a fresh sink per item. Every test below supplies a stub *and* asserts `reads[]`, and Task 5's CLI passes `defaultFetcher` in as `opts.fetcher` and still expects reads. When `fetcher` is absent, build `defaultFetcher({ hosts, identity })` and wrap that.
+  - **`allowUnclaimed` is deliberately absent.** It is an exit policy and belongs to the CLI, which hands it to `classifyRun`. `check.ts:38` states the rule: *an option the function ignores is worse than no option.*
   - each `item`: `{ n, category, sourceLabel, url, verdict, reads, claims, firedRule, originality, structural }`
   - each `reads` entry: `{ rung, status, bytes }`
   - each `claims` entry: `{ text, tag, rung }`, `tag` one of `"ok" | "ok*" | "MISS"`
@@ -191,6 +202,16 @@ it("refuses a non-string claim before any fetch", async () => {
   await expect(checkIssue(issue, { fetcher: stub({}) })).rejects.toThrow(/item 1/);
 });
 
+it("names EVERY offender, not just the first", async () => {
+  const issue = { items: [
+    { category: "x", source_url: "https://example.com/a", _claims: ["too short"], body: "" },
+    { category: "x", source_url: "https://example.com/b", _claims: [42], body: "" },
+  ] };
+  const err = await checkIssue(issue, { fetcher: stub({}) }).then(() => null, (e) => e);
+  expect(String(err)).toMatch(/item 1/);
+  expect(String(err)).toMatch(/item 2/);
+});
+
 it("marks a missing source_url structural, and never unreachable", async () => {
   const issue = { items: [{ category: "x", _claims: ["a claim long enough to pass"], body: "" }] };
   const r = await checkIssue(issue, { fetcher: stub({}) });
@@ -217,6 +238,8 @@ Run: `npx vitest run scripts/lib/__tests__/issue-check.test.ts`
 - [ ] **Step 3: Implement the pre-flight**
 
 Run `validateClaims` over every item's `_claims` **before the loop that fetches**. Report *all* offenders, not the first — an author fixing one at a time pays a network round trip per mistake. Throw with each offender's item number, the claim, and the reason `validateClaims` gave (`not-a-string` or `below-floor`).
+
+`validateClaims` **returns** `ClaimProblem[]` and never throws (`src/io/validate.ts`); the throw is the adapter's own. **Spec §7 requires this to exit 2**, and only the CLI can set an exit code — Task 5 Step 4 catches this throw and maps it. An uncaught rejection exits 1 in Node, which would mis-signal an author defect as infrastructure's opposite.
 
 Run the whole validator rather than length-checking: a non-string entry throws at `check()`'s door just as readily as a short one, and `validateClaims` already reports both.
 
@@ -250,16 +273,22 @@ git commit -m "feat(srccheck): pre-flight validation, structural rows, run tally
 
 `longestSharedRun` moves **verbatim** from `bulletin-srccheck.mjs` — the quote-stripping regex, the 4-to-40 gram range, and the early `break`. Copy it with its docstring. Changing its algorithm is not in scope and would make Task 8's originality comparison meaningless.
 
+**`norm` folds number words.** `(\d)\s*million` becomes `$1mn` and `(\d)\s*billion` becomes `$1bn` (`src/text/normalize.ts:32-35`), so `"4.2 million"` is a *single* token after normalisation. Every expected word count below was derived with that fold applied — do not re-derive them by counting the raw English.
+
 - [ ] **Step 1: Write the failing tests**
 
 ```ts
-it("measures against the read that actually carried the document, not the shell", async () => {
+it("measures against the read that carried the document, not the shell", async () => {
   const SHELL = `<html><body><div>${"Enable JavaScript to continue. ".repeat(250)}</div></body></html>`;
   const issue = { items: [{ category: "x", source_url: "https://example.com/a",
                             _claims: ["The quarterly figure was 4.2 million units"],
                             body: "The quarterly figure was 4.2 million units this period." }] };
   const r = await checkIssue(issue, { fetcher: stub({ node: { body: SHELL }, curl: { body: DOC } }) });
-  expect(r.items[0].originality.words).toBeGreaterThanOrEqual(8);
+  // Body normalises to 8 tokens: the quarterly figure was 4.2mn units this period
+  // DOC repeats "...units. The quarterly..." so token 7 ("this") breaks the run.
+  // The longest run present in DOC is therefore SIX tokens, not eight.
+  // Measured against SHELL alone it would be 0 — that is what this test pins.
+  expect(r.items[0].originality.words).toBe(6);
 });
 
 it("excludes a quoted span from the measure", async () => {
@@ -267,40 +296,53 @@ it("excludes a quoted span from the measure", async () => {
                             _claims: ["The quarterly figure was 4.2 million units"],
                             body: `He said "The quarterly figure was 4.2 million units" yesterday.` }] };
   const r = await checkIssue(issue, { fetcher: stub({ node: { body: DOC } }) });
-  expect(r.items[0].originality.words).toBeLessThan(8);
+  // Everything shared with DOC sits inside the quotes, so removing them leaves
+  // nothing. Assert ZERO, not "< 8": with the exclusion deleted the run is 4,
+  // which a "< 8" assertion cannot distinguish from working code.
+  expect(r.items[0].originality.words).toBe(0);
 });
 
-it("never measures against a vetoed read", async () => {
+it("does not measure at all when the verdict is unreachable", async () => {
+  // Veto via N1, which fires at ANY length. Do NOT try to veto by repeating a
+  // challenge SIGNATURE: N3 is conjoined with `proseVolume < 800`
+  // (src/classify/signals.ts), so a padded wall reads as an ordinary document
+  // and the item comes back `unsupported` with originality measured.
   const WALL = `<html><body><div>${"Are you a robot? Please verify you are human. ".repeat(200)}</div></body></html>`;
+  const blocked = { body: WALL, headers: { "cf-mitigated": "challenge" } };
   const issue = { items: [{ category: "x", source_url: "https://example.com/a",
                             _claims: ["a claim that is nowhere in either body"],
                             body: "Are you a robot? Please verify you are human." }] };
-  const r = await checkIssue(issue, { fetcher: stub({ node: { body: WALL }, curl: { body: WALL } }) });
-  expect(r.items[0].originality.words).toBe(0);
+  const r = await checkIssue(issue, { fetcher: stub({ node: blocked, curl: blocked }) });
+  expect(r.items[0].verdict).toBe("unreachable");
+  expect(r.items[0].originality).toBeNull();
 });
 ```
 
-The first test is the latent origin bug, pinned: today `longestSharedRun(it.body, hay)` uses `hay` and never `curlHay`, so a shell on node means the body is compared against the shell.
+The first test is the latent origin bug, pinned: today `longestSharedRun(it.body, hay)` uses `hay` and never `curlHay`, so a shell on node means the body is compared against the shell and scores 0.
 
 - [ ] **Step 2: Run and watch all three fail**
 
-- [ ] **Step 3: Implement per-read maximum with vetoed reads excluded**
+- [ ] **Step 3: Implement per-read maximum, with verdict-level exclusion**
 
 For each tee record, extract per rung — `norm(toText(rawBody))` for HTML rungs, `norm(rawBody)` for `pdftotext`, whose body is already extracted text — run `longestSharedRun` against each separately, and keep the longest.
 
 **Per-read, never concatenated:** joining reads lets an n-gram span the seam and score a match present in neither source.
 
-**Skip vetoed reads.** The origin never measures originality on a challenge page or an unclaimed item — both `continue` before reaching it — so including wall bodies would invent runs the origin never reports. Identify them from the result rather than re-classifying: an item whose verdict is `unreachable`, and any read whose body the classifier vetoed.
+**Exclusion is verdict-level and nothing more.** Set `originality: null` when the item's verdict is `unreachable`, and when the item has no claims — both match the origin's `continue`. **Do not attempt to exclude individual vetoed reads.** `CitationResult` carries no per-read field of any kind, and `computeSignals`/`isBlocked` are sealed, so it cannot be done from the result; doing it any other way means re-implementing challenge detection inside the adapter, which Task 5's criterion exists to delete.
 
-An item with no claims gets no originality measure, matching the origin's `continue`.
+The consequence is declared, not hidden: a mixed read set — a vetoed node read beside a clean curl read, verdict `supported` — measures against both bodies. Spec §6 and §8.3 record this as accepted drift. It is warning-only and cannot move a verdict or an exit code.
 
 - [ ] **Step 4: Run and watch all three pass**
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Prove the quote exclusion can fail**
+
+Delete the quote-stripping `replace` from `longestSharedRun`, re-run, confirm the second test goes red (it will read 4, not 0), restore. The other two tests are self-proving: test 1 reads 0 if the shell is measured, test 3 reads a number if the exclusion is missing.
+
+- [ ] **Step 6: Commit**
 
 ```bash
 git add scripts/lib/issue-check.mjs scripts/lib/__tests__/issue-check.test.ts
-git commit -m "feat(srccheck): originality per read, excluding vetoed bodies"
+git commit -m "feat(srccheck): originality per read, with verdict-level exclusion"
 ```
 
 ---
@@ -320,15 +362,15 @@ Tasks 1–3 already cover shapes 1, 2, 8, 9, 10, 11, 12, 13 and 14 in part. This
 | --- | --- | --- |
 | 1 | challenge interstitial | `unreachable` |
 | 2 | node-shell + curl-document | escalation, `supported` |
-| 3 | PDF | matched against raw extracted text |
+| 3 | PDF | pdftotext body matched *after* `toText`; include a plain claim (ok) **and** a tag-shaped span such as `x < 5 and y > 3` (MISS), pinning §8.8's fifth bullet |
 | 4 | Bloomberg **pre-wall** body | claims MISS without `bloombergBody` |
-| 5 | Bloomberg **wall** body | `unreachable` via the challenge signature |
+| 5 | Bloomberg **wall** body | `unreachable` via the challenge signature — keep the body under 800 prose chars, since N3 is conjoined with `maxChallengeChars` |
 | 6 | 404 | `unreachable` via `documentGone` |
 | 7 | 403 serving full text | `supported` |
 | 8 | fetch failure, `status: 0` | `unreachable` |
 | 9 | unclaimed item | counted; fails unless `allowUnclaimed` |
-| 10 | sub-16-character claim | pre-flight throw |
-| 11 | non-string `_claims` entry | pre-flight throw |
+| 10 | sub-16-character claim | pre-flight throw, surfaced as **exit 2** by Task 5 |
+| 11 | non-string `_claims` entry | pre-flight throw, surfaced as **exit 2** by Task 5 |
 | 12 | missing `source_url` | structural, exit 1 (Task 5 asserts the code) |
 | 13 | originality run of 8+ words, and a quoted run excluded | measured / excluded |
 | 14 | sub-floor **partial** match | `unreachable` |
@@ -362,7 +404,7 @@ Shape 4 is the one with a stated expectation that may read as a bug: a pre-wall 
 
 Shape 7 pins the §8.7 flip: the origin fails any non-2xx even when every claim matches; testimonium consults status only for 404/410, so a 403 serving the full text is `supported`.
 
-Shape 3 must exercise `pdftotext` bodies as **raw text**, not HTML.
+Shape 3 must exercise `pdftotext` bodies. Note that the package runs **every** rawBody through `toText`, including pdftotext output (`signals.ts:148`) — so a claim containing a tag-shaped span is eaten and MISSes. That is spec §8.8's declared drift, not a bug: pin it with two claims, one plain and one containing `x < 5 and y > 3`.
 
 - [ ] **Step 3: Run the file**
 
@@ -371,15 +413,21 @@ Expected: all green.
 
 - [ ] **Step 4: Pin the count**
 
-Add one test asserting the corpus covers fourteen named shapes, so a silently dropped fixture fails the suite:
+**Derive the pin from the tests themselves, not from a hand-maintained list.** An array asserted to have length 14 still says 14 after someone deletes a fixture and its `it()` — the exact silent under-delivery this step exists to prevent.
+
+Name every shape test `"shape N: …"` and assert the set of Ns found in the file's own test titles is exactly 1 through 14:
 
 ```ts
-it("covers all fourteen declared shapes", () => {
-  expect(COVERED_SHAPES).toHaveLength(14);
+it("covers shapes 1 through 14, with none dropped", () => {
+  const src = readFileSync(new URL("./issue-check.test.ts", import.meta.url), "utf8");
+  const seen = [...src.matchAll(/it\("shape (\d+):/g)].map((m) => Number(m[1]));
+  expect([...new Set(seen)].sort((a, b) => a - b)).toEqual(
+    Array.from({ length: 14 }, (_, i) => i + 1),
+  );
 });
 ```
 
-Export `COVERED_SHAPES` as an array of the shape names from the test file and keep it beside the table above. A sweep with no expected number under-delivers silently.
+Now a dropped test fails the pin by construction.
 
 - [ ] **Step 5: Commit**
 
@@ -440,11 +488,20 @@ The third test is spec §7's structural gap. `RunTally` has no structural field,
 
 `render` reproduces every line the current script prints — the `=== item N [category] label` header, the url, one line per read, the per-claim `ok  ` / `ok* ` / `MISS` tags with `[curl only]`, the NOT READ line with the fired rule's note and `lastConfirmed` when one fired, the `warn no _claims` line, the `ORIG` / `orig` lines, and the `==== N PROBLEM(S)` / `ALL CLAIMS SUPPORTED` footer.
 
+**Two lines need deciding rather than copying:**
+
+- **`FAIL no source_url`** must be rendered for a structural row. The origin prints it (`bulletin-srccheck.mjs:90-93`); without it the only trace is an exit code. Add a test.
+- **`FAIL non-200` is accepted as lost.** The origin fails any non-2xx even when every claim matches; testimonium consults status only for 404/410. Spec §8.7 made this an explicit decision rather than an omission, so record it here: the line is not reproduced, and the behaviour change is §8.7's declared class. `reads[]` still carries every status, so a future change of mind costs nothing.
+
 `exitFor` is `classifyRun(tally, { unreachable: true, unclaimed: !allowUnclaimed })`, then forced to at least 1 when any item has a `structural` value.
 
 - [ ] **Step 4: Wire `main`**
 
 Parse `process.argv[2]` as the issue path and `--allow-unclaimed` as a flag, build `defaultFetcher({ hosts: loadRules().hosts, identity: SRCCHECK_IDENTITY })`, call `checkIssue`, print `render`'s lines, exit `exitFor`'s code.
+
+**Catch the pre-flight throw and exit 2.** Task 2's validation throws; an uncaught rejection exits 1, which reports an author-fixable defect where spec §7 requires infrastructure. Wrap the `checkIssue` call, print every offender the error names, and `process.exit(2)`. Add a test pinning exit 2 for a sub-floor claim and for a non-string claim — nothing else in either plan asserts that code.
+
+**`SRCCHECK_IDENTITY` is a new literal in this file, and it duplicates one.** `SEC_UA` is *not* in `source-fetch.mjs`'s export list, and the global constraints forbid modifying that file — so `import { SEC_UA }` fails. Define `const SRCCHECK_IDENTITY = "omnisscientia-bulletin noahogbi@gmail.com";` with a comment naming it a deliberate duplicate of `source-fetch.mjs:44`, to be unified when project 3 retires that module.
 
 **`identity` is load-bearing.** `sec.gov` carries `requiresIdentity`; without it the package sends a browser UA that EDGAR refuses and every filing flips from `ok` to NOT READ. `SRCCHECK_IDENTITY` carries the value the origin already uses in `source-fetch.mjs`'s `SEC_UA`. Pass `source_label` through as `sourceLabel` too.
 
@@ -492,6 +549,14 @@ Take it from git, not from memory or from an edited buffer. Record the commit ha
 
 Four sites: the node `fetch`, `curlText`, and both `pdfText` calls. Record `rung` as `"node"`, `"curl"` and `"pdftotext"` respectively, to match testimonium's rung ids. For `pdfText`, record the extracted text as `rawBody` and `status: 0`, matching what testimonium's PDF rung returns.
 
+**Record `headers` and `finalUrl` for the node fetch.** `computeSignals` derives N1 from response headers and N2 from the redirect chain, so a replay without them makes both vetoes structurally unable to fire — and every §8.5 adjudication would then be an artifact of the instrument, biased toward the new arm. Both are available on the `Response`: at minimum capture `content-type` and `cf-mitigated`, plus `res.url`.
+
+`curlText` dumps no headers. Record `headers: null` there rather than `{}`, so Task 7 can bucket those reads as "headers unavailable" instead of silently treating an unfireable veto as a real parity result.
+
+- [ ] **Step 2b: Record the legacy arm's own output**
+
+The recording above holds fetches. Task 7's comparison needs the legacy arm's *results* as its left-hand side, and nothing else captures them. Write per item: the claim tags (`ok` / `ok*` / `MISS`, in order), whether it printed NOT READ, whether it printed `FAIL` and why, and the originality word count. Same file as the fetch records.
+
 - [ ] **Step 3: Verify it still behaves identically**
 
 Run it against `scripts/fixtures/bulletin-review-canary.json` with and without `--record` and diff the stdout. Expected: identical. Recording must not change behaviour.
@@ -537,7 +602,11 @@ Write that key separator as the six-character escape shown, never as a raw byte,
 
 - [ ] **Step 2: Write the comparison**
 
-For each item, compare the legacy tag set against the new one and classify every difference into one of §8's nine classes. Anything that fits none is reported as **UNCLASSIFIED**, which is the defect signal.
+For each item, compare the legacy outcome recorded by Task 6 Step 2b against `checkIssue`'s result, and classify every difference into one of §8's nine classes. Anything that fits none is reported as **UNCLASSIFIED**, which is the defect signal.
+
+**Compare tags star-blind by default**, reporting star-only differences in a separate column. `ok` versus `ok*` diverges benignly on a content-type PDF re-route: the origin's haystack *is* the pdftotext text so it prints `ok`, while the new arm's reads are `[node, pdftotext]` and the same claim tags `ok*`. Treating that as a difference would fill the table with UNCLASSIFIED rows that are pure instrument artifact.
+
+**Bucket reads recorded with `headers: null` separately.** An N1-shaped difference must never be adjudicated from a read whose headers the legacy arm could not supply.
 
 Byte equality holds by construction here, so drift is impossible and every difference is behavioural. Say that in the report header so a reader does not re-litigate it.
 
@@ -546,6 +615,8 @@ Byte equality holds by construction here, so drift is impossible and every diffe
 Run both arms against `scripts/fixtures/bulletin-review-canary.json`. This needs network for the legacy recording pass.
 
 Expected: item 1 is a sec.gov EDGAR exhibit, so it exercises the identity wire from Task 5 end to end. If it reads NOT READ, `identity` is not reaching `defaultFetcher` — fix that before going further, because every SEC citation depends on it.
+
+**What proves the wire is any read-the-page verdict** — `supported`, or `unsupported` carrying evidence — not `supported` specifically. Whether the canary's claims are still verbatim in that exhibit is a fact about the filing, not about the wire. If the canary reads `unsupported` with evidence, the wire is proven and acceptance criterion 6 should be cleared against a known-good SEC citation instead; say so in the report rather than editing the canary's claims to match.
 
 - [ ] **Step 4: Commit**
 
