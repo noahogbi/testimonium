@@ -74,7 +74,18 @@ export const THRESHOLDS: Readonly<Thresholds> = Object.freeze({
    *  200-char margin the acceptance test demands. (Three challenge fixtures
    *  extract far more than 1,180 but never reach this floor: 2,154 and
    *  13,216 are both served 404, vetoed by N4; 6,221 is a content-negotiated
-   *  PDF, vetoed by N5 as non-text.) */
+   *  PDF, vetoed by N5 as non-text.)
+   *
+   *  **That "clear air" is a property of the calibration corpus, not a bound
+   *  on real-world prose length.** A second measurement - 618 source URLs
+   *  from 99 published bulletin issues, 549 of which yielded a prose
+   *  measurement - found 154 of 549 (28.1%) fall inside the range above that
+   *  is called clear, and 68 (12.4%) fall below the floor outright. See
+   *  docs/superpowers/worklogs/2026-09-13-subfloor-measurement.md in the
+   *  omnisscientia repository, commit 947695a. Measured against testimonium
+   *  0.2.0; `git diff v0.2.0..v0.3.0 -- src/` touches four files (curl.ts,
+   *  node.ts, index.ts, version.ts), none on the path this measurement
+   *  exercises, so the version gap does not weaken it. */
   minProseChars: 4500,
   // minSlugOverlap is DELIBERATELY ABSENT. C1 was withdrawn from the verdict
   // after two calibration rounds proved it cannot separate the populations:

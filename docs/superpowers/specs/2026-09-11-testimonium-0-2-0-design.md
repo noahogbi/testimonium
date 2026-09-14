@@ -61,7 +61,7 @@ repository's most persistent defect, and 7.4 in particular appears twice.
 | --- | --- | --- |
 | **6.6** the ladder escalates until a read is readable | base spec 6.6; `src/fetch/read-source.ts:33-34`; `src/classify/verdict.ts:85-86` | it may also escalate past a readable read when the verdict would be `unsupported` and a rung is untried (section 4) |
 | **7.4** "Non-`supported` results carry no renderable fields at all - no excerpt, no `retrievedAt`" | base spec **line 995 AND line 2133** (summary table); `src/io/evidence.ts:27-35` and `:70-83` | **`unsupported` only** gains `evidence` and `retrievedAt`. `unreachable` stays bare - we did not read the page, so there is nothing honest to render. |
-| **5.3** "The primitives (`norm`, `toText`, `isPdf`, per-host helpers) are genuinely unavailable to consumers" | base spec line 260 | `norm` and `defaultFetcher` become available; `toText` and the per-host helpers stay sealed (section 6). **Amended 2026-09-13, testimonium 0.3.0:** `toText` is now exported too; only `isPdf` and the per-host rule machinery remain unavailable. |
+| **5.3** "The primitives (`norm`, `toText`, `isPdf`, per-host helpers) are genuinely unavailable to consumers" | base spec line 260 | `norm` and `defaultFetcher` become available; `toText` and the per-host helpers stay sealed (section 6). **Amended 2026-09-13, testimonium 0.3.0:** `toText` is now exported too; only `isPdf` and the UA and host-rule machinery remain unavailable. |
 | **9** what this does not do | base spec 9 | gains the non-circumvention statement (section 7) |
 
 `test/exports.test.ts` pins the runtime export allowlist and must be updated in

@@ -122,12 +122,23 @@ because the first published declarations are what consumers pin against.
 consumer writing `VERSION === "0.5.0"` gets TS2367, "these types have no
 overlap" — so **every future release is type-breaking**. Annotate it `: string`.
 
-**`THRESHOLDS` emits all-literal** — through the `as const` at
-`src/classify/thresholds.ts:215`, not through `Object.freeze`. The record is
-written `Object.freeze({ ... } as const)`, and it is the assertion that pins the
-values. That distinction matters for the fix: the freeze is what protects the
-keystone at runtime and must stay; the `as const` is what must go or be
-overridden. The emitted shape is:
+**`THRESHOLDS` emits all-literal** — through both the `as const` that shipped
+in `Object.freeze({ ... } as const)` AND `Object.freeze`'s own generic
+signature (`freeze<T>(o: T): Readonly<T>`), which infers `T` from a fresh
+object-literal argument using literal types, independently of `as const`.
+**Neither alone is the cause.** Dropping `as const` by itself does NOT widen
+the values: `Object.freeze`'s inference still pins the literal shape from the
+bare object literal, bypassing the normal widening-on-assignment path that
+would otherwise turn `4500` into `number`. The fix that actually works is an
+explicit `Readonly<Thresholds>` type annotation on the `THRESHOLDS`
+declaration (`src/classify/thresholds.ts:67`, against the `Thresholds`
+interface at `:58`, every field typed `number`) — that annotation, not the
+removal of `as const` by itself, is what forces the widening. The simpler
+"just drop `as const`" fix was tried and confirmed not to work, independently,
+by this task's implementer and by its reviewer's own minimal repro; do not
+repeat it. The runtime freeze is orthogonal to either question and must stay
+regardless: it is what protects the keystone at runtime, and no type
+annotation ever did that. The emitted shape without the fix is:
 `Readonly<{ readonly minProseChars: 4500; readonly maxChallengeChars: 800; ... }>`.
 
 That one directly contradicts §5 of this spec. §5 records evidence that the

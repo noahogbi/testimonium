@@ -114,6 +114,17 @@ export function verdict(s: Signals): Verdict {
   // separation: largest non-vetoed challenge 1,180 chars, smallest real
   // document 6,394, floor licensed at 4,500. (Re-run scripts/calibrate.mjs to
   // reproduce; see docs/calibration-2026-09.md.)
+  // That separation is a property of the 35-fixture calibration corpus, not a
+  // bound on real-world prose length - "carry the whole separation" reads as
+  // general and is not. A second measurement - 618 source URLs from 99
+  // published bulletin issues, 549 of which yielded a prose measurement -
+  // found 154 of 549 (28.1%) fall inside the range this comment calls clear
+  // air, and 68 (12.4%) fall below the floor outright. See
+  // docs/superpowers/worklogs/2026-09-13-subfloor-measurement.md in the
+  // omnisscientia repository, commit 947695a. Measured against testimonium
+  // 0.2.0; `git diff v0.2.0..v0.3.0 -- src/` touches four files (curl.ts,
+  // node.ts, index.ts, version.ts), none on the path this measurement
+  // exercises, so the version gap does not weaken it.
   // `isBlocked` already returned above, so this is the floor alone - but it
   // is asked through isReadable so the gate's "unsupported" and the reader's
   // "readable" cannot drift apart.
