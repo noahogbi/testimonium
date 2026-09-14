@@ -39,12 +39,9 @@ describe("package surface", () => {
     // either way. Task 9 touches this file to add VERSION's re-export, which
     // is the moment to close that gap: an allowlist pin turns any change to
     // the public runtime surface into a deliberate edit to a red test,
-    // rather than a silent one. Type-only exports (CheckOptions,
-    // ReachabilityResult, ReachabilityOptions, CitationResult, FiredRule,
-    // RuleSet, Verdict, Fetcher, RawResponse, RungId, FetcherOptions,
-    // ClaimProblem, RunTally, FailOn) are erased at compile time and never
-    // appear in Object.keys, so they are not - and cannot be - part of this
-    // list.
+    // rather than a silent one. Type-only exports are erased at compile
+    // time and never appear in Object.keys, so they are not - and cannot
+    // be - part of this list; test/type-surface.test.ts pins the real set.
     const api = await import("../src/index.js");
     expect(Object.keys(api).sort()).toEqual([
       "THRESHOLDS",

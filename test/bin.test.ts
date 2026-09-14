@@ -399,6 +399,13 @@ describe("tallyFor (Task 4)", () => {
     // asymmetric: a mutation that counts "supported" into `unreachable`
     // instead of "unreachable" would report 3, not the expected 1, rather
     // than coincidentally matching it the way an equal-count fixture would.
+    // This fixture alone does not distinguish every field from every other,
+    // though: `unreachable` and `orphaned` both land on 1 here, so a
+    // mutation that swapped those two specifically would still pass this
+    // test in isolation. The "counts unsupported and unreachable" test
+    // below has `unreachable: 1, orphaned: 0` - distinct - so the pair
+    // together, not either test alone, is what makes every field-swap
+    // detectable.
     const results = [
       citationResult("supported"),
       citationResult("supported"),
@@ -431,6 +438,14 @@ describe("tallyFor (Task 4)", () => {
     // the correct answer, purely because count-of-supported equalled
     // count-of-unreachable in that fixture. Proven live in the task report
     // (mutation 2): the suite stayed green.
+    //
+    // That distinctness covers only the results-sourced fields, though:
+    // `unclaimed` and `orphaned` both land on 0 here (this test uses
+    // `joined()`'s empty defaults for both), so a mutation that swapped
+    // those two specifically would still pass this test in isolation. The
+    // "sources unclaimed and orphaned from joined" test above has
+    // `unclaimed: 2, orphaned: 1` - distinct - so the pair together, not
+    // either test alone, is what makes every field-swap detectable.
     const results = [
       citationResult("supported"),
       citationResult("supported"),

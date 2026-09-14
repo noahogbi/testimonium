@@ -84,8 +84,12 @@ export const THRESHOLDS: Readonly<Thresholds> = Object.freeze({
    *  docs/superpowers/worklogs/2026-09-13-subfloor-measurement.md in the
    *  omnisscientia repository, commit 947695a. Measured against testimonium
    *  0.2.0; `git diff v0.2.0..v0.3.0 -- src/` touches four files (curl.ts,
-   *  node.ts, index.ts, version.ts), none on the path this measurement
-   *  exercises, so the version gap does not weaken it. */
+   *  node.ts, index.ts, version.ts): two of those, curl.ts and node.ts, are
+   *  fetch rungs this measurement does exercise, but both changes are a
+   *  warn-on-failure line added to the catch block, leaving the returned
+   *  response identical; the other two are an export line (index.ts) and
+   *  the version string (version.ts). So no returned byte and no
+   *  classification differs, and the version gap does not weaken it. */
   minProseChars: 4500,
   // minSlugOverlap is DELIBERATELY ABSENT. C1 was withdrawn from the verdict
   // after two calibration rounds proved it cannot separate the populations:

@@ -117,9 +117,13 @@ function typeNamesOfStatement(
       // genuine value is present in the imported namespace, a type is not.
       // The local form (`interface X {}; export { X };`) emits no key; a
       // cross-module plain type re-export emits a key valued `undefined`. One
-      // `!== undefined` test covers both. (A value deliberately set to
-      // `undefined` would be a false alarm here - there is none in this
-      // barrel, and a loud false alarm is the right way to be wrong.)
+      // `!== undefined` test covers both. That `undefined` key is vite's SSR
+      // transform, not language semantics - under a natively linking runtime
+      // (no bundler) the same mutation fails earlier, at the import itself,
+      // with a linker error naming the missing binding: same verdict, louder
+      // failure. (A value deliberately set to `undefined` would be a false
+      // alarm here - there is none in this barrel, and a loud false alarm is
+      // the right way to be wrong.)
       if (runtime[exported] === undefined) {
         throw new Error(
           `type-surface pin: "${exported}" is exported WITHOUT a type marker but does not ` +
