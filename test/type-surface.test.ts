@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
+import * as api from "../src/index.js";
 
 /**
  * This pin exists because the public TYPE surface becomes a permanent
@@ -27,6 +28,30 @@ import ts from "typescript";
  * `src/index.ts` with `ts.createSourceFile` and walks `sourceFile.statements`,
  * classifying each into exactly one of three outcomes - contributes names,
  * contributes nothing, or THROWS. There is no fourth, silent outcome.
+ *
+ * ROUND 5 - WHY THE AST ALONE IS STILL NOT ENOUGH. One gap survived that
+ * rewrite, and it is different in kind from the four above. `export { X }`
+ * with NO type marker is textually identical whether `X` is a type or a
+ * value, so type-ness is simply NOT DECIDABLE FROM SYNTAX at that node - the
+ * AST sees the specifier perfectly and classifies it correctly, and no fifth
+ * pattern can help, because the information is not in the syntax. This
+ * tsconfig sets neither `isolatedModules` nor `verbatimModuleSyntax`, so
+ * `interface LocalHidden { x: number }` plus `export { LocalHidden };`
+ * compiles clean, is erased from the runtime surface, and still lands
+ * `LocalHidden` in the emitted `index.d.ts` as a permanent public type - with
+ * this pin, the runtime allowlist in test/exports.test.ts, and `tsc --noEmit`
+ * ALL reporting success. (Enabling `isolatedModules` is not a sufficient
+ * alternative: it flags only the cross-module form; the local one compiles
+ * clean even with it on, because single-file elision suffices.)
+ *
+ * The fix uses a DIFFERENT SIGNAL rather than more syntax. This test imports
+ * the barrel's own runtime namespace and requires every unmarked specifier to
+ * name something that actually exists at runtime. A name that does not is a
+ * type wearing a value's clothes, and it throws. Both silent forms fail that
+ * check: the local form never emits a key at all, and a cross-module plain
+ * type re-export emits a key valued `undefined`. Every genuine value in the
+ * barrel passes it - which is what keeps this a discrimination rather than a
+ * blanket refusal of plain specifiers.
  */
 
 /**
@@ -53,7 +78,11 @@ function describeStatement(stmt: ts.Node, sf: ts.SourceFile): string {
  * (possibly empty) list, or throws when the statement exports something
  * this pin cannot account for.
  */
-function typeNamesOfStatement(stmt: ts.Statement, sf: ts.SourceFile): string[] {
+function typeNamesOfStatement(
+  stmt: ts.Statement,
+  sf: ts.SourceFile,
+  runtime: Record<string, unknown>,
+): string[] {
   if (ts.isExportDeclaration(stmt)) {
     const clause = stmt.exportClause;
     if (clause === undefined) {
@@ -78,7 +107,30 @@ function typeNamesOfStatement(stmt: ts.Statement, sf: ts.SourceFile): string[] {
       // specifier-level one (`export { value, type A }`). A specifier's
       // `name` is the name the CONSUMER imports and `propertyName` the
       // original, so `export { type Foo as Bar }` records `Bar`.
-      if (stmt.isTypeOnly || spec.isTypeOnly) names.push(spec.name.text);
+      const exported = spec.name.text;
+      if (stmt.isTypeOnly || spec.isTypeOnly) {
+        names.push(exported);
+        continue;
+      }
+      // No type marker at all. Syntax cannot say whether this is a value or a
+      // type (see ROUND 5 in the module docstring), so ask the runtime: a
+      // genuine value is present in the imported namespace, a type is not.
+      // The local form (`interface X {}; export { X };`) emits no key; a
+      // cross-module plain type re-export emits a key valued `undefined`. One
+      // `!== undefined` test covers both. (A value deliberately set to
+      // `undefined` would be a false alarm here - there is none in this
+      // barrel, and a loud false alarm is the right way to be wrong.)
+      if (runtime[exported] === undefined) {
+        throw new Error(
+          `type-surface pin: "${exported}" is exported WITHOUT a type marker but does not ` +
+            `exist as a runtime value of the barrel, so it is a type hidden behind a plain ` +
+            `export specifier - erased at runtime, yet permanent in the emitted .d.ts, and ` +
+            `therefore invisible to both this pin and the runtime allowlist. Write ` +
+            `\`type ${exported}\` in the export clause so it is recorded: ${describeStatement(stmt, sf)}`,
+        );
+      }
+      // A confirmed runtime value: contributes no type name, like any other
+      // value export.
     }
     return names;
   }
@@ -128,7 +180,12 @@ function typeNamesOfStatement(stmt: ts.Statement, sf: ts.SourceFile): string[] {
   );
 }
 
-function exportedTypeNames(src: string): string[] {
+/**
+ * `runtime` is the barrel's own imported namespace object. It is the second,
+ * non-syntactic signal round 5 added: it is the only way to tell a plain
+ * `export { X }` naming a value from one naming a type.
+ */
+function exportedTypeNames(src: string, runtime: Record<string, unknown>): string[] {
   const sf = ts.createSourceFile("index.ts", src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 
   // `createSourceFile` never throws on malformed input - it returns a
@@ -154,7 +211,7 @@ function exportedTypeNames(src: string): string[] {
 
   const names = new Set<string>();
   for (const stmt of sf.statements) {
-    for (const name of typeNamesOfStatement(stmt, sf)) names.add(name);
+    for (const name of typeNamesOfStatement(stmt, sf, runtime)) names.add(name);
   }
   return [...names].sort();
 }
@@ -170,6 +227,7 @@ const EXPECTED = [
 describe("public type surface", () => {
   it("exports exactly the pinned 23 types - an addition is as much a change as a removal", () => {
     const src = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
-    expect(exportedTypeNames(src)).toEqual(EXPECTED);
+    const runtime = api as unknown as Record<string, unknown>;
+    expect(exportedTypeNames(src, runtime)).toEqual(EXPECTED);
   });
 });
