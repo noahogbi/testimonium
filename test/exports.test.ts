@@ -7,6 +7,13 @@ describe("package surface", () => {
     expect(Object.keys(pkg.exports).sort()).toEqual([".", "./package.json"]);
   });
 
+  it("resolves types before default, and carries a legacy types field", () => {
+    const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+    const root = pkg.exports["."];
+    expect(Object.keys(root)).toEqual(["types", "default"]); // order is significant
+    expect(pkg.types).toBe("./dist/index.d.ts");
+  });
+
   it("does not expose internals as subpath exports", () => {
     const pkg = JSON.parse(readFileSync("package.json", "utf8"));
     const paths = Object.keys(pkg.exports);
