@@ -81,10 +81,20 @@ been checked, twice and by different methods: by hand through every field type t
 bottom, and mechanically over the emitted `.d.ts` import graph (20 reachable
 files, scanned for sealed names).
 
-**Nothing reachable from `src/index.ts` references `readSource`,
-`computeSignals`, `Read`, `SignalResult`, or `Signals`.** `check.ts:71`'s
-`readonly Read[]` is an internal signature and does not escape into
-`check.d.ts`. The doctrine holds and this release is not changed by a leak.
+**No EXPORTED TYPE references `readSource`, `computeSignals`, `Read`,
+`SignalResult`, or `Signals`.** `check.ts:71`'s `readonly Read[]` is an internal
+signature and does not escape into `check.d.ts`. The doctrine holds and this
+release is not changed by a leak.
+
+**Stated precisely, because the looser version is false.** The `.d.ts` *file
+graph* reachable from `index.d.ts` does contain `Signals` — `classify/verdict.d.ts`
+declares it and carries it in real type positions (`verdict(s: Signals)`,
+`isBlocked(s: Pick<Signals, …>)`), and that file is in the graph because
+`index.d.ts` imports `Verdict` from it. What matters is that `index.ts`
+re-exports only `Verdict` from that module and the `exports` map blocks the deep
+import, so no consumer can name or reach `Signals`. The distinction is between
+what a tarball contains and what a caller can obtain; §6.3 fixes the trace to
+measure the second.
 
 Emitting `.d.ts` for internal modules is not a leak. Verified experimentally
 rather than reasoned: under `moduleResolution: NodeNext` and under `bundler`, a
@@ -112,7 +122,12 @@ because the first published declarations are what consumers pin against.
 consumer writing `VERSION === "0.5.0"` gets TS2367, "these types have no
 overlap" — so **every future release is type-breaking**. Annotate it `: string`.
 
-**`THRESHOLDS` emits all-literal** through `Object.freeze` inference:
+**`THRESHOLDS` emits all-literal** — through the `as const` at
+`src/classify/thresholds.ts:215`, not through `Object.freeze`. The record is
+written `Object.freeze({ ... } as const)`, and it is the assertion that pins the
+values. That distinction matters for the fix: the freeze is what protects the
+keystone at runtime and must stay; the `as const` is what must go or be
+overridden. The emitted shape is:
 `Readonly<{ readonly minProseChars: 4500; readonly maxChallengeChars: 800; ... }>`.
 
 That one directly contradicts §5 of this spec. §5 records evidence that the
@@ -178,16 +193,31 @@ current test survives exactly that change.
 
 ---
 
-## 4. A wording variance across three amendment sites
+## 4. A wording variance: four occurrences, three to change
 
-`2026-09-06-testimonium-design.md:2189` says "per-host rule machinery" where the
-§5.3 body says "UA and host-rule machinery". There is a **third** instance at
-`2026-09-11-testimonium-0-2-0-design.md:64` — dated the same day as the row being
-fixed, and missed by the first draft of this spec.
+The phrase "per-host rule machinery" occurs four times. The §5.3 body of the
+base spec says "UA and host-rule machinery" instead, and the two should agree.
 
-All three are truthful and name the same component. Fix as a set. Fixing two of
-three is the twin-site failure this repository names as its most persistent
-defect, and 0.3.0's final review caught exactly that shape.
+| occurrence | disposition |
+| --- | --- |
+| `2026-09-06-testimonium-design.md:2188` | change — the 0.2.0 amendment row |
+| `2026-09-06-testimonium-design.md:2189` | change — the 0.3.0 amendment row, **adjacent to the one above** |
+| `2026-09-11-testimonium-0-2-0-design.md:64` | change the amendment text only |
+| **this spec, §4** | **leave** — it quotes the phrase to describe the defect |
+
+Two of them are **adjacent rows in the same file**. An earlier draft of this
+spec named only `:2189` and missed `:2188` one line above it — the twin-site
+failure this repository names as its most persistent defect, reproduced one row
+apart inside the section that warns about it.
+
+The fourth occurrence is this section quoting the wording under discussion.
+Editing it would make the sentence describe a variance that no longer reads as
+one. **"Make them all agree" is the wrong instruction**; three change and one is
+a quotation.
+
+`0-2-0-design.md:64` carries the same hazard in miniature: its first column
+quotes the base spec's original clause as a historical record. Only the
+amendment text in that row changes.
 
 ---
 
@@ -266,7 +296,15 @@ Note that §2.6 is what keeps this question answerable without a breaking change
 2. All nine types in §2.3 are exported and nameable, and the §2.3 table's
    membership is re-derived rather than trusted — any public type whose field,
    parameter or return type is unexported is either exported or recorded.
-3. The sealed-set trace of §2.4 is re-run against the final surface and recorded.
+3. The sealed-set trace of §2.4 is re-run against the final surface and
+   recorded. **It traces the closure of the EXPORTED TYPES, not the file
+   graph.** Measured: `classify/verdict.d.ts` both declares `Signals` and is
+   reachable from `index.d.ts` (which imports `Verdict` from it), so a
+   file-level scan for sealed names hits, and hits in real type positions —
+   `verdict(s: Signals)`, `isBlocked(s: Pick<Signals, …>)`. That is not a leak:
+   `index.ts` re-exports only `Verdict` from that module, and the `exports` map
+   blocks the deep import. A trace that reports a hit here has measured the
+   wrong thing.
 4. `VERSION` types as `string`; `THRESHOLDS`'s values type as `number`; the
    runtime freeze still throws on assignment. A consumer comparing `VERSION`
    to another version string, or `THRESHOLDS.minProseChars` to another number,
@@ -276,7 +314,8 @@ Note that §2.6 is what keeps this question answerable without a breaking change
 6. The CLI tally is a shared importable function; mutating **each** tally field
    and **each** `failOn` flag turns a test red, proven per field. The
    library-parity test still imports only `src/index.js`.
-7. All three wording sites in §4 agree.
+7. The three changeable occurrences in §4's table agree with the §5.3 body;
+   this spec's own quotation of the phrase is unchanged.
 8. Both licensing sites in §5.1 carry the second measurement, naming the report
    path and the version it was measured on.
 9. `dependencies` stays `{}`; `npm pack` ships only `dist/` plus standard
