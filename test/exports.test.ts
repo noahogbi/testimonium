@@ -81,4 +81,12 @@ describe("package surface", () => {
     const { VERSION } = await import("../src/index.js");
     expect(VERSION).toBe(pkg.version);
   });
+
+  it("VERSION is typed string, not a literal - or every release is type-breaking", async () => {
+    const { VERSION } = await import("../src/index.js");
+    // Comparing to a LITERAL is the probe. Against `VERSION: "0.3.0"` this line
+    // is TS2367 and `tsc --noEmit` fails; against `VERSION: string` it compiles.
+    expect(VERSION === "0.99.0").toBe(false);
+    expect(typeof VERSION).toBe("string");
+  });
 });

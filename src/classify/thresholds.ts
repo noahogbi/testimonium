@@ -28,15 +28,43 @@
  * evidence there is instead. Do not read this file as though every entry
  * carried the floor's evidence base.
  *
- * Frozen (Object.freeze) below, not just typed `as const`: `as const` is a
- * compile-time annotation only and does nothing at runtime, so without the
- * freeze an importer of this now-public export could reassign a property -
- * e.g. `THRESHOLDS.minProseChars = 0` - and move the keystone accusation
+ * Frozen (Object.freeze) below - this, not any compile-time annotation, is
+ * what protects the keystone at runtime: without it an importer of this
+ * now-public export could reassign a property - e.g.
+ * `THRESHOLDS.minProseChars = 0` - and move the keystone accusation
  * boundary for every consumer sharing this module instance in the process,
  * not just their own calls. The freeze makes that assignment throw instead
  * (ES modules are always strict).
+ *
+ * Deliberately NOT typed `as const`, and explicitly annotated `Readonly<
+ * Thresholds>` below rather than left to inference. `as const` types each
+ * value as its own literal (`4500`, not `number`) - fine as long as
+ * declaration emit is off, but the moment this package ships a `.d.ts`
+ * (Task 3 of the 0.4.0 plan), a literal type here is committed to every
+ * consumer forever: recalibrating `minProseChars` away from 4500 would then
+ * be a type-breaking change for anyone who wrote `THRESHOLDS.minProseChars`
+ * into a type position, contradicting spec §5, which says a threshold may
+ * need to move. Dropping `as const` alone is NOT enough - `Object.freeze`'s
+ * own generic signature still infers literal types from a bare object-literal
+ * argument, so the explicit `Readonly<Thresholds>` annotation below is what
+ * actually forces every property to `number`; `Readonly<...>` still marks
+ * each one readonly at the type level, and the runtime freeze - which is
+ * what actually stops a mutation, no type annotation ever did that - is
+ * unchanged.
  */
-export const THRESHOLDS = Object.freeze({
+/** The shape of THRESHOLDS, every field `number` - never a literal. See the
+ *  docstring above the export: this is what forces the widening that
+ *  dropping `as const` alone does not achieve. */
+interface Thresholds {
+  minProseChars: number;
+  maxChallengeChars: number;
+  maxBinaryDensity: number;
+  binarySampleCodePoints: number;
+  minClaimChars: number;
+  harvestSeedChars: number;
+}
+
+export const THRESHOLDS: Readonly<Thresholds> = Object.freeze({
   /** Extracted prose characters below which we have not read a document.
    *  Measured 2026-09 against the 35-fixture corpus (25 challenge, 10
    *  document; excludes the known-gap row - re-run scripts/calibrate.mjs to
@@ -212,7 +240,7 @@ export const THRESHOLDS = Object.freeze({
    *  and 3's job (cross-source recurrence, and the author's boilerplate
    *  rules); it is not a filter on what this rule counted. */
   harvestSeedChars: 21,
-} as const);
+});
 
 /** P2's input. Extracted prose length - NOT a text-to-markup ratio, which
  *  measurement showed discriminates in the wrong direction: modern real pages
