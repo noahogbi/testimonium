@@ -8,7 +8,7 @@ import { harvest } from "./harvest.js";
 import { recheck } from "./recheck.js";
 import type { CitationOutcome } from "./archive/compare.js";
 import { parseGfmFootnotes } from "./adapters/gfm-footnotes.js";
-import { joinClaims, parseClaimsFile } from "./io/claims.js";
+import { joinClaims, parseClaimsFile, type Joined } from "./io/claims.js";
 import { buildDraft, draftInTheWay, writeDraftFile } from "./io/draft.js";
 import { writeEvidenceFile, type CitationResult } from "./io/evidence.js";
 import { loadRules, type RuleSet } from "./rules/load.js";
@@ -161,6 +161,65 @@ export function archiveUnreadableNotice(archiveUnreadable: string | null): strin
     `\nARCHIVE UNREADABLE: ${archiveUnreadable}`,
     "Every citation below reports \"no baseline\" because of that - not because check was never run.",
   ];
+}
+
+/**
+ * `check`'s `RunTally`, pulled out of `main()` so a test can drive it
+ * directly rather than only through the full `check` command (which builds
+ * its own fetcher and cannot be handed a stub).
+ *
+ * `unsupported` and `unreachable` are counted from `results` - one row per
+ * checkable citation, verdict-bearing. `unclaimed` and `orphaned` are NOT:
+ * an unclaimed footnote never reaches `check()` in this flow (it is routed
+ * to `joined.unclaimed` instead, at `joinClaims` time), so no result in
+ * `results` ever carries an `"unclaimed"` verdict here, and `results` has no
+ * concept of an orphaned claim at all - that is a claims-file entry with no
+ * matching footnote, never a footnote row. Deriving either field from
+ * `results` would silently pin it at 0 forever.
+ *
+ * `infrastructure` is always `false`: the one path `main()`'s `check`
+ * command takes to this call is the success path, after every infrastructure
+ * refusal above it has already returned its own exit 2 directly.
+ */
+export function tallyFor(results: readonly CitationResult[], joined: Joined): RunTally {
+  let unsupported = 0;
+  let unreachable = 0;
+  for (const r of results) {
+    if (r.verdict === "unsupported") unsupported++;
+    else if (r.verdict === "unreachable") unreachable++;
+  }
+  return {
+    unsupported,
+    unclaimed: joined.unclaimed.length,
+    unreachable,
+    orphaned: joined.orphanedClaims.length,
+    infrastructure: false,
+  };
+}
+
+/**
+ * The argv-to-`FailOn` mapping for `check`, pulled out of `main()` for the
+ * same reason as `tallyFor` above - it is the ledger's named drift case ("a
+ * flag stops being wired to `classifyRun`"), and inline in `main()` it was
+ * unreachable by any test that cannot spawn a live fetcher.
+ *
+ * `unclaimed` defaults to `true` - failing - unless `--allow-unclaimed` is
+ * present: a gate that passes when nothing was actually checked is the
+ * design's named top risk, so the author has to opt out rather than in.
+ * `unreachable` defaults to `false`, the opposite polarity, because it is an
+ * availability fact about us, not a credibility fact about the claim; the
+ * author opts in with `--fail-on-unreachable`.
+ *
+ * Note for the record, not changed here: `check` never sets
+ * `orphanedClaims` on the `FailOn` it builds, so an orphaned claim cannot
+ * fail a `check` run today regardless of any flag. Wiring that would be a
+ * behaviour change and is out of this function's scope.
+ */
+export function failOnFor(flags: ReadonlySet<string>): FailOn {
+  return {
+    unreachable: flags.has("--fail-on-unreachable"),
+    unclaimed: !flags.has("--allow-unclaimed"),
+  };
 }
 
 const KNOWN_FLAGS = new Set([
@@ -729,21 +788,7 @@ export async function main(argv: string[]): Promise<number> {
     console.log("A footnote with no claims is unverified. Pass --allow-unclaimed to accept that.");
   }
 
-  return classifyRun(
-    {
-      unsupported,
-      unclaimed: joined.unclaimed.length,
-      unreachable,
-      orphaned: joined.orphanedClaims.length,
-      infrastructure: false,
-    },
-    {
-      unreachable: flags.has("--fail-on-unreachable"),
-      // A gate that passes when nothing was actually checked is the design's
-      // named top risk, so unclaimed fails unless the author opts out here.
-      unclaimed: !flags.has("--allow-unclaimed"),
-    },
-  );
+  return classifyRun(tallyFor(results, joined), failOnFor(flags));
 }
 
 /**

@@ -13,6 +13,7 @@ import type { HarvestReport, HarvestOptions } from "../src/harvest.js";
 import type { CitationResult } from "../src/io/evidence.js";
 import type { CheckOptions } from "../src/check.js";
 import type { Document } from "../src/adapters/types.js";
+import type { Joined } from "../src/io/claims.js";
 import {
   archiveContextFor,
   archivePathFor,
@@ -21,10 +22,12 @@ import {
   claimsPathFor,
   draftPathFor,
   evidencePathFor,
+  failOnFor,
   harvestSummaryLine,
   jsonOutcome,
   main,
   renderOutcome,
+  tallyFor,
   USAGE,
   validateFlags,
 } from "../src/bin.js";
@@ -359,6 +362,151 @@ describe("recheck exit codes", () => {
 
   it("a gone source the author opted into still dominates pipeline drift", () => {
     expect(classifyRecheckRun({ sourceDrift: 0, pipelineDrift: 5, gone: 1 }, { failOnGone: true })).toBe(1);
+  });
+});
+
+// A minimal-but-real CitationResult per verdict, matching the field set
+// test/bin.test.ts's own mocked check() above already uses for "unreachable"
+// - not a cast, so a required field this suite forgets fails to compile
+// rather than passing silently.
+function citationResult(verdict: CitationResult["verdict"]): CitationResult {
+  return {
+    url: "https://example.com/x",
+    verdict,
+    rungsAttempted: [],
+    rungsAvailable: [],
+    ladderTruncated: false,
+  };
+}
+
+// A minimal-but-real Joined, matching src/io/claims.ts's own interface - not
+// the `as unknown as Joined` cast an earlier draft of this plan used, which
+// would have let a shape drift in `Joined` go unnoticed here.
+function joined(overrides: Partial<Joined> = {}): Joined {
+  return { checkable: [], notApplicable: [], unclaimed: [], orphanedClaims: [], ...overrides };
+}
+
+describe("tallyFor (Task 4)", () => {
+  it("sources unclaimed and orphaned from joined, not from verdict rows", () => {
+    // Unclaimed footnotes never reach check(): joinClaims routes them to
+    // joined.unclaimed instead, so no result here ever carries an
+    // "unclaimed" verdict - and orphanedClaims has no footnote row at all,
+    // ever. Both fields must come from `joined`; `results` below carries
+    // neither category, so a wrong extraction that counted them out of
+    // `results` would report 0 for both instead of matching `joined`.
+    //
+    // Three "supported" rows against one "unreachable" row, deliberately
+    // asymmetric: a mutation that counts "supported" into `unreachable`
+    // instead of "unreachable" would report 3, not the expected 1, rather
+    // than coincidentally matching it the way an equal-count fixture would.
+    const results = [
+      citationResult("supported"),
+      citationResult("supported"),
+      citationResult("supported"),
+      citationResult("unreachable"),
+    ];
+    const j = joined({
+      unclaimed: [
+        { n: 1, url: "https://example.com/a", label: "a" },
+        { n: 2, url: "https://example.com/b", label: "b" },
+      ],
+      orphanedClaims: ["https://example.com/c"],
+    });
+    expect(tallyFor(results, j)).toEqual({
+      unsupported: 0,
+      unclaimed: 2,
+      unreachable: 1,
+      orphaned: 1,
+      infrastructure: false,
+    });
+  });
+
+  it("counts unsupported and unreachable from results, not from joined", () => {
+    // Every verdict present in a DIFFERENT count (4 supported, 2 unsupported,
+    // 1 unreachable), so a mutation that counts the WRONG verdict into a
+    // field lands on a number that matches no expected value, rather than
+    // passing by coincidence. This suite's first draft used 1 supported, 2
+    // unsupported, 1 unreachable - and a mutation that counted "supported"
+    // into `unreachable` (instead of "unreachable" itself) still produced 1,
+    // the correct answer, purely because count-of-supported equalled
+    // count-of-unreachable in that fixture. Proven live in the task report
+    // (mutation 2): the suite stayed green.
+    const results = [
+      citationResult("supported"),
+      citationResult("supported"),
+      citationResult("supported"),
+      citationResult("supported"),
+      citationResult("unsupported"),
+      citationResult("unsupported"),
+      citationResult("unreachable"),
+    ];
+    expect(tallyFor(results, joined())).toEqual({
+      unsupported: 2,
+      unclaimed: 0,
+      unreachable: 1,
+      orphaned: 0,
+      infrastructure: false,
+    });
+  });
+
+  it("infrastructure is always false: main()'s check command only reaches this call on its success path", () => {
+    expect(tallyFor([], joined()).infrastructure).toBe(false);
+  });
+});
+
+describe("failOnFor (Task 4)", () => {
+  it("maps each argv flag to its FailOn field", () => {
+    // Opposite default polarities, deliberately (src/run/classify.ts's own
+    // doc comment): unclaimed fails unless the author opts OUT with
+    // --allow-unclaimed; unreachable does not fail unless the author opts
+    // IN with --fail-on-unreachable.
+    expect(failOnFor(new Set())).toEqual({ unreachable: false, unclaimed: true });
+    expect(failOnFor(new Set(["--fail-on-unreachable"]))).toEqual({ unreachable: true, unclaimed: true });
+    expect(failOnFor(new Set(["--allow-unclaimed"]))).toEqual({ unreachable: false, unclaimed: false });
+    expect(failOnFor(new Set(["--fail-on-unreachable", "--allow-unclaimed"]))).toEqual({
+      unreachable: true,
+      unclaimed: false,
+    });
+  });
+
+  it("CHARACTERIZATION: never sets orphanedClaims - check has no flag that fails a run on an orphaned claim", () => {
+    // Recorded, not changed here: wiring this would be a behaviour change
+    // and is out of this task's scope. `toEqual` above already pins this
+    // (an extra `orphanedClaims` key would fail those assertions too), and
+    // this test exists so that pin has its own name and reason on record.
+    expect(failOnFor(new Set(["--fail-on-unreachable", "--allow-unclaimed"]))).not.toHaveProperty(
+      "orphanedClaims",
+    );
+  });
+});
+
+describe("classifyRun via tallyFor/failOnFor's fields - one field isolated per row (Task 4)", () => {
+  // Each row leaves every OTHER field at 0 so the flag under test is the
+  // only thing that can move the outcome. A table with unclaimed:1 on every
+  // row would mask this: classifyRun's unclaimed clause defaults to failing
+  // (`failOn.unclaimed !== false`) and dominates regardless of the flag
+  // actually under test - measured directly against classifyRun, an earlier
+  // draft of this suite used exactly that masked table and both
+  // --fail-on-unreachable true and false returned 1.
+  const ZERO = { unsupported: 0, unclaimed: 0, unreachable: 0, orphaned: 0, infrastructure: false };
+
+  it.each([
+    ["unreachable", { ...ZERO, unreachable: 1 }, { unreachable: true }, { unreachable: false }],
+    ["unclaimed", { ...ZERO, unclaimed: 1 }, {}, { unclaimed: false }],
+    ["orphanedClaims", { ...ZERO, orphaned: 1 }, { orphanedClaims: true }, {}],
+  ] as const)("%s reaches the exit code, and only when its flag says so", (_name, tally, on, off) => {
+    expect(classifyRun(tally, on)).toBe(1);
+    expect(classifyRun(tally, off)).toBe(0);
+  });
+
+  it("failOnFor's default output reproduces the unreachable and unclaimed rows above", () => {
+    // Ties failOnFor's actual return value to the isolated-row table, so a
+    // flag that stops being wired in failOnFor is caught here too, not only
+    // by the standalone failOnFor tests above.
+    expect(classifyRun({ ...ZERO, unreachable: 1 }, failOnFor(new Set(["--fail-on-unreachable"])))).toBe(1);
+    expect(classifyRun({ ...ZERO, unreachable: 1 }, failOnFor(new Set()))).toBe(0);
+    expect(classifyRun({ ...ZERO, unclaimed: 1 }, failOnFor(new Set()))).toBe(1);
+    expect(classifyRun({ ...ZERO, unclaimed: 1 }, failOnFor(new Set(["--allow-unclaimed"])))).toBe(0);
   });
 });
 
