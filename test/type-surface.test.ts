@@ -58,26 +58,64 @@ function stripComments(src: string): string {
   );
 }
 
-const IDENT = "[A-Za-z]\\w*";
+/**
+ * Fix round 3 (review Important finding): the original `IDENT` -
+ * `[A-Za-z]\w*` - matched only a SUBSET of legal JS/TS identifier grammar.
+ * `\w` excludes `$`, so it silently rejected a leading OR mid-name `$`; it
+ * also rejected a leading `_` even though `_` is inside `\w` for every
+ * position but the first, because the leading class was narrowed to
+ * `[A-Za-z]` alone. Both `_` and `$` are legal identifier characters
+ * anywhere a letter is, including first. Corrected to match real grammar:
+ * leading `[A-Za-z_$]`, then any run of `[A-Za-z0-9_$]`. */
+const IDENT = "[A-Za-z_$][A-Za-z0-9_$]*";
 
-/** Names inside an `export {...}` or `export type {...}` brace list.
- *  `requireTypePrefix` is true for the mixed form (2), where a bare entry
- *  is a runtime value and must be skipped rather than counted; false for
- *  the type-only block form (1), where every entry already denotes a
- *  type and a per-entry `type` prefix is not legal syntax to begin with.
- *  Either way, `X as Y` records `Y` - the name a consumer actually has. */
+/**
+ * Names inside an `export {...}` or `export type {...}` brace list.
+ * `requireTypePrefix` is true for the mixed form (2), where a bare entry
+ * is a runtime value and must be skipped rather than counted; false for
+ * the type-only block form (1), where every entry already denotes a
+ * type and a per-entry `type` prefix is not legal syntax to begin with.
+ * Either way, `X as Y` records `Y` - the name a consumer actually has.
+ *
+ * Fix round 3 (review Important finding, in the branch round 2 wrote):
+ * the `requireTypePrefix` branch used to `continue` UNCONDITIONALLY,
+ * whether the regex matched or not - so an entry that genuinely began
+ * with the `type` keyword but then failed to parse (originally: any
+ * identifier starting with `_` or containing `$`, because of the old
+ * narrow `IDENT`; now: anything not a legal identifier at all, e.g. a
+ * leading digit) was silently swallowed instead of raising the "cannot
+ * classify this" alarm the round-2 inversion exists to raise. The mixed
+ * form (`export { value, type Name }`) is 6 of `src/index.ts`'s 21
+ * statements today, so this was the extractor's most-used branch leaking
+ * exactly the failure shape round 2 was built to eliminate: a quiet 23
+ * that looks like success. Fixed by testing for the `type` KEYWORD
+ * (`/^type\b/`, a word-boundary test so a plain value name like
+ * `typeGuard` is correctly left alone) separately from whether the full
+ * entry then parses: no `type` prefix -> skip (a bare value, not a gap);
+ * `type` prefix present but the rest does not parse -> throw, naming the
+ * offending entry. Never `continue` past a failed match on a type-prefixed
+ * entry.
+ */
 function braceNames(inner: string, requireTypePrefix: boolean): string[] {
   const out: string[] = [];
   for (const raw of inner.split(",")) {
     const part = raw.trim();
     if (!part) continue;
     if (requireTypePrefix) {
+      if (!/^type\b/.test(part)) {
+        // No `type` keyword at all - a genuine bare value entry (or a
+        // value aliased with `as`), not a type. Skip it: this is what
+        // lets a mixed export list like `{ check, type CheckOptions }`
+        // count only the second half.
+        continue;
+      }
       const m = part.match(new RegExp(`^type\\s+(${IDENT})(?:\\s+as\\s+(${IDENT}))?$`));
-      if (m) out.push(m[2] ?? m[1]!);
-      // A value-only entry (no `type` prefix) is a runtime name, not a
-      // type - skip it. Deliberate, not a gap: this is what lets a mixed
-      // export list like `{ check, type CheckOptions }` count only the
-      // second half.
+      if (!m) {
+        throw new Error(
+          `type-surface pin: unrecognized type-prefixed entry inside "export { ... }": "${part}"`,
+        );
+      }
+      out.push(m[2] ?? m[1]!);
       continue;
     }
     const m = part.match(new RegExp(`^(${IDENT})(?:\\s+as\\s+(${IDENT}))?$`));
