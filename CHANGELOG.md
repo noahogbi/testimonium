@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.4.0 - 2026-09-14
+
+One additive change - the package's first shipped type declarations - and the
+type-level consequences of shipping it. No verdict moves.
+
+- **The package ships TypeScript declarations for the first time.**
+  `declaration: true` now emits a `.d.ts` beside every compiled file, the
+  `exports` map's `"."` entry gains a `types` condition ordered before
+  `default`, and a top-level `types` field serves legacy `node10` root-import
+  consumers, who never consult `exports` at all. This is a minor bump, not a
+  patch (spec 0.4.0 section 2.1): shipping declarations where none existed can
+  break a working build through no change of the consumer's own - code that
+  compiles today only because every import from this package resolves to `any`
+  can go red the moment real types arrive, and that is precisely what a patch
+  bump promises will not happen.
+- **Nine types that were already reachable, but had no name to hold them in,
+  are now exported** (spec 0.4.0 section 2.3): `Evidence`, `Rule`, `HostRule`,
+  `Document`, `Footnote`, `ClaimsFile`, `ClaimEntry`, `Joined`, `BuiltinRung`.
+  Each was already the field, parameter, or return type of an already-public
+  signature - `CitationResult.evidence`, `RuleSet`, what `parseGfmFootnotes`
+  returns, what `parseClaimsFile` returns, what `joinClaims` returns, the named
+  half of `RungId` - so a consumer already received these shapes with no name
+  to write a typed variable or a typed wrapper around them. Naming a shape
+  already crossing the boundary commits the package to nothing that passing the
+  value did not already commit it to.
+- **`VERSION` and `THRESHOLDS` are widened before declaration emit could commit
+  anyone to their literal values** (spec 0.4.0 section 2.6). `VERSION` is now
+  explicitly annotated `: string` rather than left to infer as the literal
+  `"0.4.0"`: shipped as a literal, `VERSION === "0.5.0"` fails to compile
+  against it, which means every future release would have been a type-breaking
+  change. `THRESHOLDS`'s six values are now typed `number`, not their literal
+  values (`4500`, `800`, and so on) - via an explicit `Readonly<Thresholds>`
+  annotation, since dropping the record's `as const` alone does not force the
+  widening; `Object.freeze`'s own generic signature still infers literal types
+  from a bare object-literal argument regardless. Shipped as literals, any
+  future recalibration of the prose floor - which this spec's own section 5
+  already records evidence for - would have been a semver-breaking change for
+  every consumer comparing against `THRESHOLDS.minProseChars`. `Object.freeze`
+  itself is untouched: it is what protects the keystone at runtime, and no type
+  annotation ever did that job.
+
 ## 0.3.0 - 2026-09-13
 
 Two additive changes, both in service of the first real integration replacing

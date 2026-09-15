@@ -1,6 +1,6 @@
 {
   "name": "testimonium",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Verifies that each footnote's cited URL actually carries that footnote's claims. A claim checker, not a link checker.",
   "keywords": ["citations", "footnotes", "verification", "fact-checking", "cli"],
   "license": "MIT",
@@ -9,9 +9,10 @@
   "type": "module",
   "engines": { "node": ">=20" },
   "exports": {
-    ".": "./dist/index.js",
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
     "./package.json": "./package.json"
   },
+  "types": "./dist/index.d.ts",
   "bin": { "testimonium": "./dist/bin.js" },
   "files": ["dist"],
   "scripts": {

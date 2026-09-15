@@ -7,6 +7,13 @@ describe("package surface", () => {
     expect(Object.keys(pkg.exports).sort()).toEqual([".", "./package.json"]);
   });
 
+  it("resolves types before default, and carries a legacy types field", () => {
+    const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+    const root = pkg.exports["."];
+    expect(Object.keys(root)).toEqual(["types", "default"]); // order is significant
+    expect(pkg.types).toBe("./dist/index.d.ts");
+  });
+
   it("does not expose internals as subpath exports", () => {
     const pkg = JSON.parse(readFileSync("package.json", "utf8"));
     const paths = Object.keys(pkg.exports);
@@ -32,12 +39,9 @@ describe("package surface", () => {
     // either way. Task 9 touches this file to add VERSION's re-export, which
     // is the moment to close that gap: an allowlist pin turns any change to
     // the public runtime surface into a deliberate edit to a red test,
-    // rather than a silent one. Type-only exports (CheckOptions,
-    // ReachabilityResult, ReachabilityOptions, CitationResult, FiredRule,
-    // RuleSet, Verdict, Fetcher, RawResponse, RungId, FetcherOptions,
-    // ClaimProblem, RunTally, FailOn) are erased at compile time and never
-    // appear in Object.keys, so they are not - and cannot be - part of this
-    // list.
+    // rather than a silent one. Type-only exports are erased at compile
+    // time and never appear in Object.keys, so they are not - and cannot
+    // be - part of this list; test/type-surface.test.ts pins the real set.
     const api = await import("../src/index.js");
     expect(Object.keys(api).sort()).toEqual([
       "THRESHOLDS",
@@ -80,5 +84,13 @@ describe("package surface", () => {
     const pkg = JSON.parse(readFileSync("package.json", "utf8"));
     const { VERSION } = await import("../src/index.js");
     expect(VERSION).toBe(pkg.version);
+  });
+
+  it("VERSION is typed string, not a literal - or every release is type-breaking", async () => {
+    const { VERSION } = await import("../src/index.js");
+    // Comparing to a LITERAL is the probe. Against `VERSION: "0.3.0"` this line
+    // is TS2367 and `tsc --noEmit` fails; against `VERSION: string` it compiles.
+    expect(VERSION === "0.99.0").toBe(false);
+    expect(typeof VERSION).toBe("string");
   });
 });

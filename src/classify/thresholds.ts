@@ -28,15 +28,43 @@
  * evidence there is instead. Do not read this file as though every entry
  * carried the floor's evidence base.
  *
- * Frozen (Object.freeze) below, not just typed `as const`: `as const` is a
- * compile-time annotation only and does nothing at runtime, so without the
- * freeze an importer of this now-public export could reassign a property -
- * e.g. `THRESHOLDS.minProseChars = 0` - and move the keystone accusation
+ * Frozen (Object.freeze) below - this, not any compile-time annotation, is
+ * what protects the keystone at runtime: without it an importer of this
+ * now-public export could reassign a property - e.g.
+ * `THRESHOLDS.minProseChars = 0` - and move the keystone accusation
  * boundary for every consumer sharing this module instance in the process,
  * not just their own calls. The freeze makes that assignment throw instead
  * (ES modules are always strict).
+ *
+ * Deliberately NOT typed `as const`, and explicitly annotated `Readonly<
+ * Thresholds>` below rather than left to inference. `as const` types each
+ * value as its own literal (`4500`, not `number`) - fine as long as
+ * declaration emit is off, but the moment this package ships a `.d.ts`
+ * (Task 3 of the 0.4.0 plan), a literal type here is committed to every
+ * consumer forever: recalibrating `minProseChars` away from 4500 would then
+ * be a type-breaking change for anyone who wrote `THRESHOLDS.minProseChars`
+ * into a type position, contradicting spec §5, which says a threshold may
+ * need to move. Dropping `as const` alone is NOT enough - `Object.freeze`'s
+ * own generic signature still infers literal types from a bare object-literal
+ * argument, so the explicit `Readonly<Thresholds>` annotation below is what
+ * actually forces every property to `number`; `Readonly<...>` still marks
+ * each one readonly at the type level, and the runtime freeze - which is
+ * what actually stops a mutation, no type annotation ever did that - is
+ * unchanged.
  */
-export const THRESHOLDS = Object.freeze({
+/** The shape of THRESHOLDS, every field `number` - never a literal. See the
+ *  docstring above the export: this is what forces the widening that
+ *  dropping `as const` alone does not achieve. */
+interface Thresholds {
+  minProseChars: number;
+  maxChallengeChars: number;
+  maxBinaryDensity: number;
+  binarySampleCodePoints: number;
+  minClaimChars: number;
+  harvestSeedChars: number;
+}
+
+export const THRESHOLDS: Readonly<Thresholds> = Object.freeze({
   /** Extracted prose characters below which we have not read a document.
    *  Measured 2026-09 against the 35-fixture corpus (25 challenge, 10
    *  document; excludes the known-gap row - re-run scripts/calibrate.mjs to
@@ -46,7 +74,22 @@ export const THRESHOLDS = Object.freeze({
    *  200-char margin the acceptance test demands. (Three challenge fixtures
    *  extract far more than 1,180 but never reach this floor: 2,154 and
    *  13,216 are both served 404, vetoed by N4; 6,221 is a content-negotiated
-   *  PDF, vetoed by N5 as non-text.) */
+   *  PDF, vetoed by N5 as non-text.)
+   *
+   *  **That "clear air" is a property of the calibration corpus, not a bound
+   *  on real-world prose length.** A second measurement - 618 source URLs
+   *  from 99 published bulletin issues, 549 of which yielded a prose
+   *  measurement - found 154 of 549 (28.1%) fall inside the range above that
+   *  is called clear, and 68 (12.4%) fall below the floor outright. See
+   *  docs/superpowers/worklogs/2026-09-13-subfloor-measurement.md in the
+   *  omnisscientia repository, commit 947695a. Measured against testimonium
+   *  0.2.0; `git diff v0.2.0..v0.3.0 -- src/` touches four files (curl.ts,
+   *  node.ts, index.ts, version.ts): two of those, curl.ts and node.ts, are
+   *  fetch rungs this measurement does exercise, but both changes are a
+   *  warn-on-failure line added to the catch block, leaving the returned
+   *  response identical; the other two are an export line (index.ts) and
+   *  the version string (version.ts). So no returned byte and no
+   *  classification differs, and the version gap does not weaken it. */
   minProseChars: 4500,
   // minSlugOverlap is DELIBERATELY ABSENT. C1 was withdrawn from the verdict
   // after two calibration rounds proved it cannot separate the populations:
@@ -212,7 +255,7 @@ export const THRESHOLDS = Object.freeze({
    *  and 3's job (cross-source recurrence, and the author's boilerplate
    *  rules); it is not a filter on what this rule counted. */
   harvestSeedChars: 21,
-} as const);
+});
 
 /** P2's input. Extracted prose length - NOT a text-to-markup ratio, which
  *  measurement showed discriminates in the wrong direction: modern real pages
