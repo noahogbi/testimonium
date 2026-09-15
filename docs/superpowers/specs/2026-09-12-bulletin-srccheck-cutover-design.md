@@ -118,6 +118,28 @@ ordinary readable document and a claim that is genuinely present returns
 exists to prevent. (That character count is carried from the prior session's
 probe and has not been re-measured here.)
 
+**The requirement is sharper than "attribute content", and a real bulletin
+source proved it.** On 2026-09-15 the drafting session cited a truthsocial.com
+post whose text lives entirely in `<meta name="description">`, `og:description`
+and `twitter:description`; the rendered body strips to 81 characters. Same root
+cause as humain.com — content in attributes, invisible to a tag-stripping
+extractor — and the opposite outcome:
+
+| source | visible chrome | verdict | |
+| --- | --- | --- | --- |
+| truthsocial.com | 755 chars (measured) | `unreachable` | safe |
+| humain.com | 6,824 chars (probed) | `unsupported` | **false accusation** |
+
+So the hazard is **not attribute-content as such. It is attribute-content on a
+page with enough visible chrome to clear the prose floor.** Below the floor the
+floor itself catches it; above the floor nothing does. That is the condition
+project 3 must handle, and it is a narrower and more testable requirement than
+"humain.com needs a body extractor".
+
+The drafting session's detector is better than anything this spec had: **compare
+decoded byte count against stripped-text length.** Thousands of bytes carrying
+under a couple of hundred characters of text means the content is in attributes.
+
 Recorded so project 3 inherits it as a named requirement rather than
 rediscovering it — alongside the same open question for `bloombergBody`.
 
@@ -514,6 +536,23 @@ the legacy arm never fetched replays as `EMPTY_RESPONSE` and lands in the
 "attempted by one arm only" finding bucket — which is a finding, not a
 mismatch, and is expected wherever §8.6 fires.
 
+**The legacy arm is not deterministic, so record it TWICE.** Measured on a real
+issue: an item's five claims came back `ok* [curl only]` on one srccheck run at
+209,586 bytes, and on a later run the retry did not fire and the same five read
+`MISS`. Same file, same claims, different outcome.
+
+That is `supported` versus `unsupported` — a VERDICT difference, not an
+`ok`/`ok*` difference — so §9B's star-blind comparison does nothing for it. A
+single recorded legacy outcome is one draw from a distribution, and comparing
+the new arm against it would adjudicate legacy flakiness as a behavioural
+difference.
+
+**Run the legacy arm twice over the same issues.** Any item whose outcome
+differs between the two runs is marked **legacy-unstable** and excluded from
+behavioural adjudication — reported in its own bucket, like the
+`headers: null` reads. It is not a finding against the new arm, and it is not
+parity either; it is the old implementation disagreeing with itself.
+
 The original is not edited; the legacy copy carries the instrumentation and is
 deleted when the reconciliation clears.
 
@@ -561,8 +600,43 @@ wall carrying those phrases padded past 4,500 reads as a document and returns
 cannot. This is the package's documented padded-wall gap meeting a host family
 known to serve walls at scale.
 
-**How many bulletin sources are sub-floor?** Unmeasurable from the repo;
-answered by instrument B. Drives §8.1's go/no-go.
+**How many bulletin sources are sub-floor? ANSWERED — both halves, and §8.1's
+go/no-go is GO.**
+
+*Denominator*, measured 2026-09-13 across 618 distinct source URLs from 99
+published issues (549 yielding a prose measurement): **68, or 12.4%, fall below
+the floor.** Report at `docs/superpowers/worklogs/2026-09-13-subfloor-measurement.md`
+in omnisscientia, commit `947695a`.
+
+*Numerator*, measured 2026-09-15 against the first two preserved `issue.json`
+files — 14 items, real drafter claims, published `testimonium@0.4.0`:
+
+| | |
+| --- | --- |
+| items measured | 14 |
+| sources under the prose floor | 2 |
+| **§8.1 class — `unreachable` with a PARTIAL match** | **0** |
+
+The two sub-floor sources both resolve favourably, and for different reasons:
+
+- **4,064 prose chars, 5 of 5 claims matched → `supported`.** The full-match
+  short-circuit at `verdict.ts:111` fires before the floor is consulted, so a
+  sub-floor source that verifies cleanly still verifies. No regression.
+- **755 prose chars, 0 of 4 matched → `unreachable`.** This is the zero-match
+  end of §8.1's row, not the partial end. See §3.2 — it is the attribute-content
+  class, and the cutover *fixes* it: the origin prints four MISSes against a page
+  it plainly failed to read, which is a false accusation, while the floor
+  converts that to an honest "could not confirm read".
+
+**The painful case — some claims positively confirmed, then discarded into a
+bare `unreachable` — did not occur once.** 12.4% was an upper bound on sources;
+against real claims the class that costs the author something is empty.
+
+Stated limits, because this is a green light and not a proof: 14 items over two
+issues and one week of drafting; `proseVolume` is sealed, so the measurement
+approximated it with `norm(toText(body)).length`, which is close but not the
+real predicate; and it measures today's live pages, so link rot since publication
+is inside the numbers.
 
 **Does `isChallengePage` catch anything the five vetoes miss, beyond the
 uncapped tier above?** Deferred to the reconciliation. Note the deferral is
