@@ -385,6 +385,31 @@ reconciliation run: classes 6 through 9 below were all derivable from the code.
 The count is pinned here because a list with no expected number under-delivers
 silently.
 
+### 8.0 Classifying a difference: the classes are ORDERED, and the order is the code's
+
+A page can satisfy the surface description of more than one class at once, so a
+classifier that tests them in the wrong order will mislabel real differences.
+**Test in the order `verdict()` itself decides** (`classify/verdict.ts:108-121`):
+
+1. `total === 0` — **unclaimed**.
+2. `isBlocked(s)` — **unreachable via a veto**. This is §8.5's territory.
+3. `matched === total` — **supported**, before the floor is consulted.
+4. `isReadable(s)` — else **unreachable via the floor**. This is §8.1's.
+
+**The consequence that actually bites: a page that is BOTH blocked AND
+sub-floor is §8.5, never §8.1.** The veto short-circuits at `:110`, ten lines
+before the floor is reached at `:120`, so prose length never enters the
+decision. Most walls are short, so "blocked and sub-floor" is the common shape
+rather than an exotic one.
+
+This was found the expensive way. Half B's first reconciliation pass tested a
+legacy-MISS heuristic before `firedRule`, which made the challenge branch
+unreachable, and classified a 58-character blocked page as §8.1 because its
+prose was also sub-floor. The row looked entirely plausible and **it doubled the
+reported §8.1 headline** until the ordering was corrected. Any tool reusing
+these classes — project 3 will — must consult `firedRule` and the vetoes
+before it consults prose length.
+
 **8.1 — Sub-floor partial matches.** The class to watch.
 `isReadable` is `!isBlocked(s) && s.proseChars >= 4500`
 (`classify/verdict.ts:105`).
@@ -465,6 +490,19 @@ bytes:
 **8.9 — Bloomberg citations lose the JSON-state haystack.** §3.1. Currently
 masked by the live wall; a declared class so that a pre-wall body in the
 fixture corpus has a stated expectation.
+
+### Which classes the reconciliation actually exercised
+
+Half B's run (2026-09-15, two preserved issues, 14 items) exercised §8.1, §8.2
+and §8.5, and confirmed §8.3 did not move at all — originality matched exactly
+on all five readable items.
+
+**§8.9 and §11's padded-wall gap were NOT exercised. Neither appeared in the
+corpus, so neither has evidence of parity behind it** — they remain declared
+predictions rather than measured ones. A future corpus containing a pre-wall
+Bloomberg body, or a wall carrying an uncapped signature padded past 4,500
+characters, is the only thing that settles them. Do not read the reconciliation's
+clean result as covering either.
 
 ---
 
