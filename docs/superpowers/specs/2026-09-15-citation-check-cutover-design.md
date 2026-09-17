@@ -188,6 +188,17 @@ arms identically.
    them disarms three vetoes.
 4. **Only transform humain hosts.** `isHumain` gates it; every other host passes
    through untouched.
+5. **Delegate `rungs`.** A `Fetcher` advertises which rungs it can attempt; the
+   decorator must expose the inner fetcher's list rather than inventing one, or
+   the ladder either skips a rung it has or attempts one it does not.
+
+**One residual, discharged by the instrument rather than by argument.** The
+"holds by construction" claim in §4's acceptance rests on testimonium's `norm`
+being a superset of the origin's folds. It has a gap: testimonium re-passes the
+extracted body through `toText`, which is not idempotent on `humainBody` output,
+so the two arms could in principle see different text from the same bytes. §10's
+byte comparison detects that directly, which is why this is a check rather than
+an argument.
 
 **Why here and not in the package.** humain's shape is JSON-in-an-attribute, and
 a general rule for that — decode entities in any attribute, parse JSON, extract
@@ -362,10 +373,31 @@ as unclaimed.** Never a run-aborting throw, which would leave the reconciliation
 unable to produce an intended patch for that footnote at all.
 
 **Do NOT follow project 2's `no-source-url` precedent here.** That path forces
-`Math.max(code, 1)` (`bulletin-srccheck.mjs:133`), so adopting it would add a new
-exit-1 trigger and contradict criterion 9's "exit rule unchanged". Routing
-through `unverified` instead reuses the accounting that already exists and
-changes no exit semantics.
+`Math.max(code, 1)` (`bulletin-srccheck.mjs:133`) — an **inescapable** new exit-1
+trigger, which criterion 9's "exit rule unchanged" forbids.
+
+**But be honest about what routing through `unverified` does instead.** It is
+not free of exit consequences: the existing term
+`(unclaimed > 0 && !allowUnclaimed)` (`citation-check.mjs:251`) means a post that
+passes today can exit 1 tomorrow purely because one stored claim is short. The
+difference from the rejected precedent is that this one is **escapable** —
+`--allow-unclaimed` clears it — and it adds no new term to the exit rule. An
+earlier draft claimed it "changes no exit semantics", which was false in effect.
+
+**Three dependents, each decided here rather than left to the implementer:**
+
+1. **Count them separately from genuinely-unclaimed footnotes.** Both route to
+   `unverified` and both feed the same exit term, but "the author recorded no
+   claims" and "the claims are too short for this checker" are different facts
+   and the author needs to be told which. `--allow-unclaimed` covers both;
+   conflating them in the REPORT is what would mislead.
+2. **Refusal is whole-footnote, and that is deliberate.** `check()` throws on
+   ANY sub-floor claim, so a footnote with four good claims and one short one is
+   refused entirely. Dropping the short claim and verifying the rest would let
+   the row read `supported` while one claim went unverified — §1's forbidden
+   outcome, arrived at by a side door.
+3. **The message must not say "NO CLAIMS RECORDED".** That line is false for
+   these rows and would send an author looking for claims that are present.
 
 **And writing the row is the point, not a formality.** A refused footnote that
 writes nothing leaves its **stale generation-1 row in place** — and if that row
@@ -419,6 +451,11 @@ The mapping is part of the instrument, not the implementer's judgement:
 The humain rows matter most here: §4's decorator makes the *bytes* equivalent
 while the recipe *name* differs, so an undeclared mapping would flag every humain
 row as a difference and bury the rows that actually moved.
+
+**`curl` is overloaded on the legacy side.** It covers both an ordinary curl read
+and a Bloomberg read that arrived via curl, so a legacy `curl` recipe does not by
+itself say which happened. Where the distinction matters — §11.9's Bloomberg
+class — resolve it from the URL's host rather than from the recipe name.
 
 **Excluded fields.** `retrieved_at`, `checked_at`, `updated_at` differ on every
 run by construction. Exclude them from the diff.
@@ -504,7 +541,11 @@ attempt (`read-source.ts:118-138`) → `supported`.
    class AND the claim confirmed present by hand. (The first draft forbade such
    gains outright, which would have failed the cutover on behaviour the origin's
    own tests pin as correct.)
-7. **humain rows show no verdict movement.** §4.
+7. **No humain row moves OUT of `supported`.** §4. Movement in other
+   directions is legitimate and must not fail the cutover. (An earlier draft
+   said "no verdict movement"; §4 was corrected and this criterion was not —
+   the twin-site failure this project names as its most persistent, committed
+   inside the spec that names it.)
 8. `citation-check.mjs` contains no fetch ladder, no challenge check, no curl
    retry.
 9. The exit rule is unchanged, including exit 2 (§9), and `unreachable` does not
@@ -520,6 +561,12 @@ attempt (`read-source.ts:118-138`) → `supported`.
 below the 16-character floor?** Neither is reachable from this session. The first
 sizes the reconciliation; the second sizes §11.12 and may change its policy. The
 executing session reports both before starting.
+
+**How many stored rows cite humain.com, and what are their current statuses?**
+§4's acceptance turns on humain rows not moving out of `supported`, and nobody
+has counted them. The origin measured ten footnotes on 2026-09-07; whether those
+are the same rows, and whether more have accrued, is unknown from here. The
+executing session reports the count and the status breakdown before starting.
 
 **Does the description fix move any live page across either threshold?** Zero of
 37 fixtures do. §3.5 makes this the movement report's primary question.
@@ -548,3 +595,30 @@ Recorded so project 4 does not assume it was overlooked.
 | the semver reasoning was backwards | §2 — minor because `^0.4.0` excludes 0.5.0, not because the output is committed |
 | the parse was unspecified where it breaks | §3.3 — `property=` vs `name=`, attribute order, quoting, deduplication, append-don't-prepend |
 | replay misses had no stated rule | §10.1 |
+
+### Round two — seven findings, six inside the section written to fix round one's worst
+
+The amendment that fixed the humain claim introduced more defects than any
+other part of this spec. That is the pattern worth carrying: **the riskiest text
+is whatever was written most recently in response to a finding.**
+
+| finding | change |
+| --- | --- |
+| `CheckOptions.fetcher` is ONE slot, and humain extraction and the replay fetcher both wanted it — wired naively the instrument would manufacture a supported-to-unsupported movement on every humain row | §4.1 — extraction is a decorator wrapping any inner fetcher; tee inside, extraction outside |
+| criterion 7 was an absolute a correct cutover fails | §4 — movement OUT of `supported` only |
+| §4 omitted per-rung application, the empty-extraction fallback, and header pass-through | §4.2 |
+| the sub-floor policy cited a precedent that forces exit 1, and refusing a footnote silently leaves a stale `supported` row rendering | §9 |
+| 11.10 omitted the direction §3.5 calls the primary question | §11.10 |
+| the rung vocabulary missed `humain-aem-curl` | §10.2 |
+| the exit-2 list missed the unknown-post-id path | §9 |
+
+### Round three — the twin that round two's own fix left behind
+
+| finding | change |
+| --- | --- |
+| criterion 7 was corrected in §4 and NOT in §12.7, which still said "no verdict movement" | §12.7 — swept |
+| "changes no exit semantics" was false in effect: the existing unclaimed term makes a passing post exit 1 | §9 — corrected, with three dependents decided |
+| the decorator must delegate `rungs`; `toText` is not idempotent on extracted output | §4.2 — both named, the second discharged by §10's byte comparison |
+| legacy `curl` is overloaded for Bloomberg-via-curl | §10.2 |
+| nobody has counted the humain rows the acceptance criterion turns on | §13 |
+| §14 recorded only round one, while claiming to record what review changed | this section |
