@@ -150,9 +150,44 @@ but real — and the deduplication in §3.3 matters here too.
 
 ## 4. humain: the origin keeps its own reader
 
-`humainBody` moves behind `CheckOptions.fetcher`. The origin supplies a fetcher
-that pre-extracts `blocks`/`cards` JSON into the body before testimonium
-classifies it; everything else delegates to `defaultFetcher`.
+`humainBody` moves behind `CheckOptions.fetcher`.
+
+### 4.1 It is a DECORATOR, not a terminal fetcher — and this is load-bearing
+
+`CheckOptions.fetcher` is a **single slot** (`check.ts:20`), and this project has
+**two** claimants for it: humain extraction, and §10's replay fetcher. Wired
+naively — replay in the slot, extraction forgotten — the replay serves raw humain
+chrome, testimonium reads 6,824 characters of it, every claim misses on a
+readable page, and **the reconciliation instrument manufactures a
+supported-to-unsupported movement on every humain row.** Criterion 7 would then
+fail on wiring rather than on behaviour, and the failure would look exactly like
+a real regression.
+
+So the extraction **wraps an inner fetcher** rather than replacing one:
+
+```
+extraction( tee( defaultFetcher(...) ) )     // live
+extraction( tee( replayFetcher(...) ) )      // reconciliation
+```
+
+Tee inside, extraction outside: the tee records what the network or the replay
+returned, and the extraction transforms it on the way to the classifier in both
+arms identically.
+
+### 4.2 Four details that silently move verdicts if omitted
+
+1. **Apply per rung.** Extraction runs on whichever rung returned the bytes. A
+   node read and a curl read of the same humain page must both be transformed, or
+   `check()`'s cross-rung union sees one transformed body and one raw.
+2. **Fall back on empty.** `humainBody` returns `""` when no attribute parses
+   (`source-fetch.mjs:421`), and the origin then falls back to `toText`. The
+   decorator must do the same: an empty extraction returns the body untouched,
+   never an empty one.
+3. **Pass `status`, `headers` and `finalUrl` through unchanged.** They drive N1,
+   N2 and `documentGone`. A decorator that rebuilds a `RawResponse` and drops
+   them disarms three vetoes.
+4. **Only transform humain hosts.** `isHumain` gates it; every other host passes
+   through untouched.
 
 **Why here and not in the package.** humain's shape is JSON-in-an-attribute, and
 a general rule for that — decode entities in any attribute, parse JSON, extract
@@ -166,8 +201,16 @@ without it, ten footnotes citing humain.com reported UNSUPPORTED against pages
 that plainly carry the quoted sentences. Dropping it writes ten false
 accusations.
 
-**Acceptance:** humain rows must show **no** verdict movement in the
-reconciliation. If any moves, the fetcher is wrong.
+**Acceptance, stated in the direction that is achievable.** No humain row may
+move **out of `supported`**. That half holds by construction: testimonium's
+`norm` is a strict superset of the origin's folds, so a claim the origin matched
+in extracted humain text is matched by testimonium in the same text.
+
+Movement in other directions is legitimate and must not fail the cutover — a
+humain row that is `unreachable` or `unsupported` today can move under the
+inherited classes (the prose floor, matcher drift) like any other row. An
+earlier draft said "if any moves, the fetcher is wrong", which would have failed
+a correct cutover.
 
 ---
 
@@ -294,9 +337,10 @@ this gate must not.
 
 §7.2 names one. These are its siblings, and the same argument applies.
 
-**The exit-2 contract.** Missing post-id or env → 2; PostgREST read error → 2;
-failed write → 2 (`:22, 36-39, 54-57, 63-66, 90-93`). Infrastructure, not an
-author defect. The first draft discussed only exit 1.
+**The exit-2 contract.** Missing post-id or env → 2; **an unknown post id → 2**
+(`:96-100`); PostgREST read error → 2; failed write → 2
+(`:22, 36-39, 54-57, 63-66, 90-93`). Infrastructure, not an author defect. The
+first draft discussed only exit 1.
 
 **The write response is checked.** The upsert targets
 `on_conflict=post_id,footnote_number` with `Prefer: resolution=merge-duplicates`
@@ -310,11 +354,25 @@ checker generations (`109_post_citations.sql:52-54`); the CLI writes `"1"`
 measurement depends on telling them apart.
 
 **Stored claims below testimonium's claim floor.** `check()` refuses any claim
-under 16 normalized characters (`check.ts:173-180`). The legacy gate has no
-floor and these rows were authored before one existed. **Policy: per-footnote
-structural refusal**, reported to the author and counted, following project 2's
-`no-source-url` precedent — **never a run-aborting throw**, which would make the
-reconciliation unable to produce an intended patch for that footnote at all.
+under 16 normalized characters (`check.ts:173-180`). The legacy gate has no floor
+and these rows were authored before one existed.
+
+**Policy: refuse the footnote, write `unverified` with empty evidence, count it
+as unclaimed.** Never a run-aborting throw, which would leave the reconciliation
+unable to produce an intended patch for that footnote at all.
+
+**Do NOT follow project 2's `no-source-url` precedent here.** That path forces
+`Math.max(code, 1)` (`bulletin-srccheck.mjs:133`), so adopting it would add a new
+exit-1 trigger and contradict criterion 9's "exit rule unchanged". Routing
+through `unverified` instead reuses the accounting that already exists and
+changes no exit semantics.
+
+**And writing the row is the point, not a formality.** A refused footnote that
+writes nothing leaves its **stale generation-1 row in place** — and if that row
+says `supported`, it keeps rendering a passage to readers for a claim the new
+checker declined to verify. Writing `unverified` clears it: nothing renders, the
+roll-up sees the footnote, and the author is told. This is the same reasoning as
+the 2026-09-12 incident in §8.
 
 ---
 
@@ -342,10 +400,25 @@ bucketed, never adjudicated**, as in project 2 §9B.
 ### 10.2 The comparison needs declared mappings, or it drowns in noise
 
 **Rung vocabulary.** Legacy `fetch_recipe` and `evidence[].method` use
-`fetch` / `curl` / `pdftotext` / `bloomberg-json` / `humain-aem` / `challenge`
-(`:162,178,201,223`). testimonium's `rung` is `node` / `curl` / `pdftotext`. The
-mapping table is part of the instrument: at minimum `node`→`fetch`, and the
-origin-only recipes appear only where the origin's own fetcher produced them.
+`fetch` / `curl` / `pdftotext` / `bloomberg-json` / `humain-aem` /
+**`humain-aem-curl`** (`source-fetch.mjs:446`) / `challenge`
+(`:162,178,201,223`). testimonium's `rung` is `node` / `curl` / `pdftotext`.
+
+The mapping is part of the instrument, not the implementer's judgement:
+
+| legacy | testimonium |
+| --- | --- |
+| `fetch` | `node` |
+| `curl` | `curl` |
+| `pdftotext` | `pdftotext` |
+| `humain-aem` | `node`, transformed by §4's decorator |
+| `humain-aem-curl` | `curl`, transformed by §4's decorator |
+| `bloomberg-json` | no equivalent — §11.9 |
+| `challenge` | no equivalent — the package reports `firedRule` instead |
+
+The humain rows matter most here: §4's decorator makes the *bytes* equivalent
+while the recipe *name* differs, so an undeclared mapping would flag every humain
+row as a difference and bury the rows that actually moved.
 
 **Excluded fields.** `retrieved_at`, `checked_at`, `updated_at` differ on every
 run by construction. Exclude them from the diff.
@@ -376,9 +449,17 @@ is how the first draft lost four of them.
 
 Plus three this project introduces:
 
-**11.10 — description-borne text makes pages readable.** §3. `unreachable` →
-`supported` where the description carries the claim (the truthsocial mechanism),
-and `unsupported` → `supported` where chrome already cleared the floor.
+**11.10 — description-borne text changes what a page reads as.** §3. Three
+directions, and the third is the one to watch:
+
+- `unreachable` → `supported` where the description carries the claim (the
+  truthsocial mechanism).
+- `unsupported` → `supported` where chrome already cleared the floor.
+- **`unreachable` → `unsupported`** where a description pushes a sub-floor page
+  over 4,500 and its claims are not in that description — a manufactured
+  accusation. §3.5 calls this the movement report's primary question, and an
+  earlier draft of this class omitted the direction its own §3.5 was written
+  about.
 
 **11.11 — content-negotiated PDFs.** The legacy gate tests the URL alone
 (`fetchSourceText` calls `isPdf(url)` with one argument, so its content-type
