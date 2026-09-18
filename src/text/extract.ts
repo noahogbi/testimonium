@@ -101,6 +101,16 @@ function* tagsIn(html: string): Generator<string> {
       } else if (c === ">") break;
       j++;
     }
+    // An unterminated quote consumes to end of input and we stop here, discarding
+    // every later tag - including legitimate descriptions. That is deliberate in
+    // 0.5.0 and it is NOT free: on a page with enough body prose to clear the
+    // floor, losing a description that carried a claim leaves matched < total and
+    // accuses the author. Recovering instead - resuming at the first `>` seen
+    // inside the quote - trades that for harvesting text a strict parser would
+    // never render, i.e. a false `supported`. Choosing between those two is a
+    // spec-level ruling about which wrong verdict is worse, not an implementation
+    // detail, so it is escalated rather than decided here. Malformed pages keep
+    // pre-0.5.0 behaviour meanwhile, so this is a coverage gap, not a regression.
     if (j >= html.length) break;
     yield html.slice(i, j + 1);
     i = j + 1;
@@ -133,13 +143,22 @@ export function toText(html: string): string {
   const stripped = html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ");
-  // A `<template>` body is inert until scripted, and a comment is never rendered
-  // at all - both are text no reader sees, the same hazard class as the script
-  // body above. The scan below closes a plain comment incidentally, but NOT one
-  // containing an early `>`, so this strip is load-bearing, not belt-and-braces.
+  // Every strip here tolerates a MISSING closer. A regex that demands one simply
+  // fails to match on malformed input, leaving the region's contents in the
+  // harvest input for `tagsIn` to read as live markup - which is the dangerous
+  // direction, since a browser treats an unterminated `<!--`, `<template>` or
+  // `<script>` as swallowing the rest of the document as inert content. `$` only
+  // matches once the non-greedy engine has exhausted the string without finding
+  // the real closer, so well-formed input is completely unaffected.
+  //
+  // Script and style are re-stripped here even though `stripped` already removed
+  // the well-formed ones: `stripped` feeds BODY extraction, which is contractually
+  // untouched in this release, so the tolerant variants live on this side only.
   const forHarvest = stripped
-    .replace(/<!--[\s\S]*?-->/g, " ")
-    .replace(/<template\b[\s\S]*?<\/template>/gi, " ");
+    .replace(/<script\b[\s\S]*?(?:<\/script>|$)/gi, " ")
+    .replace(/<style\b[\s\S]*?(?:<\/style>|$)/gi, " ")
+    .replace(/<!--[\s\S]*?(?:-->|$)/g, " ")
+    .replace(/<template\b[\s\S]*?(?:<\/template>|$)/gi, " ");
   const described = descriptionText(forHarvest);
   const body = stripped.replace(/<[^>]*>/g, " ");
   return (described ? `${body} ${described}` : body)

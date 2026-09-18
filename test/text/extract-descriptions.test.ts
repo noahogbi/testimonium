@@ -115,4 +115,28 @@ describe("toText: description attributes", () => {
     const h = `<head><meta name="description" content="Rates a > b explained."></head>${BODY}`;
     expect(toText(h)).toContain("Rates a > b explained.");
   });
+
+  it("does NOT harvest a meta inside an UNCLOSED <template>", () => {
+    const h = `<head><template><meta name="description" content="TEMPLATE_UNCLOSED"></head>${BODY}`;
+    expect(toText(h)).not.toContain("TEMPLATE_UNCLOSED");
+  });
+
+  it("does NOT harvest a meta inside an UNCLOSED comment containing an earlier >", () => {
+    const h = `<head><!-- a > b <meta name="description" content="COMMENT_UNCLOSED"></head>${BODY}`;
+    expect(toText(h)).not.toContain("COMMENT_UNCLOSED");
+  });
+
+  it("does NOT harvest a meta inside an UNCLOSED script containing an earlier >", () => {
+    // The script strip predates this release, but the harvest is what turns it
+    // into a route to a false `supported`, so it is closed on the harvest side.
+    const h = `<head><script>x > 1; document.write(0);<meta name="description" content="SCRIPT_UNCLOSED"></head>${BODY}`;
+    expect(toText(h)).not.toContain("SCRIPT_UNCLOSED");
+  });
+
+  it("still harvests normally when an unrelated comment IS closed", () => {
+    // Guards against the tolerant `$` alternation over-matching and swallowing
+    // the document from the first comment onward.
+    const h = `<head><!-- housekeeping --><meta name="description" content="Genuine after comment."></head>${BODY}`;
+    expect(toText(h)).toContain("Genuine after comment.");
+  });
 });
