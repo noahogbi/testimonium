@@ -14,7 +14,7 @@
 
 ## Global Constraints
 
-- **`testimonium@0.5.0` must be published before Task 2.** Verify with `npm view testimonium version`. Task 1 can proceed without it.
+- **`testimonium@0.5.0` must be published before Task 1**, which installs the pin. Verify with `npm view testimonium version` before starting.
 - **Only `supported` rows render to readers** (`inject-evidence.ts:76`). A wrong `supported` publishes a passage under an unsupported claim; every other wrong status renders nothing. **Never write `supported` wrongly** — this outranks every other consideration in this plan.
 - The status vocabulary is enforced by a CHECK constraint: `unverified`, `supported`, `unsupported`, `unreachable`, `not_applicable`.
 - **Do NOT run `fixtures/challenge-battery.mjs`.**
@@ -29,8 +29,18 @@
 
 **Files:**
 - Create: `scripts/lib/fetch-core.mjs`
-- Modify: `scripts/lib/issue-check.mjs`
+- Modify: `scripts/lib/issue-check.mjs`, `scripts/bulletin-srccheck.mjs`
+- Modify: `package.json`, `package-lock.json`
 - Test: `scripts/lib/__tests__/fetch-core.test.ts` (create)
+
+**Install the dependency first.** omnisscientia pins exact `testimonium@0.4.0`
+today; nothing in this plan installs the version it depends on:
+
+```bash
+npm install --save-exact testimonium@0.5.0
+```
+
+Include `package.json` and the lockfile in this task's commit.
 
 **Interfaces:**
 - Produces: `buildTeedFetcher({ fetcher, hosts, identity, sink })` returning a `Fetcher`, and `rungForClaim(result, claimText)`.
@@ -43,25 +53,29 @@
 - [ ] **Step 1: Write the test that the corpus cannot**
 
 ```ts
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { buildTeedFetcher } from "../fetch-core.mjs";
 import { loadRules } from "testimonium";
 
 describe("fetch-core construction", () => {
   it("wires the declared identity through to a host that requires one", async () => {
-    // sec.gov carries requiresIdentity. Without the wire it gets a browser UA
-    // and refuses - which is the capability loss project 2 nearly shipped.
+    // THE DEFAULT PATH IS THE SUBJECT, so this test must NOT pass `fetcher` -
+    // supplying one short-circuits `opts.fetcher ?? defaultFetcher(...)` and
+    // makes identity and hosts dead parameters. An earlier draft of this plan
+    // did exactly that: the test could not fail for the property it named, and
+    // its only real assertion duplicated the tee test below.
+    //
+    // Drive the real construction instead by stubbing the global fetch that
+    // testimonium's node rung uses, and read the user agent it was given.
     const seen = [];
-    const inner = {
-      rungs: ["node"],
-      async fetch(url, rung) {
-        seen.push({ url, rung });
-        return { rawBody: "", status: 0, headers: {}, finalUrl: url, bytes: 0 };
-      },
-    };
-    const f = buildTeedFetcher({ fetcher: inner, sink: [], identity: "x y@z", hosts: loadRules().hosts });
+    vi.stubGlobal("fetch", async (url, init) => {
+      seen.push(init?.headers?.["user-agent"] ?? init?.headers?.["User-Agent"]);
+      return new Response("", { status: 200 });
+    });
+    const f = buildTeedFetcher({ sink: [], identity: "app contact@example.com", hosts: loadRules().hosts });
     await f.fetch("https://www.sec.gov/Archives/edgar/x.htm", "node");
-    expect(seen).toHaveLength(1);
+    vi.unstubAllGlobals();
+    expect(seen[0]).toBe("app contact@example.com");
   });
 
   it("delegates rungs rather than inventing them", () => {
@@ -82,7 +96,11 @@ describe("fetch-core construction", () => {
 });
 ```
 
-**Additionally assert the construction is shared, not merely similar.** The default path must produce a fetcher whose `sec.gov` user agent is the declared identity. Use whatever seam `testimonium` exposes for that (`userAgentFor` if it is public in 0.5.0; otherwise a `requiresIdentity` host with a recording inner fetcher). Report which you used.
+**Two seams that do NOT work, so you do not spend time on them.** `userAgentFor`
+is not exported from `testimonium`'s index and the exports map blocks a deep
+import. And a recording *inner* fetcher can never reach the default construction,
+because supplying one bypasses it. Stubbing the global `fetch` is the seam that
+works — testimonium's node rung calls it, so the user agent is observable there.
 
 - [ ] **Step 2: Run and watch them fail**
 
@@ -92,9 +110,16 @@ Expected: module not found.
 
 Move the tee and the `opts.fetcher ?? defaultFetcher({ hosts, identity })` construction out of `issue-check.mjs` verbatim. **The tee wrap is unconditional** — a supplied fetcher is wrapped too, or `reads[]` is empty when a caller passes a stub.
 
-- [ ] **Step 4: Route `issue-check.mjs` through it**
+- [ ] **Step 4: Route BOTH callers through it**
 
-Delete its local copies. Behaviour must not change.
+`issue-check.mjs` loses its local copies. **And `bulletin-srccheck.mjs:146-148`
+keeps its own hand-written `defaultFetcher({ hosts, identity })` call** — route
+that through `fetch-core` too.
+
+Spec criterion 2 requires "the CLI and the shared core make the same call", and
+leaving that copy in place means there are still two constructions, which is the
+whole defect this task exists to remove. Behaviour must not change in either
+caller.
 
 - [ ] **Step 5: Prove `issue-check` is behaviourally unchanged**
 
@@ -106,7 +131,7 @@ This is necessary and **not sufficient** — see the note above. Both checks are
 - [ ] **Step 6: Commit**
 
 ```bash
-git add scripts/lib/fetch-core.mjs scripts/lib/issue-check.mjs scripts/lib/__tests__/fetch-core.test.ts
+git add scripts/lib/fetch-core.mjs scripts/lib/issue-check.mjs scripts/bulletin-srccheck.mjs \n        scripts/lib/__tests__/fetch-core.test.ts package.json package-lock.json
 git commit -m "refactor(lib): one fetcher construction, shared by both gates"
 ```
 
@@ -307,9 +332,19 @@ Upsert on `on_conflict=post_id,footnote_number` with `Prefer: resolution=merge-d
 
 **Bump `checker_version` to `"2"`.** A cutover is the definition of a new generation, and post-cutover drift measurement depends on telling them apart.
 
-- [ ] **Step 3: Write the render tests**
+- [ ] **Step 3: Unit-test the exit rule, not just the rendering**
 
-`render` returns lines; test against them, not stdout.
+`render` returns lines; test against them, not stdout. **And extract the exit
+computation as a pure function and test it directly** — project 2 did this
+(`srccheck-render.test.ts:64-84` unit-tests `exitFor`), and criteria 9 and 10
+otherwise rest on prose alone.
+
+Cover each term separately, with a tally where only that term is non-zero:
+`unsupported`, `moved`, `unclaimed` with and without `--allow-unclaimed`, and
+**`unreachable` alone, which must return 0.** That last one is the difference
+from project 2's gate and the easiest to get backwards.
+
+Cover exit 2 as its own case, including the unknown-post-id path.
 
 - [ ] **Step 4: Prove the ladder is gone**
 
@@ -335,9 +370,39 @@ git show <commit-before-task-5>:scripts/citation-check.mjs > scripts/citation-ch
 
 From git, not from an edited buffer. Record the hash in its header.
 
-- [ ] **Step 2: Instrument it to record, twice**
+- [ ] **Step 2: Instrument it to record, twice — and read this before starting**
 
-Record `(url, rung, rawBody, status, headers, finalUrl)` per fetch, plus its own per-footnote intended patch. **Run it twice over the same posts** — anything whose outcome differs between runs is **legacy-unstable** and is excluded from adjudication rather than counted as a difference. citation-check has the same curl-retry non-determinism srccheck does.
+**Project 2's recording technique does not transfer, and the naive fallback
+corrupts the instrument.** srccheck had an inline fetch ladder, so project 2
+recorded at its fetch sites. `citation-check.mjs:158` delegates everything to
+`fetchSourceText`, which **returns extracted text and discards `rawBody`,
+`headers`, `finalUrl` and the per-rung detail inside `source-fetch.mjs`** — a
+file Task 7 Step 5 requires to be byte-untouched. Project 2's own legacy copy
+says so in as many words: *"citation-check gets this from fetchSourceText; this
+ladder is inline"* (`bulletin-srccheck.legacy.mjs:175`).
+
+Recording what `fetchSourceText` returns would replay **post-extraction text**
+into the new arm, so the new arm would classify text the legacy arm had already
+transformed. That is the §4.1 corruption in a different costume: the instrument
+manufacturing the difference it is measuring.
+
+**So the legacy copy inlines its own instrumented fetch layer.** Copy the
+relevant parts of `source-fetch.mjs`'s fetch path into
+`citation-check.legacy.mjs` and record at those sites — raw bytes, status,
+headers, finalUrl, per rung. The shared module stays untouched; the legacy
+copy is already a throwaway that Task 7 deletes.
+
+Record `(url, rung, rawBody, status, headers, finalUrl)` per fetch, plus its own
+per-footnote intended patch.
+
+**Where headers are genuinely unavailable** (the curl path dumps none), record
+`headers: null` rather than `{}`, and have the report bucket those reads as
+"headers unavailable" so no N1-shaped difference is ever adjudicated from them.
+Project 2 learned this one and this plan omitted it.
+
+**Run it twice over the same posts.** Anything whose outcome differs between runs
+is **legacy-unstable**, excluded from adjudication rather than counted as a
+difference. citation-check has the same curl-retry non-determinism srccheck does.
 
 - [ ] **Step 3: Declare the comparison's mappings**
 
@@ -413,7 +478,7 @@ Remove `source-fetch.mjs`'s now-unused exports in the same commit, and confirm n
 
 | edge | why |
 | --- | --- |
-| 0.5.0 published before 2 | the decorator's behaviour depends on description extraction |
+| 0.5.0 published before 1 | Task 1 installs the pin. (An earlier draft said "before 2, because the decorator depends on description extraction" — false: the decorator imports nothing from testimonium. Tasks 3 onward depend on it for correct verdicts.) |
 | 1 before 2 | the decorator wraps the shared core |
 | 1, 2 before 3 | the adapter composes both |
 | 3 before 4 | fixtures assert the adapter's returns |
