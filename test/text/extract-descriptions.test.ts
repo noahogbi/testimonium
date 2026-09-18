@@ -34,6 +34,7 @@ describe("toText: description attributes", () => {
     const out = toText(h);
     expect(out).toContain("Tom & Jerry");
     expect(out).not.toContain("&amp;");
+    expect(out).toContain(String.fromCodePoint(0x2014));
   });
 
   it("DEDUPLICATES the three tags when they carry the same sentence", () => {
@@ -45,6 +46,16 @@ describe("toText: description attributes", () => {
     // Counting occurrences, not just presence: triple-counting inflates prose
     // toward the floor and toward srccheck's originality haystack.
     expect(out.split(s).length - 1).toBe(1);
+  });
+
+  it("keeps three DISTINCT description values, rather than only the first tag", () => {
+    const h = `<meta name="description" content="First distinct sentence.">` +
+              `<meta property="og:description" content="Second distinct sentence.">` +
+              `<meta name="twitter:description" content="Third distinct sentence.">${BODY}`;
+    const out = toText(h);
+    expect(out).toContain("First distinct sentence.");
+    expect(out).toContain("Second distinct sentence.");
+    expect(out).toContain("Third distinct sentence.");
   });
 
   it("APPENDS, never prepends - body text must still be found first", () => {
@@ -67,5 +78,41 @@ describe("toText: description attributes", () => {
     // that is not on the page - a route to a false `supported`.
     const h = `<head><script>document.write('<meta name="description" content="INJECTED">');</script></head>${BODY}`;
     expect(toText(h)).not.toContain("INJECTED");
+  });
+
+  it("does NOT harvest a meta inside an inert <template>", () => {
+    const h = `<head><template><meta name="description" content="TEMPLATE_INJECTED"></template></head>${BODY}`;
+    expect(toText(h)).not.toContain("TEMPLATE_INJECTED");
+  });
+
+  it("does NOT harvest a commented-out meta", () => {
+    // Stale meta tags left in comments are ordinary in CMS output.
+    const h = `<head><!-- <meta name="description" content="COMMENT_INJECTED"> --></head>${BODY}`;
+    expect(toText(h)).not.toContain("COMMENT_INJECTED");
+  });
+
+  it("does NOT harvest a commented-out meta when the comment contains an earlier >", () => {
+    // The quote-aware scan alone does NOT close this one - the comment strip does.
+    const h = `<head><!-- a > b <meta name="description" content="COMMENT_GT"> --></head>${BODY}`;
+    expect(toText(h)).not.toContain("COMMENT_GT");
+  });
+
+  it("does NOT harvest a meta-shaped string sitting in another tag's attribute", () => {
+    // Markup as data, not an element. The strips do NOT close this one - the scan does.
+    const h = `<div data-raw='<meta name="description" content="ATTR_INJECTED">'>hi</div>${BODY}`;
+    expect(toText(h)).not.toContain("ATTR_INJECTED");
+  });
+
+  it("DOES still harvest a meta inside <noscript>", () => {
+    // We fetch without running JS, so noscript content is precisely what our
+    // reader sees. Excluding it would discard real prose.
+    const h = `<head><noscript><meta name="description" content="Noscript sentence."></noscript></head>${BODY}`;
+    expect(toText(h)).toContain("Noscript sentence.");
+  });
+
+  it("DOES harvest a genuine description whose content contains >", () => {
+    // Fixed by the scan; the old tag regex truncated the tag and harvested nothing.
+    const h = `<head><meta name="description" content="Rates a > b explained."></head>${BODY}`;
+    expect(toText(h)).toContain("Rates a > b explained.");
   });
 });

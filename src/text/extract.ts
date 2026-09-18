@@ -74,17 +74,43 @@ const NAMED: Readonly<Record<string, number>> = {
 /** Text a page carries in description attributes. Harvested AFTER script and
  *  style bodies are removed but BEFORE the tag strip: `<[^>]*>` discards
  *  attribute values wholesale - which is why a page whose only prose lives in
- *  its description reads as unreadable - while a `<meta>` written inside a
- *  script body is text no reader sees and must not be harvested at all.
- *  Deduplicated: the three tags almost always carry one sentence, and counting
- *  it three times inflates prose toward the 4,500 floor. */
-const META_TAG = /<meta\b[^>]*>/gi;
+ *  its description reads as unreadable - while a `<meta>` sitting in text no
+ *  reader's browser actually renders - a script body, an inert `<template>`,
+ *  a comment - must not be harvested at all. Deduplicated: the three tags
+ *  almost always carry one sentence, and counting it three times inflates
+ *  prose toward the 4,500 floor. */
 const IS_DESCRIPTION = /\b(?:name|property)\s*=\s*(["'])(?:og:|twitter:)?description\1/i;
 const CONTENT_ATTR = /\bcontent\s*=\s*(["'])([\s\S]*?)\1/i;
 
+/** Tags, with attribute values respected. A regex cannot do this: `<[^>]*>`
+ *  ends the tag at the first `>`, so a `>` inside a quoted attribute value both
+ *  truncates a genuine tag and makes a `<meta>`-shaped STRING sitting inside
+ *  another tag's attribute look like a tag of its own. The first loses a real
+ *  description; the second harvests text that is markup, not page content. */
+function* tagsIn(html: string): Generator<string> {
+  let i = 0;
+  while ((i = html.indexOf("<", i)) !== -1) {
+    let j = i + 1;
+    let quote = "";
+    while (j < html.length) {
+      const c = html[j];
+      if (quote) {
+        if (c === quote) quote = "";
+      } else if (c === '"' || c === "'") {
+        quote = c;
+      } else if (c === ">") break;
+      j++;
+    }
+    if (j >= html.length) break;
+    yield html.slice(i, j + 1);
+    i = j + 1;
+  }
+}
+
 function descriptionText(html: string): string {
   const seen = new Set<string>();
-  for (const tag of html.match(META_TAG) ?? []) {
+  for (const tag of tagsIn(html)) {
+    if (!/^<meta\b/i.test(tag)) continue;
     if (!IS_DESCRIPTION.test(tag)) continue;
     const m = CONTENT_ATTR.exec(tag);
     const value = m?.[2]?.trim();
@@ -107,7 +133,14 @@ export function toText(html: string): string {
   const stripped = html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ");
-  const described = descriptionText(stripped);
+  // A `<template>` body is inert until scripted, and a comment is never rendered
+  // at all - both are text no reader sees, the same hazard class as the script
+  // body above. The scan below closes a plain comment incidentally, but NOT one
+  // containing an early `>`, so this strip is load-bearing, not belt-and-braces.
+  const forHarvest = stripped
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<template\b[\s\S]*?<\/template>/gi, " ");
+  const described = descriptionText(forHarvest);
   const body = stripped.replace(/<[^>]*>/g, " ");
   return (described ? `${body} ${described}` : body)
     // Named entities EXCEPT &amp;, which must come last.
