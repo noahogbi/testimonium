@@ -71,14 +71,45 @@ const NAMED: Readonly<Record<string, number>> = {
   Phi: 0x3a6, Omega: 0x3a9,
 };
 
+/** Text a page carries in description attributes. Harvested AFTER script and
+ *  style bodies are removed but BEFORE the tag strip: `<[^>]*>` discards
+ *  attribute values wholesale - which is why a page whose only prose lives in
+ *  its description reads as unreadable - while a `<meta>` written inside a
+ *  script body is text no reader sees and must not be harvested at all.
+ *  Deduplicated: the three tags almost always carry one sentence, and counting
+ *  it three times inflates prose toward the 4,500 floor. */
+const META_TAG = /<meta\b[^>]*>/gi;
+const IS_DESCRIPTION = /\b(?:name|property)\s*=\s*(["'])(?:og:|twitter:)?description\1/i;
+const CONTENT_ATTR = /\bcontent\s*=\s*(["'])([\s\S]*?)\1/i;
+
+function descriptionText(html: string): string {
+  const seen = new Set<string>();
+  for (const tag of html.match(META_TAG) ?? []) {
+    if (!IS_DESCRIPTION.test(tag)) continue;
+    const m = CONTENT_ATTR.exec(tag);
+    const value = m?.[2]?.trim();
+    if (value) seen.add(value);
+  }
+  return [...seen].join(" ");
+}
+
 /** HTML to visible prose. Script and style bodies are removed before tags are
  *  stripped, or their contents would land in the extracted text and a claim
  *  could "match" against a JSON blob. */
 export function toText(html: string): string {
-  return html
+  // Strip script and style FIRST, then harvest, then strip tags. The order is
+  // load-bearing: a `<meta>` tag written inside a script body is text no reader
+  // ever sees, and harvesting from raw HTML would feed it to the classifier as
+  // prose - a route to a false `supported`, which is the one outcome the spec
+  // calls inviolable. This function's own docstring already names the hazard
+  // for script bodies generally; harvesting before the strip would bypass the
+  // protection it was built around.
+  const stripped = html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]*>/g, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ");
+  const described = descriptionText(stripped);
+  const body = stripped.replace(/<[^>]*>/g, " ");
+  return (described ? `${body} ${described}` : body)
     // Named entities EXCEPT &amp;, which must come last.
     .replace(/&([a-zA-Z][a-zA-Z0-9]{1,31});/g, (raw, name: string) => {
       const cp = NAMED[name];
