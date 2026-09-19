@@ -22,14 +22,19 @@ URLs because a change to a committed surface earns one.
   same sentence, and counting it three times would inflate a page's measured
   prose toward the 4,500-character floor on the strength of one sentence
   repeated, not three sentences read. Description text is appended after the
-  body, never prepended, so an already-supported result's rendered excerpt
-  cannot change.
+  body, never prepended, so description text cannot win the first match ahead
+  of body text. It does not make excerpts invariant: a claim matching at the
+  very end of the body can now draw appended description text into its trailing
+  context window, so an excerpt may gain a trailing ellipsis or a sentence of
+  publisher blurb.
 - **This changes `toText`'s output, which has been a committed surface since
   0.3.0.** A caller diffing its own prose against a source's extracted text,
   or comparing extraction snapshots across a version bump, will see new
-  characters on any page carrying a description. The bump is minor, not
-  patch: `^0.4.0` in a consumer's own dependency range excludes `0.5.0`, so
-  nobody receives this change without choosing to take it.
+  characters on any page carrying a description. This repository's own doctrine
+  (`src/text/normalize.ts:7-11`) treats a change to committed output as
+  breaking, which argues for a major bump; it is released as minor on the
+  narrower ground that `^0.4.0` in a consumer's dependency range excludes
+  `0.5.0`, so nobody receives this change without choosing to take it.
 - **Measured against the 618 source URLs cited by 99 published bulletin
   issues** (`docs/description-movement-0-5-0.md`): 618 of 618 measured, 549
   yielded a reading, 532 non-vetoed. 483 of 549 (88.0%) gained description
@@ -39,12 +44,17 @@ URLs because a change to a committed surface earns one.
 - **5 URLs cross the 4,500 prose floor. 0 cross the 800 signature cap.** Each
   of the five was already within 20 to 390 characters of the floor before
   this change - substantial articles sitting just under an arbitrary line,
-  not shells becoming accusable. One of the five, `casar.house.gov`, clears
-  the floor only because part of its gain restates a sentence already present
-  in its own body; deduplication runs across the three meta tags but not
-  against body text, so this crossing is weaker than the other four and does
-  not hold once that restatement is discounted. The other four cross on new
-  text. No URL crosses the 800 signature cap anywhere in the corpus.
+  not shells becoming accusable. **Two of the five - `casar.house.gov` and the
+  `techcrunch.com` Apple/Qwen row - clear the floor almost entirely on text
+  already present in their own bodies**, and land back under it once that
+  restatement is discounted; deduplication runs across the three meta tags but
+  not against body text. Only three of the five cross on genuinely new text.
+  No URL crosses the 800 signature cap anywhere in the corpus, and no read's
+  challenge signature flips in either direction - but that is not a bound on
+  the sub-floor case: a claim matching description text alone returns
+  `supported` below the floor, because `matched === total` is tested before any
+  floor test. 61 of the 549 readings sit below the floor and gained description
+  text.
 
 ## 0.4.0 - 2026-09-14
 

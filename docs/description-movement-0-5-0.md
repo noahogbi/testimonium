@@ -49,26 +49,36 @@ sub-floor measurement reached - is a corroboration, not a coincidence.
 
 Each was 20 to 390 characters short of the floor and cleared it by 40 to 201.
 
-| URL | before -> after | gained | duplicated | still crosses if duplicates discounted |
+| URL | before -> after | gained | duplicated | crosses on genuinely new text |
 | --- | --- | --- | --- | --- |
-| `nhtsa.gov` Tesla Cybercab audit query | 4407 -> 4701 | 294 | 150 | yes |
-| `casar.house.gov` OpenAI/Anthropic transparency | 4110 -> 4584 | 474 | 151 | **no** |
-| `techcrunch.com` Apple Intelligence / Qwen | 4480 -> 4604 | 124 | 0 | yes |
+| `nhtsa.gov` Tesla Cybercab audit query | 4407 -> 4701 | 294 | 151 | yes |
+| `casar.house.gov` OpenAI/Anthropic transparency | 4110 -> 4584 | 474 | **473** | **no** |
+| `techcrunch.com` Apple Intelligence / Qwen | 4480 -> 4604 | 124 | **120** | **no** |
 | `techcrunch.com` Palihapitiya Series A | 4432 -> 4548 | 116 | 0 | yes |
 | `openai.com` Economic Research Exchange | 4374 -> 4540 | 166 | 0 | yes |
 
 All five are ordinary HTML read on the `node` rung. None is vetoed, none is PDF-shaped, so
 none is an artifact of how this harness picks a rung.
 
-### The casar row is weaker than the other four
+### Two of the five cross only on text already in their own bodies
 
-It clears the floor only because 151 characters of its gain restate a sentence already in its
-own body - ledes commonly repeat the meta description, and deduplication runs only among the
-three tag values, never against body text. Discount the restatement and it does not cross.
+`casar.house.gov` and the `techcrunch.com` Apple/Qwen row clear the floor almost entirely on
+restatement. Discount it and they land at 4,110 and 4,484 - both below the floor. Only three
+of the five cross on genuinely new text.
 
-The 4,500 floor is a proxy for *did we really read a document*, so a crossing that rests on
-counting one sentence twice is a different and weaker finding than one that rests on new text.
-It is listed separately for that reason rather than tallied alongside the rest.
+Ledes commonly repeat the meta description, and deduplication runs only among the three tag
+values, never against body text. The 4,500 floor is a proxy for *did we really read a
+document*, so a crossing that rests on counting one sentence twice is a weaker finding than
+one resting on new text, and the two kinds are not tallied together here.
+
+**An earlier draft of this report put the duplicated figures at 151 and 0** and called the
+other four clean. That was wrong, and the way it was wrong is worth recording: duplication
+was measured as whole-sentence *exact* matching. The techcrunch description differs from its
+own lede by one word (`Alibaba`) and one apostrophe codepoint, so exact matching scored it
+zero. The figures above come from a fold-aware longest-common-run cover, which is stable
+across 30-, 60- and 90-character minimum runs. This report's own Limits section had predicted
+that exact matching would understate duplication, and the conclusion relied on the metric
+anyway.
 
 ## What the crossings are, and are not
 
@@ -115,9 +125,21 @@ from being counted three times.
 
 ## The 800 signature cap
 
-No URL crosses it. Crossing would disarm the N3 challenge signature for that read, and the
-mechanism by which a shell's description can support a claim - its matches entering the
-cross-rung union - is not exercised anywhere in this corpus.
+No URL crosses it, and no read's challenge signature flips in either direction.
+
+**Do not read that as a bound on the shell case.** An earlier draft of this section said the
+verdict "stays floor-protected below 4,500", which is false. `verdict()` tests
+`matched === total` *before* any floor test, so a claim matching description text alone
+returns `supported` on a page far below the floor - no cap crossing, no veto disarm and no
+cross-rung union required. Verified end to end: a 214-character stub whose claim appears only
+in `og:description` returns `unreachable` on 0.4.0 and `supported` on 0.5.0, quoting the
+description as its evidence excerpt.
+
+That is the intended behaviour - it is the shape the cutover spec exists to fix, where a page
+we can genuinely read only through its description was previously declined. The 800 cap
+governs something narrower: whether such a read's matches also enter the cross-rung union.
+The exposed population here is **61 of 549 readings** - pages that remain below the floor and
+gained description text.
 
 ## Cross-check against the 2026-09-13 baseline
 
@@ -140,6 +162,9 @@ artifact, not as pages that changed.
 - **Rung selection is simplified**, as described above. It cancels out of the before/after
   delta, because both arms extract the same bytes, and it does not cancel out of the absolute
   cross-check.
-- **Duplication is measured per sentence** against the body, so a description restating a lede
-  with different punctuation may be scored as new text. The figure understates duplication
-  rather than overstating it.
+- **Duplication is measured by a fold-aware longest-common-run cover** against the body, after
+  case folding, Unicode NFKC normalisation and quote-character folding, counting runs of 30
+  characters or more. The earlier per-sentence exact match understated duplication badly
+  enough to reverse two of the five crossing verdicts - see the note above the table. Runs
+  shorter than the threshold still read as new text, so the figure remains a lower bound on
+  duplication.
