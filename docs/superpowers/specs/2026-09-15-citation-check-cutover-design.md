@@ -104,6 +104,13 @@ decline was written against defeating a paywall's truncation, and
 
 ### 3.4 What it moves, measured
 
+**Amended 2026-09-19:** this change landed in 0.5.0. `extract.ts` was reshaped
+in the process, so the `extract.ts:81` line citation below no longer resolves
+to the discard this section describes. The values below (6,394, 13,216) are
+the pre-change record of what this section measured and are left as written;
+post-change the smallest gaining document is 6,481 and the ECB known-gap
+fixture is 13,452. See `docs/calibration-2026-09.md`.
+
 `toText` discards attributes wholesale at `extract.ts:81`, and `proseVolume` is
 plain length, so **this fix can only raise prose, never lower it.**
 

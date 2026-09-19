@@ -210,7 +210,7 @@ describe("check", () => {
     // prose volume wins - picked the same read `proven` picks and `proven`
     // discriminated nothing: deleting it left the entire suite green. The body
     // below is the shape the corpus's real ECB capture has, heavy navigation
-    // chrome served at 404 (13,216 extracted characters there), reproduced
+    // chrome served at 404 (13,452 extracted characters there), reproduced
     // inline rather than read from fixtures/corpus.json because this file
     // deliberately holds no fixture reads - and because a test whose
     // discriminating power depends on a captured file's SIZE would degrade
@@ -632,7 +632,7 @@ describe("check", () => {
     // A server is not authoritative about PRESENCE, which is why 2xx is never
     // proof of a read - but it IS authoritative when it says a resource does
     // not exist. Calibration forced this: no prose floor could reject a real
-    // ECB 404 serving 13,216 characters of navigation chrome, and with the
+    // ECB 404 serving 13,452 characters of navigation chrome, and with the
     // veto removed zero thresholds satisfied the acceptance test.
     //
     // The cost is recorded and accepted: a misconfigured host serving a

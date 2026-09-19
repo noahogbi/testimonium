@@ -3,6 +3,14 @@
 Three thresholds, three dated records. `minProseChars` (plan 1) is below;
 `minClaimChars` and `harvestSeedChars` (plan 2) are at the end.
 
+**Amended 2026-09-19: 0.5.0 began reading `description` meta tags that `toText` previously
+discarded.** Eight calibration fixtures carry such a tag, so their extracted prose grew and
+every current-state figure on this page that derives from them moved. The floor remains
+licensed: the satisfying range is now `[1,380, 6,281]` and 4,500 still sits well inside it.
+Re-run `node scripts/calibrate.mjs && node scripts/sweep-floor.mjs` to reproduce. Figures
+below are corrected in place where they describe the corpus as it stands today; historical
+records of past measurements are left as written and carry a dated amendment instead.
+
 **Date:** 2026-09-07 (round 3, after ruling C7) — supersedes the round-1 and round-2 records.
 Round 3's own baseline numbers were then overtaken twice more, same day: the entity-decoding
 fix (`b75a8e5`, `61c8a9a`) changed several fixtures' extracted length before Task 3 added two
@@ -37,27 +45,29 @@ otherwise try to add it back.
 **Re-verified for Task 4 (plan 1.1)** against the current 36-row corpus. Two of round 3's
 own numbers below moved since they were first recorded - the smallest real document dropped
 from 6,858 to 6,394 (the entity-heavy fixture Task 3 added is smaller than round 3's
-smallest), and the ECB fixture's extracted length dropped from 13,221 to 13,216 once the
-entity-decoding fix landed (`b75a8e5`, `61c8a9a`) - and every downstream figure that depends
-on them (gap, clear air, the sweep) is recomputed from the corrected numbers, not carried
-forward by arithmetic on the old ones.
+smallest), and to 6,481 once 0.5.0 began reading description attributes, and the ECB
+fixture's extracted length dropped from 13,221 to 13,216 once the entity-decoding fix landed
+(`b75a8e5`, `61c8a9a`), and to 13,452 once 0.5.0 began reading description attributes - and
+every downstream figure that depends on them (gap, clear air, the sweep) is recomputed from
+the corrected numbers, not carried forward by arithmetic on the old ones.
 
 | quantity | value |
 |---|---:|
 | largest challenge fixture that no veto rejects | 1,180 |
-| smallest real document | 6,394 ‡ |
-| gap | 5,214 |
+| smallest real document | 6,481 ‡ |
+| gap | 5,301 |
 | **chosen floor** | **4,500** |
 | clear air below the floor | 3,320 |
-| clear air above the floor | 1,894 |
+| clear air above the floor | 1,981 |
 
 **‡ The smallest real document is a CONSTRUCTED fixture, and it sets the sweep's upper
 bound.** `documents/entity-heavy-article.html` was authored for Task 3 (plan 1.1) to
 exercise the entity table; it is real-*shaped*, not a real capture, and the rest of this
-page marks non-measured properties with a dagger for exactly this reason. At 6,394 it is
+page marks non-measured properties with a dagger for exactly this reason. At 6,481 it is
 now the corpus's smallest document, below the smallest real capture
-(`blog-mozilla-org-en-.html`, 6,858), so it - not a measured page - is what caps the floor
-sweep, moving that cap from 6,658 to 6,194. Two consequences worth being explicit about:
+(`blog-mozilla-org-en-.html`, 6,900), so it - not a measured page - is what caps the floor
+sweep, moving that cap from 6,658 to 6,194, and to 6,281 once 0.5.0 began reading
+description attributes. Two consequences worth being explicit about:
 the upper end of the licensed range is now set by a file this project wrote, and shortening
 that fixture would narrow the range further. Neither affects the chosen floor of 4,500,
 which sits far from both ends, but neither should be discovered later either.
@@ -65,18 +75,20 @@ which sits far from both ends, but neither should be discovered later either.
 Both margins are more than nine times the 200-character margin the acceptance test
 requires. `scripts/sweep-floor.mjs` (added for this re-verification, so the figure can be
 re-run rather than trusted) sweeps every integer floor from 1 to 120,000 and checks all four
-acceptance assertions at each one; it finds **4,815 values** that satisfy every assertion, a
-contiguous range of `[1,380, 6,194]`. 4,500 sits 3,120 above its lower bound and 1,694 below
+acceptance assertions at each one; it finds **4,902 values** that satisfy every assertion, a
+contiguous range of `[1,380, 6,281]`. 4,500 sits 3,120 above its lower bound and 1,781 below
 its upper. The choice is not delicate. (Both figures re-run 2026-09-07 after plan 1.1's
-final fix round, against a fresh `npm run build`: unchanged.)
+final fix round, against a fresh `npm run build`: unchanged. Re-run again after 0.5.0 began
+reading description attributes: 4,902 and `[1,380, 6,281]` - no longer unchanged, but the
+floor remains licensed by the same wide margin.)
 
 The three challenge fixtures that extract far past this floor — the Cloudflare blog 404 at
-2,154, the PDF-binary fixture (Task 3) at 6,221, and the ECB 404 at 13,216 — never reach
+2,154, the PDF-binary fixture (Task 3) at 6,221, and the ECB 404 at 13,452 — never reach
 prose volume: the two 404s are rejected by **N4** and the PDF binary, served at 200, is
 rejected by **N5** (it is not text at all). That is the whole reason the floor gets to be
 this comfortable. **N4 and N5 are both load-bearing now**: without N4, the ECB page alone
 makes these assertions unsatisfiable (round 1's finding); without N5, the PDF-binary
-fixture's 6,221 extracted characters would sit inside the gap between 1,180 and 6,394 and
+fixture's 6,221 extracted characters would sit inside the gap between 1,180 and 6,481 and
 collapse most of it.
 
 ## The two populations
@@ -87,17 +99,17 @@ round 3's original record.
 
 ### `challenge` (n = 25)
 
-Prose volume: min 43, max 13,216. **Excluding the three vetoed fixtures (two by N4, one by
+Prose volume: min 43, max 13,452. **Excluding the three vetoed fixtures (two by N4, one by
 N5): 43 to 1,180.** Status: 23 at 200, 2 at 404.
 
 ### `document` (n = 10)
 
-Prose volume: min 6,394, max 108,248. Status: all 200.
+Prose volume: min 6,481, max 108,248. Status: all 200.
 
 ### Read together
 
 The 22 challenge fixtures that reach the body-derived gate span 43–1,180. The ten
-documents span 6,394–108,248. Nothing lies between 1,180 and 6,394 **among fixtures that
+documents span 6,481–108,248. Nothing lies between 1,180 and 6,481 **among fixtures that
 reach the gate** - but the PDF-binary fixture's own raw prose volume, 6,221, sits inside
 that numeric gap. It never reaches prose volume at all: N5 vetoes it first, on body shape
 rather than length, which is exactly why N5 has to run before the floor is consulted rather
@@ -110,7 +122,7 @@ is not marginal, and no such fixture sits near the boundary from either side.
 |---|---:|---|
 | **N4 (HTTP 404/410 veto)** | 2 challenge (#23, #24) | The Cloudflare blog 404 and the ECB 404. Both statuses measured twice. Neither is separable by body shape — the ECB page out-extracts two real documents. |
 | **N5 (non-text veto, Task 2)** | 1 challenge (`pdf-binary-served-at-200.bin`, Task 3 - not one of the 33 numbered rows below; see "Two new body shapes") | Extracts to 6,221 characters, past the 4,500 floor on length alone, and served at 200 so N4 does not see it either. Only a check on the raw body's own bytes catches it. |
-| **Prose volume >= 4,500** | 22 challenge (#1–#22), 10 document (#25–#33 plus `entity-heavy-article.html`, Task 3 - not row-numbered below) | Every one clears by margin. Largest challenge in this group is 1,180 against a 4,500 floor; smallest document is 6,394 (`entity-heavy-article.html`), not 6,858 as recorded when this table was first written - see "Two new body shapes". |
+| **Prose volume >= 4,500** | 22 challenge (#1–#22), 10 document (#25–#33 plus `entity-heavy-article.html`, Task 3 - not row-numbered below) | Every one clears by margin. Largest challenge in this group is 1,180 against a 4,500 floor; smallest document is 6,481 (`entity-heavy-article.html`), not 6,858 as recorded when this table was first written - see "Two new body shapes". |
 | **Slug/label overlap** | **0** | Withdrawn from the verdict. Still computed and printed. See below. |
 
 ## Why C1 was withdrawn — the finding worth keeping
@@ -224,14 +236,14 @@ those.
 | 21 | `challenge/cloudflare-turnstile-cookie-privacy-boilerplate-800-chars.html` | challenge | 200 † | 982 | 0.00 | rejected | prose (3,518 clear) |
 | 22 | `challenge/www-federalregister-gov-documents-2024-01-29-2024-01580-.html` | challenge | 200 | 1,180 | 0.00 * | rejected | prose (3,320 clear) |
 | 23 | `challenge/blog-cloudflare-com-cloudflare-incident-on-november-18-2025-.html` | challenge | 404 | 2,154 | 0.33 | rejected | **N4 veto** |
-| 24 | `challenge/www-ecb-europa-eu-press-pr-date-2024-html-index-en-html.html` | challenge | 404 | 13,216 | 1.00 | rejected | **N4 veto** |
-| 25 | `documents/blog-mozilla-org-en-.html` | document | 200 | 6,858 | 0.00 | reaches accusation | prose (2,358 clear) |
-| 26 | `documents/www-theverge-com-tech.html` | document | 200 | 16,449 | 1.00 | reaches accusation | prose (11,949 clear) |
-| 27 | `documents/developer-mozilla-org-en-US-docs-Web-HTTP-Status.html` | document | 200 | 23,595 | 0.50 * | reaches accusation | prose (19,095 clear) |
+| 24 | `challenge/www-ecb-europa-eu-press-pr-date-2024-html-index-en-html.html` | challenge | 404 | 13,452 | 1.00 | rejected | **N4 veto** |
+| 25 | `documents/blog-mozilla-org-en-.html` | document | 200 | 6,900 | 0.00 | reaches accusation | prose (2,400 clear) |
+| 26 | `documents/www-theverge-com-tech.html` | document | 200 | 16,693 | 1.00 | reaches accusation | prose (12,193 clear) |
+| 27 | `documents/developer-mozilla-org-en-US-docs-Web-HTTP-Status.html` | document | 200 | 23,735 | 0.50 * | reaches accusation | prose (19,235 clear) |
 | 28 | `documents/www-bls-gov-news-release-cpi-nr0-htm.html` | document | 200 | 24,248 | 1.00 | reaches accusation | prose (19,748 clear) |
-| 29 | `documents/docs-python-org-3-library-json-html.html` | document | 200 | 26,208 | 1.00 | reaches accusation | prose (21,708 clear) |
-| 30 | `documents/www-gov-uk-government-news.html` | document | 200 | 33,070 | 1.00 | reaches accusation | prose (28,570 clear) |
-| 31 | `documents/apnews-com-hub-technology.html` | document | 200 | 45,390 | 1.00 | reaches accusation | prose (40,890 clear) |
+| 29 | `documents/docs-python-org-3-library-json-html.html` | document | 200 | 26,409 | 1.00 | reaches accusation | prose (21,909 clear) |
+| 30 | `documents/www-gov-uk-government-news.html` | document | 200 | 33,115 | 1.00 | reaches accusation | prose (28,615 clear) |
+| 31 | `documents/apnews-com-hub-technology.html` | document | 200 | 45,529 | 1.00 | reaches accusation | prose (41,029 clear) |
 | 32 | `documents/openai-com-index-gpt-4o-system-card-.html` | document | 200 | 76,930 | 1.00 | reaches accusation | prose (72,430 clear) |
 | 33 | `documents/en-wikipedia-org-wiki-Textual-criticism.html` | document | 200 | 108,248 | 1.00 | reaches accusation | prose (103,748 clear) |
 
@@ -239,6 +251,11 @@ those.
 shifted by a few characters each after the entity-decoding fix (`b75a8e5`, `61c8a9a`) landed,
 after round 3's numbers above were first recorded. Confirmed directly against `toText`'s
 current output, not carried forward from the old table by arithmetic.)*
+
+*(Rows 24–27 and 29–31 were corrected again after 0.5.0: `toText` began reading
+`description` meta-tag text it previously discarded, and each of those fixtures carries one,
+so their extracted lengths grew. Rows 28, 32, and 33 do not carry the tag and are unchanged.
+Confirmed directly against `toText`'s current output, not carried forward by arithmetic.)*
 
 The overlap column is what `scripts/calibrate.mjs` prints today: the current
 `slugLabelOverlap`, URL path only, with no label supplied by the corpus. `*` marks the two
@@ -265,11 +282,11 @@ What it exposes, measured through the shipped pipeline:
 
 | body | status | prose | bundled signature? | verdict |
 |---|---:|---:|---|---|
-| ECB error page, real capture | 404 | 13,216 | none matches | `unreachable` (N4) |
-| the identical bytes | 200 | 13,216 | none matches | **`unsupported`** |
+| ECB error page, real capture | 404 | 13,452 | none matches | `unreachable` (N4) |
+| the identical bytes | 200 | 13,452 | none matches | **`unsupported`** |
 
 So on this page **N4 is the only thing standing between an author and a false
-accusation.** Nothing about the body rejects it: 13,216 characters of intact navigation
+accusation.** Nothing about the body rejects it: 13,452 characters of intact navigation
 chrome out-extracts two real documents in the corpus, and it carries no wording the
 challenge-signature list recognizes.
 
@@ -496,7 +513,7 @@ A **constructed** (authored here, not captured) real-shaped news article using s
 spellings of non-ASCII prose across its body:
 `&mdash;`, `&#8212;`, and `&#x2014;` (three encodings of the same em dash), `&eacute;` /
 `&Eacute;`, `&hellip;`, `&nbsp;`, `&amp;`, and `&lt;`. `kind: "document"`, `status: 200`.
-Extracts to 6,394 characters, clear of the floor (and the 200-char margin) by 1,894.
+Extracts to 6,481 characters, clear of the floor (and the 200-char margin) by 1,981.
 
 This is the only end-to-end pin of Task 1's entity-table work. The corresponding test does
 **not** call `run(f, [])` — `verdict()` returns `"unclaimed"` on `total === 0` before any
@@ -511,7 +528,7 @@ entities. The pipeline is required to decode the entities and report `"supported
 No fixture was dropped, omitted, or reclassified across any of the three rounds. The
 200-character margin is untouched. No assertion was weakened or deleted — the two margin
 assertions still demand 200 characters of clear air, and every fixture now provides at
-least 1,894 (`entity-heavy-article.html`, the new smallest document - see above; unchanged
+least 1,981 (`entity-heavy-article.html`, the new smallest document - see above; unchanged
 on the challenge side, where the tightest margin is still 3,320). `proseVolume` and
 `slugLabelOverlap` are byte-for-byte as specified in the
 brief. No status was guessed, and none was set to 404 or 410 for convenience.

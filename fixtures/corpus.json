@@ -252,6 +252,6 @@
     "url": "https://www.ecb.europa.eu/press/pr/date/2024/html/index.en.html",
     "title": "Sorry, this page does not exist.",
     "status": 200,
-    "note": "THE SAME REAL CAPTURE AS THE 404 ENTRY ABOVE, FILED A SECOND TIME AT STATUS 200. Not part of either calibrated population - it is the README's heavy-chrome-error-page gap, pinned as a fixture instead of a ledger line. This body extracts 13,216 characters of intact navigation (13,221 before plan 1.1's entity decoding), matches no bundled challenge signature, and therefore clears the 4,500 prose floor and reaches an accusation whenever the origin does not say 404. N4 is the only thing that rejects the real capture. See docs/calibration-2026-09.md, 'Known gap'. Do NOT reclassify this as `challenge`: it would fail the acceptance test, which is the point."
+    "note": "THE SAME REAL CAPTURE AS THE 404 ENTRY ABOVE, FILED A SECOND TIME AT STATUS 200. Not part of either calibrated population - it is the README's heavy-chrome-error-page gap, pinned as a fixture instead of a ledger line. This body extracts 13,452 characters of intact navigation (13,221 before plan 1.1's entity decoding, 13,216 before 0.5.0 began reading description attributes), matches no bundled challenge signature, and therefore clears the 4,500 prose floor and reaches an accusation whenever the origin does not say 404. N4 is the only thing that rejects the real capture. See docs/calibration-2026-09.md, 'Known gap'. Do NOT reclassify this as `challenge`: it would fail the acceptance test, which is the point."
   }
 ]

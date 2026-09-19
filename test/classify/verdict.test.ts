@@ -46,7 +46,7 @@ describe("verdict", () => {
   });
 
   it("a 404 or 410 vetoes, even over a full match - the document is gone", () => {
-    // N4. A real ECB 404 served 13,216 characters of nav chrome and cleared
+    // N4. A real ECB 404 served 13,452 characters of nav chrome and cleared
     // every body-derived test; body shape cannot see what the status line says.
     expect(verdict({ ...base, matched: 3, documentGone: true })).toBe("unreachable");
   });

@@ -243,6 +243,11 @@ amendment text in that row changes.
 **The numbers are true of testimonium's own calibration corpus and stay.** What
 is new is a second, independent measurement.
 
+**Amended 2026-09-19:** they did not stay. 0.5.0 changed what `toText` reads
+(`description` meta tags now contribute), and the quote above is the
+pre-0.5.0 record - the current values are 6,481 and a gap of 5,301. See
+`docs/calibration-2026-09.md`.
+
 On 2026-09-13 the omnisscientia bulletin corpus was measured: 618 distinct
 source URLs from 99 published issues, 549 yielding a prose measurement. **154 of
 those 549 — 28.1% — fall inside the band this comment treats as clear.** 68

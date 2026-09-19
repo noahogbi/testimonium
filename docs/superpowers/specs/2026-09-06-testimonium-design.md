@@ -399,7 +399,8 @@ VETO - overrides everything, including P1
       information recheck will want even though check does not act on
       it." Calibration proved check must act on it: a real ECB 404 serving
       13,221 characters of navigation chrome (13,216 since plan 1.1's entity
-      decoding) cleared every body-derived test - prose volume above two of
+      decoding, 13,452 since 0.5.0 began reading description attributes)
+      cleared every body-derived test - prose volume above two of
       nine real documents, overlap 1.00 - and no threshold pair could reject
       it. Exhaustive search over 24,915
       pairs returned zero solutions with that fixture and 249 without it.
@@ -453,7 +454,7 @@ VERDICT
 
 Accusation rests on P2 and the five vetoes. Measured separation on the
 fixture corpus: largest non-vetoed challenge 1,180 characters, smallest
-real document 6,394 - a gap of 5,214, with the floor licensed at 4,500.
+real document 6,481 - a gap of 5,301, with the floor licensed at 4,500.
 N4 removes the padded error shells that prose volume cannot see, and N5
 the bodies that are not prose at all; nothing else needs removing.
 
@@ -462,7 +463,10 @@ when this paragraph was written; it is 6,394 as of the current corpus -
 re-measured 2026-09-07 with `node scripts/calibrate.mjs`, and the reason
 for the change is recorded in `docs/calibration-2026-09.md`. Both N4 and N5
 are load-bearing on this corpus: without N5 a fixture extracting 6,221
-characters sits inside the 1,180-to-6,394 gap and collapses most of it.)*
+characters sits inside the 1,180-to-6,394 gap and collapses most of it.
+Re-measured again after 0.5.0 began reading description attributes: the
+document figure is 6,481 and the gap is 1,180-to-6,481; see
+docs/calibration-2026-09.md.)*
 
 **Read the table's shape, because it is the whole correction.** Attestation and
 accusation have different burdens. A full match is its own proof of a read and
@@ -778,7 +782,7 @@ the ladder's own stop condition (`nextAction`'s `exhaustive` parameter,
 never do, so their ladders stop exactly as before (0.2.0 section 4). At
 6546176 `check` climbed on N1, N2, N3 or a sub-floor body, while
 `reachability` climbed on any of the five vetoes or a sub-floor body; so a URL
-whose first rung returned a 404 carrying 13,216 characters of navigation
+whose first rung returned a 404 carrying 13,452 characters of navigation
 chrome (N4), or a PDF served as bytes (N5), stopped climbing in `check` and
 kept climbing in `reachability`. The unified rule is the wider of the two. It
 reaches strictly further than either and never less, and its cost is extra
