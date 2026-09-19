@@ -157,8 +157,14 @@ artifact, not as pages that changed.
 
 - **One week of drift.** The baseline is 2026-09-13; these are live pages read 2026-09-18.
   Only the cross-check is exposed to this - the before/after comparison uses one fetch.
-- **Live pages.** A page can change between two runs of this harness. Nothing here is
-  reproducible byte-for-byte except through the recorded NDJSON.
+- **Live pages, and the raw data is session-local.** A page can change between two runs of
+  this harness, so nothing here is reproducible byte-for-byte from the URLs alone. The raw
+  per-URL NDJSON these figures are computed from is **not in the repository** - it lives under
+  the git-ignored `.superpowers/` tree and is roughly 51 MB, because it stores both arms' full
+  extracted text. Anyone re-deriving these numbers re-fetches 618 live pages and will get a
+  different corpus. The harness also passes no claims to `computeSignals`, so every row has
+  `matched = 0` of `0`: this report measures prose volume and threshold crossings, and no row
+  in it can support a statement about verdicts.
 - **Rung selection is simplified**, as described above. It cancels out of the before/after
   delta, because both arms extract the same bytes, and it does not cancel out of the absolute
   cross-check.

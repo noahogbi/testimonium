@@ -149,10 +149,16 @@ export function toText(html: string): string {
   // Strip script and style FIRST, then harvest, then strip tags. The order is
   // load-bearing: a `<meta>` tag written inside a script body is text no reader
   // ever sees, and harvesting from raw HTML would feed it to the classifier as
-  // prose - a route to a false `supported`, which is the one outcome the spec
-  // calls inviolable. This function's own docstring already names the hazard
-  // for script bodies generally; harvesting before the strip would bypass the
-  // protection it was built around.
+  // prose - a route to a false `supported`, which the CONSUMER cutover spec
+  // (2026-09-15-citation-check-cutover-design.md, section 1) calls inviolable.
+  // Note this is a different ranking from the one cited in `tagsIn` above: the
+  // binding DESIGN spec ranks a false accusation as the worse of the two
+  // (2026-09-06-testimonium-design.md:101). The order below is what both
+  // rankings require, so nothing turns on which governs - but the two citations
+  // point in opposite directions and each must name its own spec to stay
+  // readable. This function's own docstring already names the hazard for script
+  // bodies generally; harvesting before the strip would bypass the protection
+  // it was built around.
   const stripped = html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ");
