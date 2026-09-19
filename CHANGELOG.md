@@ -1,5 +1,61 @@
 # Changelog
 
+## 0.5.0 - 2026-09-19
+
+One additive change to what `toText` extracts, the deduplication rule that
+keeps it from inflating prose on its own, and a measurement against 618 live
+URLs because a change to a committed surface earns one.
+
+- **`toText` now reads text carried in `description`, `og:description` and
+  `twitter:description` meta tags** (spec
+  `2026-09-15-citation-check-cutover-design.md` section 3). It previously
+  discarded every attribute value wholesale along with the tags themselves, so
+  a page whose prose lives almost entirely in its description - a post whose
+  rendered body strips to a sentence or two - read as unreadable no matter how
+  substantial that description was. The fix names no publisher and reads bytes
+  the server already returned in the response body: the same text any link
+  preview renders, not an extraction of anything hidden or paywalled.
+  `og:description` uses `property=`, not `name=`; both spellings are read,
+  attribute order is not assumed, both quote styles are accepted, and entities
+  inside `content` decode.
+- **The three tags are deduplicated before appending.** They usually carry the
+  same sentence, and counting it three times would inflate a page's measured
+  prose toward the 4,500-character floor on the strength of one sentence
+  repeated, not three sentences read. Description text is appended after the
+  body, never prepended, so description text cannot win the first match ahead
+  of body text. It does not make excerpts invariant: a claim matching at the
+  very end of the body can now draw appended description text into its trailing
+  context window, so an excerpt may gain a trailing ellipsis or a sentence of
+  publisher blurb.
+- **This changes `toText`'s output, which has been a committed surface since
+  0.3.0.** A caller diffing its own prose against a source's extracted text,
+  or comparing extraction snapshots across a version bump, will see new
+  characters on any page carrying a description. This repository's own doctrine
+  (`src/text/normalize.ts:7-11`) treats a change to committed output as
+  breaking, which argues for a major bump; it is released as minor on the
+  narrower ground that `^0.4.0` in a consumer's dependency range excludes
+  `0.5.0`, so nobody receives this change without choosing to take it.
+- **Measured against the 618 source URLs cited by 99 published bulletin
+  issues** (`docs/description-movement-0-5-0.md`): 618 of 618 measured, 549
+  yielded a reading, 532 non-vetoed. 483 of 549 (88.0%) gained description
+  text; 66 (12.0%) gained nothing. No URL's measured prose went down anywhere
+  in the corpus - prose can only rise. Median gain among pages that gained
+  anything: 148 characters; maximum: 3,283.
+- **5 URLs cross the 4,500 prose floor. 0 cross the 800 signature cap.** Each
+  of the five was already within 20 to 390 characters of the floor before
+  this change - substantial articles sitting just under an arbitrary line,
+  not shells becoming accusable. **Two of the five - `casar.house.gov` and the
+  `techcrunch.com` Apple/Qwen row - clear the floor almost entirely on text
+  already present in their own bodies**, and land back under it once that
+  restatement is discounted; deduplication runs across the three meta tags but
+  not against body text. Only three of the five cross on genuinely new text.
+  No URL crosses the 800 signature cap anywhere in the corpus, and no read's
+  challenge signature flips in either direction - but that is not a bound on
+  the sub-floor case: a claim matching description text alone returns
+  `supported` below the floor, because `matched === total` is tested before any
+  floor test. 61 of the 549 readings sit below the floor and gained description
+  text.
+
 ## 0.4.0 - 2026-09-14
 
 One additive change - the package's first shipped type declarations - and the

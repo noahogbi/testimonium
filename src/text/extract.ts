@@ -71,14 +71,116 @@ const NAMED: Readonly<Record<string, number>> = {
   Phi: 0x3a6, Omega: 0x3a9,
 };
 
+/** Text a page carries in description attributes. Harvested AFTER script and
+ *  style bodies are removed but BEFORE the tag strip: `<[^>]*>` discards
+ *  attribute values wholesale - which is why a page whose only prose lives in
+ *  its description reads as unreadable - while a `<meta>` sitting in text no
+ *  reader's browser actually renders - a script body, an inert `<template>`,
+ *  a comment - must not be harvested at all. Deduplicated: the three tags
+ *  almost always carry one sentence, and counting it three times inflates
+ *  prose toward the 4,500 floor. */
+const IS_DESCRIPTION = /\b(?:name|property)\s*=\s*(["'])(?:og:|twitter:)?description\1/i;
+const CONTENT_ATTR = /\bcontent\s*=\s*(["'])([\s\S]*?)\1/i;
+
+/** Tags, with attribute values respected. A regex cannot do this: `<[^>]*>`
+ *  ends the tag at the first `>`, so a `>` inside a quoted attribute value both
+ *  truncates a genuine tag and makes a `<meta>`-shaped STRING sitting inside
+ *  another tag's attribute look like a tag of its own. The first loses a real
+ *  description; the second harvests text that is markup, not page content. */
+function* tagsIn(html: string): Generator<string> {
+  let i = 0;
+  while ((i = html.indexOf("<", i)) !== -1) {
+    let j = i + 1;
+    let quote = "";
+    while (j < html.length) {
+      const c = html[j];
+      if (quote) {
+        if (c === quote) quote = "";
+      } else if (c === '"' || c === "'") {
+        quote = c;
+      } else if (c === ">") break;
+      j++;
+    }
+    // An unterminated quote consumes to end of input and we stop here, discarding
+    // every later tag - including legitimate descriptions. That is NOT free: on a
+    // page with enough body prose to clear the floor, losing a description that
+    // carried a claim leaves matched < total and accuses the author. Recovering
+    // instead - resuming at the first `>` seen inside the quote - trades that for
+    // harvesting text a strict parser would never render.
+    //
+    // The design spec RANKS those two outcomes rather than leaving it open: a
+    // false accusation "is a worse failure than the one the tool exists to
+    // prevent, because it is self-inflicted and it is aimed at the author's own
+    // honest citations", and everything in that document is subordinate to that
+    // rule (2026-09-06-testimonium-design.md:101). So recovery is the direction
+    // the spec points, and the risk it carries is milder than it first looks: an
+    // unterminated quote is a MALFORMED page, not an adversarial one, and the tag
+    // recovered is a genuine publisher-authored description rather than the stale
+    // or injected content the strips above exist to exclude.
+    //
+    // It is deferred out of 0.5.0 for one reason, and not because the question is
+    // open: changing this after the fact would invalidate
+    // docs/description-movement-0-5-0.md, whose numbers describe the code as
+    // measured, and re-measuring costs 618 live requests against real publishers.
+    // Malformed pages keep pre-0.5.0 behaviour meanwhile, so this is a coverage
+    // gap rather than a regression. Scheduled for 0.5.1.
+    if (j >= html.length) break;
+    yield html.slice(i, j + 1);
+    i = j + 1;
+  }
+}
+
+function descriptionText(html: string): string {
+  const seen = new Set<string>();
+  for (const tag of tagsIn(html)) {
+    if (!/^<meta\b/i.test(tag)) continue;
+    if (!IS_DESCRIPTION.test(tag)) continue;
+    const m = CONTENT_ATTR.exec(tag);
+    const value = m?.[2]?.trim();
+    if (value) seen.add(value);
+  }
+  return [...seen].join(" ");
+}
+
 /** HTML to visible prose. Script and style bodies are removed before tags are
  *  stripped, or their contents would land in the extracted text and a claim
  *  could "match" against a JSON blob. */
 export function toText(html: string): string {
-  return html
+  // Strip script and style FIRST, then harvest, then strip tags. The order is
+  // load-bearing: a `<meta>` tag written inside a script body is text no reader
+  // ever sees, and harvesting from raw HTML would feed it to the classifier as
+  // prose - a route to a false `supported`, which the CONSUMER cutover spec
+  // (2026-09-15-citation-check-cutover-design.md, section 1) calls inviolable.
+  // Note this is a different ranking from the one cited in `tagsIn` above: the
+  // binding DESIGN spec ranks a false accusation as the worse of the two
+  // (2026-09-06-testimonium-design.md:101). The order below is what both
+  // rankings require, so nothing turns on which governs - but the two citations
+  // point in opposite directions and each must name its own spec to stay
+  // readable. This function's own docstring already names the hazard for script
+  // bodies generally; harvesting before the strip would bypass the protection
+  // it was built around.
+  const stripped = html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]*>/g, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ");
+  // Every strip here tolerates a MISSING closer. A regex that demands one simply
+  // fails to match on malformed input, leaving the region's contents in the
+  // harvest input for `tagsIn` to read as live markup - which is the dangerous
+  // direction, since a browser treats an unterminated `<!--`, `<template>` or
+  // `<script>` as swallowing the rest of the document as inert content. `$` only
+  // matches once the non-greedy engine has exhausted the string without finding
+  // the real closer, so well-formed input is completely unaffected.
+  //
+  // Script and style are re-stripped here even though `stripped` already removed
+  // the well-formed ones: `stripped` feeds BODY extraction, which is contractually
+  // untouched in this release, so the tolerant variants live on this side only.
+  const forHarvest = stripped
+    .replace(/<script\b[\s\S]*?(?:<\/script>|$)/gi, " ")
+    .replace(/<style\b[\s\S]*?(?:<\/style>|$)/gi, " ")
+    .replace(/<!--[\s\S]*?(?:-->|$)/g, " ")
+    .replace(/<template\b[\s\S]*?(?:<\/template>|$)/gi, " ");
+  const described = descriptionText(forHarvest);
+  const body = stripped.replace(/<[^>]*>/g, " ");
+  return (described ? `${body} ${described}` : body)
     // Named entities EXCEPT &amp;, which must come last.
     .replace(/&([a-zA-Z][a-zA-Z0-9]{1,31});/g, (raw, name: string) => {
       const cp = NAMED[name];

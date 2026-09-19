@@ -197,6 +197,17 @@ before you trust a green run to mean more than it does.
   repair, and no plan has yet taken it. It is disclosed here rather than
   promised to a plan. See `docs/calibration-2026-09.md` for how this was
   checked.
+- **Since 0.5.0, a claim that appears only in a page's `description` meta tag
+  can return `supported`.** `toText` harvests `description`, `og:description`
+  and `twitter:description` content, so a page carrying almost no body text can
+  still verify a claim from its publisher-written summary alone - and it does so
+  below the 4,500-character prose floor, because `verdict()` tests
+  `matched === total` before any floor test. This is deliberate: a page we can
+  genuinely read only through its description was previously declined as
+  `unreachable`, which is the failure the change exists to fix. It is disclosed
+  because the attesting text is metadata rather than body prose, and because it
+  is common - 88% of 549 measured live pages carry such a description. See
+  `docs/description-movement-0-5-0.md`.
 - **The audience is small**, and that is a limit, not a roadmap item - the
   way `urtext` says three of seven analyzers find nothing in a Python repo.
   Direct fit is people who already keep verbatim source quotes and are
