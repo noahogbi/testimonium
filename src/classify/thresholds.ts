@@ -69,11 +69,11 @@ export const THRESHOLDS: Readonly<Thresholds> = Object.freeze({
    *  Measured 2026-09 against the 35-fixture corpus (25 challenge, 10
    *  document; excludes the known-gap row - re-run scripts/calibrate.mjs to
    *  reproduce): the largest challenge shell that no veto rejects is 1,180
-   *  chars and the smallest real document is 6,394, so 4,500 sits in that gap
-   *  with 3,320 of clear air below and 1,894 above - both well past the
+   *  chars and the smallest real document is 6,481, so 4,500 sits in that gap
+   *  with 3,320 of clear air below and 1,981 above - both well past the
    *  200-char margin the acceptance test demands. (Three challenge fixtures
    *  extract far more than 1,180 but never reach this floor: 2,154 and
-   *  13,216 are both served 404, vetoed by N4; 6,221 is a content-negotiated
+   *  13,452 are both served 404, vetoed by N4; 6,221 is a content-negotiated
    *  PDF, vetoed by N5 as non-text.)
    *
    *  **That "clear air" is a property of the calibration corpus, not a bound

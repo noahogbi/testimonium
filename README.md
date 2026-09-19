@@ -178,7 +178,7 @@ before you trust a green run to mean more than it does.
   body: a misconfigured server, a CDN that mislabels, or an origin that
   answers `application/octet-stream` for a document your browser renders
   happily gets declined rather than judged. Measured on the corpus's real
-  Verge capture: at `text/html` it extracts 16,449 characters and reaches
+  Verge capture: at `text/html` it extracts 16,693 characters and reaches
   a verdict; the identical bytes under `application/octet-stream` read
   `unreachable`. The tool is refusing to accuse on a body it cannot first
   confirm is text, and the server told it the body is not text. If you
@@ -266,7 +266,7 @@ will eventually surprise a real user if it isn't said here first.
 - **A heavy-chrome error page served at HTTP 200 can evade both the status
   veto and the prose floor.** This route *is* pinned by a fixture:
   `fixtures/corpus.json` files the real ECB error capture a second time at
-  status 200 (`"kind": "known-gap"`), where its 13,216 characters of intact
+  status 200 (`"kind": "known-gap"`), where its 13,452 characters of intact
   navigation chrome clear the prose floor and reach an accusation. That page
   matches **none** of the sixteen bundled challenge signatures - verified, 0
   of 16 - so at its real 404 the status veto is the *only* thing rejecting
