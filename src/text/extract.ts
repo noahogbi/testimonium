@@ -102,15 +102,28 @@ function* tagsIn(html: string): Generator<string> {
       j++;
     }
     // An unterminated quote consumes to end of input and we stop here, discarding
-    // every later tag - including legitimate descriptions. That is deliberate in
-    // 0.5.0 and it is NOT free: on a page with enough body prose to clear the
-    // floor, losing a description that carried a claim leaves matched < total and
-    // accuses the author. Recovering instead - resuming at the first `>` seen
-    // inside the quote - trades that for harvesting text a strict parser would
-    // never render, i.e. a false `supported`. Choosing between those two is a
-    // spec-level ruling about which wrong verdict is worse, not an implementation
-    // detail, so it is escalated rather than decided here. Malformed pages keep
-    // pre-0.5.0 behaviour meanwhile, so this is a coverage gap, not a regression.
+    // every later tag - including legitimate descriptions. That is NOT free: on a
+    // page with enough body prose to clear the floor, losing a description that
+    // carried a claim leaves matched < total and accuses the author. Recovering
+    // instead - resuming at the first `>` seen inside the quote - trades that for
+    // harvesting text a strict parser would never render.
+    //
+    // The design spec RANKS those two outcomes rather than leaving it open: a
+    // false accusation "is a worse failure than the one the tool exists to
+    // prevent, because it is self-inflicted and it is aimed at the author's own
+    // honest citations", and everything in that document is subordinate to that
+    // rule (2026-09-06-testimonium-design.md:101). So recovery is the direction
+    // the spec points, and the risk it carries is milder than it first looks: an
+    // unterminated quote is a MALFORMED page, not an adversarial one, and the tag
+    // recovered is a genuine publisher-authored description rather than the stale
+    // or injected content the strips above exist to exclude.
+    //
+    // It is deferred out of 0.5.0 for one reason, and not because the question is
+    // open: changing this after the fact would invalidate
+    // docs/description-movement-0-5-0.md, whose numbers describe the code as
+    // measured, and re-measuring costs 618 live requests against real publishers.
+    // Malformed pages keep pre-0.5.0 behaviour meanwhile, so this is a coverage
+    // gap rather than a regression. Scheduled for 0.5.1.
     if (j >= html.length) break;
     yield html.slice(i, j + 1);
     i = j + 1;
