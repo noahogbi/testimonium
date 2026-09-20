@@ -25,7 +25,7 @@ without the matching tightening.
 `2026-09-06-testimonium-design.md:101-103` ranks the two wrong verdicts: a false accusation
 "is a worse failure than the one the tool exists to prevent, because it is self-inflicted and
 it is aimed at the author's own honest citations." The document subordinates itself to the
-**keystone rule** at `:110-111`, of which that ranking is the stated rationale.
+**keystone rule** at `:109-110`, of which that ranking is the stated rationale.
 
 **Name the spec you are citing.** "A false `supported` is the one outcome the spec calls
 inviolable" belongs to the CONSUMER cutover spec `2026-09-15-citation-check-cutover-design.md`
@@ -78,6 +78,18 @@ matchedClaims = claims.filter((c) => regions.some((r) => phraseFound(r, c)))
 
 The same region rule governs harvest's span assertion and its frequency filter.
 
+**Harvest scans per region rather than filtering a flat scan.** A candidate span is drawn
+from within one region, so it cannot cross a join by construction. The alternative - keeping
+the flat scan and rejecting join-crossers afterwards - drops legitimate join-adjacent spans
+whole instead of clipping them to the region, a coverage loss with no compensating benefit.
+Decided here so the plan does not have to guess.
+
+**`src/harvest/spans.ts` carries a comment asserting "THIS IS THE ONLY WAY ASSERTION 1 CAN
+FAIL", and its `normBoundaryNote` attributes every assertion-1 drop to a digit-magnitude
+fold.** Region-awareness makes a join-crossing span a second way it can fail, so both the
+claim and the emitted message become false. The implementation rewrites them - the same
+obligation section 4 records for `tagsIn`'s comment.
+
 ### What does not change
 
 - **`toText`'s output is byte-identical** under this fix. It remains the join of the same
@@ -91,8 +103,10 @@ match is "by construction also present in the flat text". **Both are false, with
 counterexample.** `norm` folds digit-unit pairs: a body ending "Revenue was 12" and a
 description beginning "billion users grew during the quarter" normalize *across the join* to
 "...was 12bn users grew...", so the claim "billion users grew" **fails** against the
-concatenation today and **matches** the description region. Any of `norm`'s four digit-unit
-folds at a region boundary does this.
+concatenation today and **matches** the description region. Only the two TOKEN-REWRITING folds do this -
+`billion` and `million`. The `bn` and `mn` folds merely delete the join space, so the
+region match survives in the flat text; a criterion-2 test parametrized over all four would
+find two of them never destroyed anything.
 
 So the corrected statement is: the fix removes matches that spanned a join, **and restores
 matches that a fold across a join had destroyed.** Both movements are correct. A page can
@@ -104,9 +118,12 @@ criterion 2 requires.
 `excerptFor` works on the flat text, and in the fold case above it returns **null** for a
 claim that legitimately matched a region: its window spans the join and its own contract
 check fails. That is an existing, tolerated outcome — a `supported` row with no excerpt
-renders nothing (cutover spec §1) — not a new defect. The implementation either accepts a
-null excerpt for these rows or locates the excerpt within the matching region; it must not
-assume the flat lookup always resolves.
+renders nothing (cutover spec §1) — not a new defect. **Locate the excerpt within the matching region.** A flat lookup is not merely sometimes
+null, it can be actively wrong: with descriptions "The board met" and "in march the group met
+in march at noon", the claim "met in march" legitimately matches the second region while
+`excerptFor` finds the JOIN-SPANNING occurrence and returns a passage conjoining two separate
+meta tags as one sequence. A null excerpt is an acceptable fallback where a region lookup
+fails; a join-spanning passage is not.
 
 ### The consumer-visible consequence
 
@@ -121,8 +138,27 @@ something shaped like `name="description"` anywhere — including inside a diffe
 value. **Verified:** `<meta name="keywords" content="'x' name='description' LEAKED">` harvests
 `'x' name='description' LEAKED`.
 
-Decide description-ness from the tag's own attribute-name positions. This **changes `toText`'s
-output**, removing text that was never the page's description.
+**`CONTENT_ATTR` carries the identical defect, and it is worse.** `content\s*=` matches
+inside `data-content`, and it matches inside another attribute's *value*. Verified, on tags
+whose `name` is a genuine `description`:
+
+- `<meta name="description" data-content="WRONG_TEXT" content="THE REAL DESCRIPTION">`
+  harvests `WRONG_TEXT`
+- `<meta name="description" title='use content="INJECTED" here' content="THE REAL DESCRIPTION">`
+  harvests `INJECTED`
+
+In both the wrong text enters prose **and the real description is lost entirely.**
+
+### The fix is the class, not the two instances
+
+Both regexes pattern-match over the tag string. That is the root cause, and fixing them one
+at a time is how the first draft shipped a fix for one while the other stayed open. **Parse
+the tag's attributes into name/value pairs and decide from those**: description-ness from the
+`name`/`property` attribute's value, and the content from the `content` attribute's value. No
+substring of another attribute's name or value can then masquerade as either.
+
+This **changes `toText`'s output**, removing text that was never the page's description and
+restoring real descriptions currently lost to the `CONTENT_ATTR` defect.
 
 Because it removes text, a page can cross the 4,500 floor **downward**. That direction is
 safe — a readable page becomes `unreachable` rather than accused, and a full match is
@@ -150,6 +186,13 @@ recovers at the wrong position. Measured: it harvests **nothing**.
 **The rule is: recover at the first `>` observed inside ANY quote during the stranded scan,
 and allow at most one recovery per document.**
 
+**Two choices the rule must state, because the readings diverge in output.** First, the
+truncated tag IS yielded, not discarded: discarding it loses a genuine description whose own
+attributes parsed cleanly before the malformation -
+`<meta name="description" content="short" junk="unterm >` harvests `short` under yield and
+nothing under discard. Second, recovery applies only when the stranded scan reaches end of
+input; a scan that ended outside any quote has found its `>` and was never stranded.
+
 The bound is load-bearing, not tidiness. Unbounded, the rule is quadratic — a repeated
 `<a b="c>"` unit plus one stray quote measured 18 KB → 200 ms, 36 KB → 806 ms, 72 KB →
 3,249 ms, roughly 4x per doubling, which is a denial of service in a gate that fetches
@@ -169,6 +212,14 @@ So route 3 **deliberately reopens the meta-in-attribute route for unterminated a
 That is accepted here, under the design spec's ranking: the alternative is accusing an author
 over our own parse failure. It is bounded to one recovery per document, and it must be
 disclosed in the README's known-gaps list beside the existing entries.
+
+**The bound has a residual, and it is not academic.** One recovery per document means a page
+with TWO stranding malformations recovers the first description and abandons the second -
+verified. Worse, the budget is spent on the *first* strand rather than the *useful* one, so
+adversarial or merely messy noise early in a document can consume it before the real
+description is reached - also verified. Route 3's accusation therefore persists on
+multi-strand pages. This is disclosed in section 9 and in the README, and it is accepted here
+because the alternative - an unbounded rule - is the quadratic behaviour measured above.
 
 The earlier draft's sentence claiming the recovered tag "is a genuine publisher-authored
 description rather than the stale or injected content the strips exist to exclude" is false
@@ -215,16 +266,21 @@ cannot support; 0.5.0's report had to disclose exactly this after the fact.
 2. A claim matching entirely within the body, or entirely within any single description value,
    **does** match — including when a `norm` digit-unit fold across a join previously destroyed
    it. (This is the criterion a careless fix breaks.)
-3. **Every span `harvest` proposes is matchable by the post-fix `check()`.** No tool-proposed
-   claim may produce an accusation.
+3. **Every span `harvest` proposes is matchable by the post-fix `check()` against the same
+   extraction.** No tool-proposed claim may produce an accusation. The qualifier is not a
+   weakening: a page re-fetched at check time can legitimately have changed, and that is
+   source drift rather than a tool defect.
 4. `toText`'s output is unchanged by the route-1 fix alone, proven by byte-comparing pre- and
    post-fix extraction over every `.html` file under `fixtures/` (38 on disk at time of
    writing; name the glob rather than a count).
 5. A `keywords` tag containing `name='description'` in its content is not harvested; genuine
    `description`, `og:description` and `twitter:description` still are, in every attribute
    order and quoting style the 0.5.0 tests already cover.
-6. A page with an unterminated quote followed by a real description harvests that description
-   — including when both use double quotes, which is the case the earlier draft failed.
+6. **On the document's first stranded scan**, a page with an unterminated quote followed by a
+   real description harvests that description — including when both use double quotes, which
+   is the case the earlier draft failed. The criterion is scoped to the first strand because
+   §4 bounds recovery to one per document; stated universally it would contradict the rule
+   this spec mandates, which is the defect round one found and this criterion reintroduced.
 7. Termination and linearity: a `<` with no `>` anywhere after it terminates; **and** a
    repeated `<a b="c>"` unit followed by a stray quote completes in time linear in input
    length. (The earlier criterion tested only the first family, which never exercises
@@ -245,6 +301,18 @@ cannot support; 0.5.0's report had to disclose exactly this after the fact.
 
 ## 9. What this release does NOT fix
 
+- **Tag boundaries diverge from a browser's on malformed pages, and that is already true
+  today.** An unterminated quote earlier in a document desyncs quote parity, so the scan can
+  end a "tag" at a `>` inside a later TERMINATED attribute value and expose a meta-shaped
+  string there as a live tag. Verified on published 0.5.0 with no recovery involved:
+  `<div title="unterm><span data-x="A > <meta name='description' content='INJECTED'> B">`
+  harvests `INJECTED`. HTML5 would absorb everything after the unterminated quote into that
+  attribute and render none of it. This is the same divergence route 3's recovery makes
+  deliberately, arriving by a different door; it predates this release and is not closed by
+  it. Criterion 8's "stays closed" therefore means the cases 0.5.0's tests cover, not a
+  general guarantee about terminated attributes, and the README disclosure must say so.
+- **Multi-strand pages keep route 3's accusation.** Recovery is bounded to one per document,
+  so a second stranding malformation abandons the tail after it.
 - **Other joins in the body region.** `<title>` text lands in the body at head position, so a
   claim spanning title|body matches text no reader encounters as a sequence. The body path
   still strips with `<[^>]*>` rather than `tagsIn`, so a `>` inside an attribute leaks the
@@ -274,3 +342,19 @@ cannot support; 0.5.0's report had to disclose exactly this after the fact.
 | no calibration-refresh, README-gap or comment-rewrite obligation | §6 question 4, §4, §3 |
 | the seam closure's CI-visible consequence was unstated | §2 |
 | criterion 3 named "36 HTML fixtures", a universe that does not exist | criterion 4 names a glob |
+
+### Round two
+
+| finding | change |
+| --- | --- |
+| the recovery bound contradicted criterion 6, which was universally quantified | criterion 6 scoped to the first stranded scan; the residual disclosed in sections 4 and 9 |
+| the bound spends itself on the FIRST strand, so early noise can consume it before the real description | section 4 - named as an accepted residual, with the README disclosure |
+| `CONTENT_ATTR` carried the identical whole-tag defect, injecting wrong text AND losing the real description | section 3 - the fix became attribute PARSING, closing the class rather than two instances |
+| meta-in-a-TERMINATED-attribute is already open on published 0.5.0 via quote-parity desync | section 9 - recorded; criterion 8 means the cases 0.5.0 tests, not a general guarantee |
+| `spans.ts` asserts "THIS IS THE ONLY WAY ASSERTION 1 CAN FAIL", which region-awareness falsifies | section 2 - rewrite obligation added |
+| whether harvest scans per region or filters a flat scan was left to the plan | section 2 - decided: per region |
+| "four digit-unit folds" was true of two; `bn`/`mn` never destroyed anything | section 2 |
+| criterion 3 was unconditional over time, unguaranteeable against a re-fetch | criterion 3 - "against the same extraction" |
+| the truncated-tag yield/discard choice and the EOF-outside-quote case were unstated | section 4 |
+| the excerpt fallback permitted a join-spanning passage, which is wrong provenance not just imprecision | section 2 - region-located, null as fallback |
+| keystone citation off by one | section 1 - `:109-110` |
