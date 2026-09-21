@@ -1,71 +1,62 @@
 # testimonium 0.6.0 — attest only what is on the page
 
-**Status:** design, revised after review. See §10 for what review changed.
+**Status:** design, revised after three review rounds. See §9 for what review changed and §8
+for what was cut.
 **Amends** the behaviour 0.5.0 shipped.
 
-## 1. What this fixes, and why it is one release
+## 1. What this fixes
 
 0.5.0 made `toText` harvest `description` / `og:description` / `twitter:description`
 content. That closed a real failure — a page whose prose lives in its description read as
-unreadable — and opened three narrower ones. All three are live on npm and all three were
+unreadable — and opened two that this release closes. Both are live on npm and both were
 verified by execution, not by reading:
 
-| # | route | direction | verified |
-| --- | --- | --- | --- |
-| 1 | a claim spanning the join between two harvested regions matches text that exists **nowhere on the page** and returns `supported` | false attestation | yes |
-| 2 | `IS_DESCRIPTION` tests the whole tag, so a `keywords` tag whose content contains `name='description'` is harvested | wrong text enters prose | yes |
-| 3 | `tagsIn` abandons every later tag after an unterminated quote, discarding real descriptions | false accusation | yes |
+| # | route | verified |
+| --- | --- | --- |
+| 1 | a claim spanning the join between two harvested regions matches text that exists **nowhere on the page** and returns `supported` | yes |
+| 2 | `IS_DESCRIPTION` and `CONTENT_ATTR` match substrings of the whole tag, so the wrong attribute's text is harvested — and the real description is lost | yes |
 
-They ship together because **they pull in opposite directions.** 1 and 2 remove wrong
-`supported`; 3 removes wrong `unsupported`. Shipping 3 alone would loosen attestation
-without the matching tightening.
+Both are **tightenings against false attestation**, which is what makes them one release: each
+removes a way the tool can say "this page says that" when it does not.
+
+A third route — `tagsIn` abandoning the tail of a document after an unterminated quote — was
+specified here across three review rounds and **is cut**. §8 records why, because the reason
+is about this document's own reliability rather than about the defect.
 
 ### The ranking this rests on
 
-`2026-09-06-testimonium-design.md:101-103` ranks the two wrong verdicts: a false accusation
-"is a worse failure than the one the tool exists to prevent, because it is self-inflicted and
-it is aimed at the author's own honest citations." The document subordinates itself to the
-**keystone rule** at `:109-110`, of which that ranking is the stated rationale.
+`2026-09-06-testimonium-design.md:101-103` ranks the two wrong verdicts, and the document
+subordinates itself to the **keystone rule** at `:109-110`, of which the ranking is the
+rationale: a false accusation "is a worse failure than the one the tool exists to prevent,
+because it is self-inflicted and it is aimed at the author's own honest citations."
 
-**Name the spec you are citing.** "A false `supported` is the one outcome the spec calls
-inviolable" belongs to the CONSUMER cutover spec `2026-09-15-citation-check-cutover-design.md`
-§1, not to the design spec. The two rank oppositely and both are quoted in
-`src/text/extract.ts`. Every ranking argument below names its source.
+**Name the spec you cite.** "A false `supported` is the one outcome the spec calls inviolable"
+belongs to the CONSUMER cutover spec `2026-09-15-citation-check-cutover-design.md` §1, not to
+the design spec. The two rank oppositely and both are quoted in `src/text/extract.ts`.
 
 ## 2. The seam (route 1)
 
 ### What is wrong
 
 `toText` returns one flat string. In `check()`'s verdict path the match is
-`src/classify/signals.ts:148-150`:
+`src/classify/signals.ts:148-150`, and `phraseFound` is
+`norm(haystack).includes(norm(phrase))` (`src/text/normalize.ts:53`). Any claim straddling a
+join between concatenated regions matches, though no reader could encounter that sequence.
 
-```ts
-const text = toText(input.rawBody);
-const matchedClaims = input.claims.filter((c) => phraseFound(text, c));
-const missedClaims  = input.claims.filter((c) => !phraseFound(text, c));
-```
-
-`phraseFound` is `norm(haystack).includes(norm(phrase))` (`src/text/normalize.ts:53`). Any
-claim straddling a join between concatenated regions matches, though no reader could
-encounter that sequence.
-
-**Verified**, at both joins: body|description ("The committee reviewed the" + "quarterly
+**Verified at both joins:** body|description ("The committee reviewed the" + "quarterly
 filings without objection.") and description|description ("The board met in March." +
 "Revenue rose twelve percent."). A fix treating the harvest as one merged block leaves the
 second open.
 
 ### `check()` is not the only matcher
 
-**`harvest` proposes claims against the same flat string.** `src/harvest/spans.ts` extends
-and pins candidate spans with `phraseFound` over the flat `toText` output, and
-`src/harvest/filters.ts` frequency-filters over the same. A span crossing a join therefore
-passes harvest's own assertion, enters the author's claims file **with her approval**, and is
-then rejected by the post-fix `check()` — `unsupported` on a readable page, a red run against
-a claim this tool proposed.
-
-That is the design spec's worst-ranked outcome, produced by fixing one matcher and not the
-other. **Route 1 covers both.** A release that fixed only `signals.ts` would manufacture the
-failure it exists to prevent.
+**`harvest` proposes claims against the same flat string.** `src/harvest/spans.ts` extends and
+pins candidate spans with `phraseFound` over the flat `toText` output, and
+`src/harvest/filters.ts` frequency-filters over the same. A span crossing a join passes
+harvest's own assertion, enters the author's claims file **with her approval**, and is then
+rejected by the post-fix `check()` — an accusation against a claim this tool proposed. That is
+the design spec's worst-ranked outcome, produced by fixing one matcher and not the other.
+**Route 1 covers both.**
 
 ### The fix
 
@@ -76,285 +67,252 @@ separately**. A claim must match entirely within one region.
 matchedClaims = claims.filter((c) => regions.some((r) => phraseFound(r, c)))
 ```
 
-The same region rule governs harvest's span assertion and its frequency filter.
+**Harvest scans per region rather than filtering a flat scan.** A candidate span is drawn from
+within one region, so it cannot cross a join by construction. The alternative — flat scan plus
+post-filter — drops legitimate join-adjacent spans whole instead of clipping them to the
+region, a coverage loss with no compensating benefit.
 
-**Harvest scans per region rather than filtering a flat scan.** A candidate span is drawn
-from within one region, so it cannot cross a join by construction. The alternative - keeping
-the flat scan and rejecting join-crossers afterwards - drops legitimate join-adjacent spans
-whole instead of clipping them to the region, a coverage loss with no compensating benefit.
-Decided here so the plan does not have to guess.
+### Comments this falsifies
 
-**`src/harvest/spans.ts` carries a comment asserting "THIS IS THE ONLY WAY ASSERTION 1 CAN
-FAIL", and its `normBoundaryNote` attributes every assertion-1 drop to a digit-magnitude
-fold.** Region-awareness makes a join-crossing span a second way it can fail, so both the
-claim and the emitted message become false. The implementation rewrites them - the same
-obligation section 4 records for `tagsIn`'s comment.
+- **`src/harvest/spans.ts`** asserts "THIS IS THE ONLY WAY ASSERTION 1 CAN FAIL" and its
+  `normBoundaryNote` attributes every assertion-1 drop to a digit-magnitude fold. Under
+  per-region scanning a join-crossing span never reaches assertion 1 at all, so the comment is
+  not wrong about a *new* failure path — it is a proof phrased over the flat source that must
+  be **restated per region**, with digit-fold boundary effects now arising at region edges.
+  (An earlier draft said region-awareness "makes a join-crossing span a second way it can
+  fail." That is the failure mode of the rejected flat-scan design, not the mandated one.)
+- **`src/harvest/sources.ts`'s `HarvestRead.normText`** is a one-flat-string memoization whose
+  docstring records why it exists. Per-region voting obsoletes the interface as written. The
+  behavioural delta is accepted: a span matching another source only across that source's join
+  no longer votes, so there are fewer frequency drops, and every surviving span remains
+  per-region matchable by `check()`.
 
-### What does not change
+### Direction
 
-- **`toText`'s output is byte-identical** under this fix. It remains the join of the same
-  regions in the same order. Routes 2 and 3 do move it; route 1 does not.
-- **`proseChars` and every calibration figure** are unchanged by this fix.
+The fix removes matches that spanned a join, **and restores matches that a fold across a join
+had destroyed.** Only the two token-rewriting `norm` folds do this — `billion` and `million`;
+the `bn` and `mn` folds merely delete the join space, so the region match survives in the flat
+text. Verified: a body ending "Revenue was 12" and a description beginning "billion users
+grew" normalize across the join to "...was 12bn users grew...", so the claim "billion users
+grew" fails against the concatenation today and matches the description region. Both movements
+are correct.
 
-### Direction — corrected
+### Excerpts
 
-The earlier draft claimed the predicate "can only ever remove matches" and that a region
-match is "by construction also present in the flat text". **Both are false, with a verified
-counterexample.** `norm` folds digit-unit pairs: a body ending "Revenue was 12" and a
-description beginning "billion users grew during the quarter" normalize *across the join* to
-"...was 12bn users grew...", so the claim "billion users grew" **fails** against the
-concatenation today and **matches** the description region. Only the two TOKEN-REWRITING folds do this -
-`billion` and `million`. The `bn` and `mn` folds merely delete the join space, so the
-region match survives in the flat text; a criterion-2 test parametrized over all four would
-find two of them never destroyed anything.
-
-So the corrected statement is: the fix removes matches that spanned a join, **and restores
-matches that a fold across a join had destroyed.** Both movements are correct. A page can
-become `supported` — correctly, because the claim genuinely is in that region, which is what
-criterion 2 requires.
-
-### Excerpts — corrected
-
-`excerptFor` works on the flat text, and in the fold case above it returns **null** for a
-claim that legitimately matched a region: its window spans the join and its own contract
-check fails. That is an existing, tolerated outcome — a `supported` row with no excerpt
-renders nothing (cutover spec §1) — not a new defect. **Locate the excerpt within the matching region.** A flat lookup is not merely sometimes
-null, it can be actively wrong: with descriptions "The board met" and "in march the group met
-in march at noon", the claim "met in march" legitimately matches the second region while
+**Locate the excerpt within the matching region.** A flat lookup is not merely sometimes null,
+it can be actively wrong: with descriptions "The board met" and "in march the group met in
+march at noon", the claim "met in march" legitimately matches the second region while
 `excerptFor` finds the JOIN-SPANNING occurrence and returns a passage conjoining two separate
 meta tags as one sequence. A null excerpt is an acceptable fallback where a region lookup
-fails; a join-spanning passage is not.
+fails — a `supported` row with no excerpt renders nothing (cutover spec §1) — but a
+join-spanning passage is not.
 
 ### The consumer-visible consequence
 
 Closing the seam turns a `supported` into an `unsupported` on a readable page — a **correct
-accusation**, which fails a run by default. Pages green today go red. That is the intended
-outcome and it must be stated plainly in the changelog; §6's question 2 produces the list.
+accusation**, which fails a run by default. Pages green today go red. The changelog must say
+so; §5 question 2 produces the list.
 
 ## 3. The wrong-attribute harvest (route 2)
 
-`IS_DESCRIPTION` is tested against the whole tag string, so it fires on any tag containing
-something shaped like `name="description"` anywhere — including inside a different attribute's
-value. **Verified:** `<meta name="keywords" content="'x' name='description' LEAKED">` harvests
-`'x' name='description' LEAKED`.
+Both `IS_DESCRIPTION` and `CONTENT_ATTR` are tested against the whole tag string, so each
+fires on a substring appearing anywhere in the tag — including inside a different attribute's
+name or value. Verified:
 
-**`CONTENT_ATTR` carries the identical defect, and it is worse.** `content\s*=` matches
-inside `data-content`, and it matches inside another attribute's *value*. Verified, on tags
-whose `name` is a genuine `description`:
-
-- `<meta name="description" data-content="WRONG_TEXT" content="THE REAL DESCRIPTION">`
-  harvests `WRONG_TEXT`
+- `<meta name="keywords" content="'x' name='description' LEAKED">` harvests `LEAKED` from a
+  tag that is not a description at all.
+- `<meta name="description" data-content="WRONG" content="THE REAL DESCRIPTION">` harvests
+  `WRONG` — `\bcontent` matches inside `data-content`.
 - `<meta name="description" title='use content="INJECTED" here' content="THE REAL DESCRIPTION">`
-  harvests `INJECTED`
+  harvests `INJECTED`.
 
-In both the wrong text enters prose **and the real description is lost entirely.**
+In the last two the wrong text enters prose **and the real description is lost entirely.**
 
-### The fix is the class, not the two instances
+### The fix is the class, not the instances
 
-Both regexes pattern-match over the tag string. That is the root cause, and fixing them one
-at a time is how the first draft shipped a fix for one while the other stayed open. **Parse
-the tag's attributes into name/value pairs and decide from those**: description-ness from the
-`name`/`property` attribute's value, and the content from the `content` attribute's value. No
-substring of another attribute's name or value can then masquerade as either.
+Both regexes pattern-match over the tag string. Fixing them one at a time is how an earlier
+draft of this spec shipped a fix for one while its sibling stayed open. **Parse the tag's
+attributes into name/value pairs and decide from those**: description-ness from the
+`name`/`property` attribute's value, the content from the `content` attribute's value.
 
-This **changes `toText`'s output**, removing text that was never the page's description and
-restoring real descriptions currently lost to the `CONTENT_ATTR` defect.
+### The grammar, pinned
 
-Because it removes text, a page can cross the 4,500 floor **downward**. That direction is
-safe — a readable page becomes `unreachable` rather than accused, and a full match is
-unaffected because `matched === total` precedes the floor — but §6 must count it, since a
-crossing is a release-changing finding by this project's own rule.
+Left unstated, a parser changes the harvest on **well-formed** pages, and 0.5.0's tests pin
+only attribute order and quote style — so the criteria would not catch it.
 
-## 4. The abandoned tail (route 3)
+| axis | rule | why |
+| --- | --- | --- |
+| whitespace around `=` | permitted: `name = "description"` | valid HTML5 and harvested today; a stricter parser would silently drop a real description |
+| unquoted values | **not** harvested | preserves 0.5.0 behaviour exactly; a parser that accepted them would newly harvest `name=description`. Disclosed in §7 |
+| attribute names | case-insensitive | today's regexes are `/i`; no test pins it |
+| duplicate attributes | **first** wins | matches 0.5.0's first-match behaviour and HTML5; the natural `map.set` loop is last-wins and would diverge silently |
+| `/` before `>` | inert | the no-space `"/>` form appears in the calibration fixtures (AP News `twitter:description`) |
 
-`tagsIn` scans tag by tag respecting quoted attribute values. On an unterminated quote it
-runs to end of input and stops, discarding every later tag including real descriptions.
+### Direction — both ways
 
-**Verified end to end:** a ~5,900-character readable page whose claim lives only in a
-description after `<div title="unterminated>` returns **`unsupported`** — an accusation, not
-merely lost coverage, because `matched === total` is tested before the floor
-(`src/classify/verdict.ts`).
+This fix **removes** leaked text and **restores** real descriptions currently lost to the
+`CONTENT_ATTR` defect. Measured on one constructed tag: 8 characters of leaked text removed,
+20 characters of real description restored — a net **add**.
 
-### The rule — corrected, because the earlier draft did not fix its own example
+So a page can cross the 4,500 floor in **either** direction. Downward is safe: a readable page
+becomes `unreachable` rather than accused. **Upward is not** — it turns `unreachable` into
+`unsupported` where `matched < total`, a new accusation, which is the design authority's
+worst-ranked outcome. §5 asks both directions.
 
-The earlier draft said "recover at the first `>` observed while inside **that** quote". That
-is wrong, and wrong precisely on the motivating case. In
-`<div title="unterminated><p>x</p><meta name="description" content="...">` the unterminated
-`"` is closed by **the description's own attribute quote**; parity alternates, and the rule
-recovers at the wrong position. Measured: it harvests **nothing**.
+Route 2 also moves matches: a claim that matched leaked text loses its match, so pages can go
+red for this route too, not only for route 1. The changelog obligation covers both.
 
-**The rule is: recover at the first `>` observed inside ANY quote during the stranded scan,
-and allow at most one recovery per document.**
+## 4. Semver
 
-**Two choices the rule must state, because the readings diverge in output.** First, the
-truncated tag IS yielded, not discarded: discarding it loses a genuine description whose own
-attributes parsed cleanly before the malformation -
-`<meta name="description" content="short" junk="unterm >` harvests `short` under yield and
-nothing under discard. Second, recovery applies only when the stranded scan reaches end of
-input; a scan that ended outside any quote has found its `>` and was never stranded.
+**Minor — 0.6.0.** Route 2 changes `toText`'s committed output; route 1 changes verdicts.
+This repository's doctrine (`src/text/normalize.ts:7-11`) treats a change to committed output
+as breaking, which argues for major; as with 0.5.0 it ships as minor on the narrower ground
+that `^0.5.0` excludes `0.6.0`. **That concession must appear in the changelog** — 0.5.0's
+entry dropped it and review restored it.
 
-The bound is load-bearing, not tidiness. Unbounded, the rule is quadratic — a repeated
-`<a b="c>"` unit plus one stray quote measured 18 KB → 200 ms, 36 KB → 806 ms, 72 KB →
-3,249 ms, roughly 4x per doubling, which is a denial of service in a gate that fetches
-arbitrary URLs. Bounded to one recovery it is linear: **288 KB → 3 ms**, and it still
-recovers the motivating description.
+## 5. Measurement
 
-### The cost, which is larger than the earlier draft admitted
+Re-run `scripts/description-movement.mjs` against 0.6.0 and answer:
 
-Consider `<div title="x > <meta name='description' content='INJECTED'> tail`. Per HTML5 a
-browser absorbs everything to end of input into the `title` value and renders **nothing** —
-there is no meta element. **Any** recovery that satisfies criterion 5 harvests `INJECTED`;
-verified. The two inputs — a real description after a malformed tag, and a meta-shaped string
-inside an unterminated attribute — are indistinguishable to a tokenizer, because HTML5
-absorbs both.
-
-So route 3 **deliberately reopens the meta-in-attribute route for unterminated attributes.**
-That is accepted here, under the design spec's ranking: the alternative is accusing an author
-over our own parse failure. It is bounded to one recovery per document, and it must be
-disclosed in the README's known-gaps list beside the existing entries.
-
-**The bound has a residual, and it is not academic.** One recovery per document means a page
-with TWO stranding malformations recovers the first description and abandons the second -
-verified. Worse, the budget is spent on the *first* strand rather than the *useful* one, so
-adversarial or merely messy noise early in a document can consume it before the real
-description is reached - also verified. Route 3's accusation therefore persists on
-multi-strand pages. This is disclosed in section 9 and in the README, and it is accepted here
-because the alternative - an unbounded rule - is the quadratic behaviour measured above.
-
-The earlier draft's sentence claiming the recovered tag "is a genuine publisher-authored
-description rather than the stale or injected content the strips exist to exclude" is false
-in exactly this construction and is withdrawn. **The same sentence appears in `tagsIn`'s
-comment in `src/text/extract.ts`, along with a now-stale "Scheduled for 0.5.1" — the
-implementation rewrites both.**
-
-## 5. Semver
-
-**Minor — 0.6.0.** Routes 2 and 3 change `toText`'s committed output; route 1 changes
-verdicts. This repository's doctrine (`src/text/normalize.ts:7-11`) treats a change to
-committed output as breaking, which argues for major; as with 0.5.0 it ships as minor on the
-narrower ground that `^0.5.0` excludes `0.6.0`. **That concession must appear in the
-changelog** — 0.5.0's entry dropped it and review restored it.
-
-## 6. Measurement
-
-Re-run `scripts/description-movement.mjs` against 0.6.0 and answer four questions:
-
-1. **Does route 3's recovery move any page across the 4,500 floor upward?** Any crossing is a
-   release-changing finding, not a number to tabulate. For each, report whether the gain is
-   duplicated body text using the **fold-aware longest-common-run cover** — not whole-sentence
-   exact matching, which understated duplication badly enough in 0.5.0's report to reverse two
-   of five verdicts.
-2. **Which pages lose a match to route 1?** Name them. They are the evidence the seam was real
-   in the wild rather than only constructible, and they are the pages whose CI runs go red.
-3. **Does route 2 move any page across the floor downward?**
-4. **Do routes 2 or 3 move any calibration fixture?** If so, `scripts/calibrate.mjs` and
-   `scripts/sweep-floor.mjs` are re-run and the figures in `docs/calibration-2026-09.md`, the
-   design spec, `src/classify/thresholds.ts`, `src/classify/verdict.ts` and the README are
-   refreshed — the obligation 0.5.0 discharged in its own PR. A prototype sweep over the
-   on-disk HTML fixtures found no movement under either fix, so the expected answer is "no
-   refresh needed"; it must be established against the real implementation, not assumed.
+1. **Does route 2 move any page across the 4,500 floor, in either direction?** Upward is the
+   release-changing one. For any crossing, report whether the gain is duplicated body text
+   using the **fold-aware longest-common-run cover** — not whole-sentence exact matching,
+   which understated duplication badly enough in 0.5.0's report to reverse two of five
+   verdicts.
+2. **Which pages lose a match, to either route?** Name them. They are the evidence the seam
+   and the leak were real in the wild rather than only constructible, and they are the pages
+   whose CI runs go red.
+3. **Do either route's changes move any calibration fixture?** If so, `scripts/calibrate.mjs`
+   and `scripts/sweep-floor.mjs` are re-run and the figures in `docs/calibration-2026-09.md`,
+   the design spec, `src/classify/thresholds.ts`, `src/classify/verdict.ts` and the README are
+   refreshed — the obligation 0.5.0 discharged in its own PR. A prototype sweep found no
+   fixture movement; that must be established against the real implementation, not assumed.
 
 **The harness passes `claims: []`, so it cannot answer question 2 as it stands.** Either
-extend it to carry the corpus's stored claims, or answer question 2 from constructed fixtures
-and say plainly that the live corpus was not used. Do not report a number the instrument
-cannot support; 0.5.0's report had to disclose exactly this after the fact.
+extend it to carry the corpus's stored claims, or answer from constructed fixtures and say
+plainly that the live corpus was not used. Do not report a number the instrument cannot
+support; 0.5.0's report had to disclose exactly this after the fact.
 
-## 7. Acceptance criteria
+## 6. Acceptance criteria
 
 1. A claim spanning the body/description join does not match. A claim spanning two description
    values does not match.
 2. A claim matching entirely within the body, or entirely within any single description value,
-   **does** match — including when a `norm` digit-unit fold across a join previously destroyed
-   it. (This is the criterion a careless fix breaks.)
+   **does** match — including when a `norm` token-rewriting fold (`billion`, `million`) across
+   a join previously destroyed it. This is the criterion a careless fix breaks.
 3. **Every span `harvest` proposes is matchable by the post-fix `check()` against the same
    extraction.** No tool-proposed claim may produce an accusation. The qualifier is not a
-   weakening: a page re-fetched at check time can legitimately have changed, and that is
-   source drift rather than a tool defect.
-4. `toText`'s output is unchanged by the route-1 fix alone, proven by byte-comparing pre- and
+   weakening: a page re-fetched at check time can legitimately have changed, which is source
+   drift rather than a tool defect.
+4. An excerpt is located within the matching region; no excerpt spans a join. A null excerpt
+   is acceptable where a region lookup fails.
+5. `toText`'s output is unchanged by the route-1 fix alone, proven by byte-comparing pre- and
    post-fix extraction over every `.html` file under `fixtures/` (38 on disk at time of
-   writing; name the glob rather than a count).
-5. A `keywords` tag containing `name='description'` in its content is not harvested; genuine
-   `description`, `og:description` and `twitter:description` still are, in every attribute
-   order and quoting style the 0.5.0 tests already cover.
-6. **On the document's first stranded scan**, a page with an unterminated quote followed by a
-   real description harvests that description — including when both use double quotes, which
-   is the case the earlier draft failed. The criterion is scoped to the first strand because
-   §4 bounds recovery to one per document; stated universally it would contradict the rule
-   this spec mandates, which is the defect round one found and this criterion reintroduced.
-7. Termination and linearity: a `<` with no `>` anywhere after it terminates; **and** a
-   repeated `<a b="c>"` unit followed by a stray quote completes in time linear in input
-   length. (The earlier criterion tested only the first family, which never exercises
-   recovery at all.)
-8. Every unrendered-text route 0.5.0 closed stays closed **for terminated attributes**:
-   script (closed and unclosed), `<template>` (closed and unclosed), comment (plain, early
-   `>`, unclosed), and a meta-shaped string inside a *terminated* attribute. The unterminated
-   variant is a named, accepted reopening per §4.
-9. `<noscript>` content is still harvested.
-10. 585 existing tests pass, or every deviation is named with the reason it is correct.
+   writing; name the glob, not a count).
+6. Attribute parsing: a `keywords` tag containing `name='description'` in its content is not
+   harvested; `data-content` does not satisfy `content`; a `content="..."` appearing inside
+   another attribute's value does not satisfy it either; and the real description IS harvested
+   in each of those cases. Every row of §3's grammar table has a test — whitespace around `=`,
+   unquoted values still unharvested, mixed-case attribute names, duplicate attributes taking
+   the first, and the `"/>` form.
+7. Every unrendered-text route 0.5.0 closed stays closed **for the constructions 0.5.0's tests
+   pin — pages whose earlier markup keeps quote parity intact**: script (closed and unclosed),
+   `<template>` (closed and unclosed), comment (plain, early `>`, unclosed), and a meta-shaped
+   string inside a terminated attribute. This is not a general guarantee about terminated
+   attributes; see §7's first bullet for the case that remains open.
+8. `<noscript>` content is still harvested.
+9. 585 existing tests pass, or every deviation is named with the reason it is correct.
 
-## 8. Open questions
+## 7. What this release does NOT fix
 
-1. **Should regions be visible to consumers?** Needed only internally; not proposed for
-   export. Named so the omission is a decision.
-2. **Question 2's instrument** — extend the harness to carry claims, or answer from fixtures
-   and disclose. Decide before the plan is written.
-
-## 9. What this release does NOT fix
-
-- **Tag boundaries diverge from a browser's on malformed pages, and that is already true
-  today.** An unterminated quote earlier in a document desyncs quote parity, so the scan can
-  end a "tag" at a `>` inside a later TERMINATED attribute value and expose a meta-shaped
-  string there as a live tag. Verified on published 0.5.0 with no recovery involved:
+- **Tag boundaries diverge from a browser's on malformed pages, and already do today.** An
+  unterminated quote earlier in a document desyncs quote parity, so the scan can end a "tag"
+  at a `>` inside a later TERMINATED attribute value and expose a meta-shaped string there as
+  a live tag. Verified on published 0.5.0:
   `<div title="unterm><span data-x="A > <meta name='description' content='INJECTED'> B">`
   harvests `INJECTED`. HTML5 would absorb everything after the unterminated quote into that
-  attribute and render none of it. This is the same divergence route 3's recovery makes
-  deliberately, arriving by a different door; it predates this release and is not closed by
-  it. Criterion 8's "stays closed" therefore means the cases 0.5.0's tests cover, not a
-  general guarantee about terminated attributes, and the README disclosure must say so.
-- **Multi-strand pages keep route 3's accusation.** Recovery is bounded to one per document,
-  so a second stranding malformation abandons the tail after it.
+  attribute and render none of it. This predates the release and is not closed by it, which is
+  why criterion 7 is scoped rather than universal. It belongs in the README's known-gaps list.
+- **The abandoned tail after an unterminated quote** — see §8.
 - **Other joins in the body region.** `<title>` text lands in the body at head position, so a
   claim spanning title|body matches text no reader encounters as a sequence. The body path
   still strips with `<[^>]*>` rather than `tagsIn`, so a `>` inside an attribute leaks the
-  attribute tail into body prose, and `<template>` and comment tails likewise sit in body
-  text — 0.5.0 closed those on the harvest side only. These are route 1's shape inside the
-  region this fix treats as one block. Body extraction stays contractually untouched in this
-  release; recorded here so they are not rediscovered as new.
+  attribute tail into body prose, and `<template>` and comment tails likewise sit in body text
+  — 0.5.0 closed those on the harvest side only. Same shape as route 1, inside the region this
+  fix treats as one block. Body extraction stays contractually untouched here.
+- **Unquoted attribute values** are still not harvested, now by explicit decision (§3) rather
+  than by accident of the regexes.
 - A claim appearing only in a description still returns `supported` **below** the 4,500 floor,
   because `matched === total` precedes the floor. Deliberate, disclosed in the README, and the
   shape the consumer cutover exists to fix.
-- The stale `"two of nine real documents"` count in `src/classify/verdict.ts` — pre-existing
-  and unrelated.
-- Unquoted attribute values (`content=Foo`) are still not harvested. Safe direction; one line
-  in the docstring, not a behaviour change.
+- The stale `"two of nine real documents"` count in `src/classify/verdict.ts`.
 
-## 10. What review changed
+## 8. Why the `tagsIn` recovery was cut
+
+`tagsIn` stops at the first tag whose quote is never closed, discarding every later tag
+including real descriptions. On a page with enough body prose to clear the floor, that leaves
+`matched < total` on a readable page — an accusation, not merely lost coverage. It is a real
+defect and it is the one the design spec's ranking cares most about, so cutting it needs a
+reason.
+
+**The reason is that three review rounds produced three rules and all three were wrong**, each
+in a way the round before had not considered:
+
+| round | rule | how it failed |
+| --- | --- | --- |
+| 1 | recover at the first `>` inside *that* quote | harvested nothing on its own motivating case — the unterminated quote is closed by the description's own attribute quote |
+| 2 | first `>` inside *any* quote, one recovery per document | the bound contradicted a universally quantified criterion; multi-strand pages abandon the second description |
+| 3 | criterion scoped to the first stranded scan | still false when the stranded region contains no `>` before the description — the recovery point becomes the description's own closing `>` and swallows it |
+
+Each rule also carried costs the previous one had not surfaced: a deliberate HTML5 divergence,
+a reopening of the meta-in-attribute route for unterminated attributes, and a residual where
+the recovery budget is spent on the first malformation rather than the useful one.
+
+Against that, **the malformation is not present in the corpus**: a scan replicating `tagsIn`
+over all 38 real captured fixtures strands on none of them. The fix is therefore buying a
+correction for a shape we have never observed, at the cost of the most intricate rule in the
+document — one that has been wrong every time it has been written.
+
+It is deferred to its own release, where the rule can be settled on its own terms and, ideally,
+against evidence of real incidence. Detecting a strand needs raw bodies, which the 618-URL
+movement corpus does not retain, so that evidence requires its own fetch.
+
+**This is not a judgment that the defect does not matter.** It is a judgment that a rule wrong
+three times running should not ship alongside two fixes that are simple, verified, and
+independently valuable.
+
+## 9. What review changed
+
+### Round one
 
 | finding | change |
 | --- | --- |
-| the recovery rule did not fix its own motivating case — the unterminated quote is closed by the description's own attribute quote | §4 — recover at the first `>` inside ANY quote |
-| the only reading that did fix it was quadratic, measured 4x per doubling | §4 — bounded to one recovery per document, verified linear at 288 KB |
-| criteria 5 and 7 were jointly unsatisfiable: any working recovery harvests injected text from an unterminated attribute | §4 names the reopening as an accepted cost; criterion 8 scoped to terminated attributes |
-| route 1 fixed `check()` and not `harvest`, so the tool would accuse an author over a claim it proposed | §2 — route 1 covers both matchers; criterion 3 added |
-| "the predicate can only remove matches" and "a region match is by construction in the flat text" were both false | §2 Direction rewritten with the digit-unit fold counterexample |
-| "the excerpt still resolves" was false; it returns null in that case | §2 Excerpts rewritten to the actual contract |
-| other joins (title, attribute leak, template/comment body tails) went unrecorded | §9 |
-| no calibration-refresh, README-gap or comment-rewrite obligation | §6 question 4, §4, §3 |
-| the seam closure's CI-visible consequence was unstated | §2 |
-| criterion 3 named "36 HTML fixtures", a universe that does not exist | criterion 4 names a glob |
+| the recovery rule did not fix its own motivating case | §8 — eventually cut |
+| route 1 fixed `check()` and not `harvest`, so the tool would accuse an author over a claim it proposed | §2 — both matchers; criterion 3 |
+| "the predicate can only remove matches" and "a region match is by construction in the flat text" were both false | §2 Direction, rewritten with the digit-fold counterexample |
+| "the excerpt still resolves" was false; it returns null in that case | §2 Excerpts |
+| other joins (title, attribute leak, template/comment body tails) unrecorded | §7 |
+| the seam closure's CI-visible consequence unstated | §2 |
 
 ### Round two
 
 | finding | change |
 | --- | --- |
-| the recovery bound contradicted criterion 6, which was universally quantified | criterion 6 scoped to the first stranded scan; the residual disclosed in sections 4 and 9 |
-| the bound spends itself on the FIRST strand, so early noise can consume it before the real description | section 4 - named as an accepted residual, with the README disclosure |
-| `CONTENT_ATTR` carried the identical whole-tag defect, injecting wrong text AND losing the real description | section 3 - the fix became attribute PARSING, closing the class rather than two instances |
-| meta-in-a-TERMINATED-attribute is already open on published 0.5.0 via quote-parity desync | section 9 - recorded; criterion 8 means the cases 0.5.0 tests, not a general guarantee |
-| `spans.ts` asserts "THIS IS THE ONLY WAY ASSERTION 1 CAN FAIL", which region-awareness falsifies | section 2 - rewrite obligation added |
-| whether harvest scans per region or filters a flat scan was left to the plan | section 2 - decided: per region |
-| "four digit-unit folds" was true of two; `bn`/`mn` never destroyed anything | section 2 |
-| criterion 3 was unconditional over time, unguaranteeable against a re-fetch | criterion 3 - "against the same extraction" |
-| the truncated-tag yield/discard choice and the EOF-outside-quote case were unstated | section 4 |
-| the excerpt fallback permitted a join-spanning passage, which is wrong provenance not just imprecision | section 2 - region-located, null as fallback |
-| keystone citation off by one | section 1 - `:109-110` |
+| `CONTENT_ATTR` carried the identical whole-tag defect, injecting wrong text AND losing the real description | §3 — the fix became attribute parsing, closing the class |
+| meta-in-a-TERMINATED-attribute already open on published 0.5.0 via quote-parity desync | §7 — recorded; criterion 7 scoped |
+| `spans.ts` asserts "THIS IS THE ONLY WAY ASSERTION 1 CAN FAIL", which the fix falsifies | §2 — rewrite obligation |
+| whether harvest scans per region or filters a flat scan was left to the plan | §2 — decided: per region |
+| "four digit-unit folds" was true of two | §2 |
+| criterion 3 unguaranteeable against a re-fetch | criterion 3 — "against the same extraction" |
+| the excerpt fallback permitted a join-spanning passage | §2 — region-located, null as fallback |
+
+### Round three
+
+| finding | change |
+| --- | --- |
+| the recovery criterion was STILL false — a single-strand page whose strand contains no `>` before the description harvests nothing | §8 — the rule was cut rather than patched a fourth time |
+| route 2's fix now ADDS text, while the adjacent sentence still analysed removal only; upward floor crossings unexamined | §3 Direction — both ways; §5 question 1 |
+| the attribute grammar was unpinned on five axes where parsing changes well-formed pages | §3 — grammar table; criterion 6 |
+| a criterion promised a general terminated-attribute guarantee its own §7 example contradicts | criterion 7 — scope moved into the criterion's own text |
+| the `spans.ts` rationale described the failure mode of the REJECTED design | §2 — restated as a per-region proof |
+| `HarvestRead.normText`'s docstring obsoleted, unrecorded | §2 |
