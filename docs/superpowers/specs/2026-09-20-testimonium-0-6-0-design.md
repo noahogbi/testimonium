@@ -144,8 +144,8 @@ only attribute order and quote style — so the criteria would not catch it.
 | --- | --- | --- |
 | whitespace around `=` | permitted: `name = "description"` | valid HTML5 and harvested today; a stricter parser would silently drop a real description |
 | unquoted values | **not** harvested | preserves 0.5.0 behaviour exactly; a parser that accepted them would newly harvest `name=description`. Disclosed in §7 |
-| attribute names | case-insensitive | today's regexes are `/i`; no test pins it |
-| duplicate attributes | **first** wins | matches 0.5.0's first-match behaviour and HTML5; the natural `map.set` loop is last-wins and would diverge silently |
+| attribute names AND values | case-insensitive, including the `og:`/`twitter:` prefixes | today's regexes are `/i`, and 0.5.0 harvests `name="DeScRiPtIoN"`, `property="OG:Description"` and `<META ...>` - verified. A parser that lowercases NAMES but compares the value with `=== "description"` passes every other row and silently drops a real description on a well-formed page. `name="Description"` is ordinary legacy CMS output |
+| duplicate attributes | **first** wins | matches 0.5.0's first-match behaviour **for `content`** (verified: `content="A" content="B"` harvests `A`) and matches HTML5; the natural `map.set` loop is last-wins and would diverge silently. For a duplicated `name` 0.5.0 is not first-match - `name="keywords" name="description"` harvests today because the substring defect fires - and a first-wins parser will not. That divergence is the route-2 class being closed, on malformed input |
 | `/` before `>` | inert | the no-space `"/>` form appears in the calibration fixtures (AP News `twitter:description`) |
 
 ### Direction — both ways
@@ -213,8 +213,9 @@ support; 0.5.0's report had to disclose exactly this after the fact.
    harvested; `data-content` does not satisfy `content`; a `content="..."` appearing inside
    another attribute's value does not satisfy it either; and the real description IS harvested
    in each of those cases. Every row of §3's grammar table has a test — whitespace around `=`,
-   unquoted values still unharvested, mixed-case attribute names, duplicate attributes taking
-   the first, and the `"/>` form.
+   unquoted values still unharvested, duplicate `content` attributes taking the first, the
+   `"/>` form, and **case-insensitivity on the attribute VALUE as well as the name**:
+   `name="DeScRiPtIoN"`, `property="OG:Description"` and `<META ...>` must each still harvest.
 7. Every unrendered-text route 0.5.0 closed stays closed **for the constructions 0.5.0's tests
    pin — pages whose earlier markup keeps quote parity intact**: script (closed and unclosed),
    `<template>` (closed and unclosed), comment (plain, early `>`, unclosed), and a meta-shaped
@@ -225,14 +226,23 @@ support; 0.5.0's report had to disclose exactly this after the fact.
 
 ## 7. What this release does NOT fix
 
-- **Tag boundaries diverge from a browser's on malformed pages, and already do today.** An
-  unterminated quote earlier in a document desyncs quote parity, so the scan can end a "tag"
-  at a `>` inside a later TERMINATED attribute value and expose a meta-shaped string there as
-  a live tag. Verified on published 0.5.0:
-  `<div title="unterm><span data-x="A > <meta name='description' content='INJECTED'> B">`
-  harvests `INJECTED`. HTML5 would absorb everything after the unterminated quote into that
-  attribute and render none of it. This predates the release and is not closed by it, which is
-  why criterion 7 is scoped rather than universal. It belongs in the README's known-gaps list.
+- **Tag boundaries diverge from a browser's, and already do today.** A quote character
+  appearing inside an UNQUOTED attribute value desyncs the scan's quote parity, so it can end
+  a "tag" at a `>` that HTML5 places inside a later quoted value, exposing a meta-shaped
+  string there as a live tag. Verified on published 0.5.0:
+  `<div title=O'Brien><span data-x='A > <meta name="description" content="INJECTED"> B'>`
+  harvests `INJECTED`, while HTML5 ends the unquoted `title` at the `>` and puts the meta text
+  inside the span's single-quoted `data-x`, where no element exists and nothing renders. An
+  apostrophe in an unquoted value is ordinary content, not an attack. This predates the
+  release and is not closed by it, which is why criterion 7 is scoped rather than universal.
+  It belongs in the README's known-gaps list.
+
+  **An earlier draft illustrated this with
+  `<div title="unterm><span data-x="A > <meta ...> B">` and claimed HTML5 would render none of
+  it. That was false**: HTML5 closes the double-quoted `title` at the very next `"`, so the
+  meta is a live element for a browser too and 0.5.0 agrees with it there. The claim survived
+  two review rounds because it was never traced through the tokenizer - the same mechanism
+  that defeated the first recovery rule in §8, applied to an example rather than a rule.
 - **The abandoned tail after an unterminated quote** — see §8.
 - **Other joins in the body region.** `<title>` text lands in the body at head position, so a
   claim spanning title|body matches text no reader encounters as a sequence. The body path
@@ -316,3 +326,11 @@ independently valuable.
 | a criterion promised a general terminated-attribute guarantee its own §7 example contradicts | criterion 7 — scope moved into the criterion's own text |
 | the `spans.ts` rationale described the failure mode of the REJECTED design | §2 — restated as a per-region proof |
 | `HarvestRead.normText`'s docstring obsoleted, unrecorded | §2 |
+
+### Round four
+
+| finding | change |
+| --- | --- |
+| the grammar table pinned attribute-NAME case but not VALUE case; a parser comparing `=== "description"` passes every other row and silently drops `name="Description"` on a well-formed page | §3 case row; criterion 6 |
+| §7's leak example proved nothing - HTML5 closes that double-quoted `title` at the next `"`, so the meta is live for a browser too and 0.5.0 agrees with it | §7 - replaced with a verified divergent example, and the false claim recorded |
+| "first duplicate wins" preserves 0.5.0 only for `content`; a duplicated `name` behaves differently | §3 duplicate row scoped |
