@@ -1,6 +1,6 @@
 {
   "name": "testimonium",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Verifies that each footnote's cited URL actually carries that footnote's claims. A claim checker, not a link checker.",
   "keywords": ["citations", "footnotes", "verification", "fact-checking", "cli"],
   "license": "MIT",
