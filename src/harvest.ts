@@ -144,9 +144,21 @@ export async function harvest(doc: Document, opts: HarvestOptions = {}): Promise
     // `normBoundaryNote` line with nothing broken anywhere. Both sides of the
     // assertion pair are now pinned in test/harvest.test.ts.
     for (const read of source.reads) {
-      const found = commonSpans(doc.prose, read.text);
-      bugs.push(...found.bugs);
-      candidates.push(...found.spans);
+      // Per region, not over read.text's flat join (Task 5; spec criterion
+      // 3): a span common to the draft and the CONCATENATION of two regions
+      // can be a run that exists on neither region alone - the join between a
+      // page's body and its description is not a place an author's copy ever
+      // sat - and check() (Task 3) already refuses to find such a span
+      // anywhere on the page. Proposing one would be the tool accusing an
+      // author over its own suggestion. Cross-region duplicates within one
+      // read, and across a URL's several reads, are absorbed by the
+      // `dropContained` call below - ONE containment pass over the union,
+      // same as before this loop scanned by region instead of once per read.
+      for (const region of read.regions) {
+        const found = commonSpans(doc.prose, region);
+        bugs.push(...found.bugs);
+        candidates.push(...found.spans);
+      }
     }
 
     const entry = opts.claims?.get(source.key);

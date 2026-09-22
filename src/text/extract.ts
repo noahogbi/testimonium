@@ -71,16 +71,32 @@ const NAMED: Readonly<Record<string, number>> = {
   Phi: 0x3a6, Omega: 0x3a9,
 };
 
-/** Text a page carries in description attributes. Harvested AFTER script and
- *  style bodies are removed but BEFORE the tag strip: `<[^>]*>` discards
- *  attribute values wholesale - which is why a page whose only prose lives in
- *  its description reads as unreadable - while a `<meta>` sitting in text no
- *  reader's browser actually renders - a script body, an inert `<template>`,
- *  a comment - must not be harvested at all. Deduplicated: the three tags
- *  almost always carry one sentence, and counting it three times inflates
- *  prose toward the 4,500 floor. */
-const IS_DESCRIPTION = /\b(?:name|property)\s*=\s*(["'])(?:og:|twitter:)?description\1/i;
-const CONTENT_ATTR = /\bcontent\s*=\s*(["'])([\s\S]*?)\1/i;
+/** A tag's attributes, by lowercased name, FIRST occurrence winning. Replaces
+ *  two regexes that matched substrings of the whole tag: `\bcontent\s*=` fired
+ *  inside `data-content`, and both fired inside another attribute's VALUE, so
+ *  the wrong text was harvested and the real description was lost. Values are
+ *  matched case-insensitively by the caller, because `name="Description"` is
+ *  ordinary legacy CMS output.
+ *
+ *  Unquoted values are deliberately NOT collected: 0.5.0 never harvested them,
+ *  and accepting them here would newly harvest `name=description` on pages this
+ *  release is not otherwise changing. */
+function parseAttrs(tag: string): Map<string, string> {
+  const attrs = new Map<string, string>();
+  // Strip the angle brackets. The tag name needs no skipping: it carries no `=`.
+  const body = tag.slice(1, -1);
+  const re = /([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(["'])([\s\S]*?)\2/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(body)) !== null) {
+    // `as string`: the repo runs noUncheckedIndexedAccess, so a matched group
+    // types as string | undefined even though the regex guarantees it here.
+    const name = (m[1] as string).toLowerCase();
+    if (!attrs.has(name)) attrs.set(name, m[3] as string);
+  }
+  return attrs;
+}
+
+const DESCRIPTION_VALUES = new Set(["description", "og:description", "twitter:description"]);
 
 /** Tags, with attribute values respected. A regex cannot do this: `<[^>]*>`
  *  ends the tag at the first `>`, so a `>` inside a quoted attribute value both
@@ -130,22 +146,75 @@ function* tagsIn(html: string): Generator<string> {
   }
 }
 
-function descriptionText(html: string): string {
+/** Text a page carries in description attributes, one entry per distinct
+ *  value. Harvested AFTER script and style bodies are removed but BEFORE the
+ *  tag strip: `<[^>]*>` discards attribute values wholesale - which is why a
+ *  page whose only prose lives in its description reads as unreadable -
+ *  while a `<meta>` sitting in text no reader's browser actually renders - a
+ *  script body, an inert `<template>`, a comment - must not be harvested at
+ *  all. Deduplicated: the three tags almost always carry one sentence, and
+ *  counting it three times inflates prose toward the 4,500 floor. */
+function descriptionValues(html: string): string[] {
   const seen = new Set<string>();
   for (const tag of tagsIn(html)) {
     if (!/^<meta\b/i.test(tag)) continue;
-    if (!IS_DESCRIPTION.test(tag)) continue;
-    const m = CONTENT_ATTR.exec(tag);
-    const value = m?.[2]?.trim();
+    const attrs = parseAttrs(tag);
+    // Prefer whichever of `name=`/`property=` actually carries a description
+    // value, rather than preferring `name` blindly: a tag carrying BOTH
+    // `name="author"` and `property="og:description"` is real, and 0.5.0
+    // harvested it. `.trim()` here newly harvests `name=" description "`,
+    // which 0.5.0 did not. This is a DELIBERATE WIDENING on a well-formed
+    // page, in the text-ADDING direction, and it is more permissive than a
+    // browser rather than equal to it: HTML5 matches standard metadata names
+    // exactly, so `name=" description "` selects nothing for a browser. An
+    // earlier comment here claimed this "matches a browser"; that was false.
+    // Disclosed in the 0.6.0 spec's grammar table and in the changelog.
+    const candidates = [attrs.get("name"), attrs.get("property")];
+    const key = candidates.map((v) => (v ?? "").trim().toLowerCase()).find((v) => DESCRIPTION_VALUES.has(v));
+    if (!key) continue;
+    const value = attrs.get("content")?.trim();
+    // Deduplicated by the RAW attribute text, not the decoded value, so
+    // `Cats &amp; Dogs.` and `Cats &amp;amp; Dogs.` remain two regions even
+    // though they decode alike. Deliberate, and it must stay: decoding first
+    // would change how many regions a page yields and therefore move
+    // `toText`'s byte output, which this release holds fixed.
     if (value) seen.add(value);
   }
-  return [...seen].join(" ");
+  return [...seen];
 }
 
-/** HTML to visible prose. Script and style bodies are removed before tags are
- *  stripped, or their contents would land in the extracted text and a claim
- *  could "match" against a JSON blob. */
-export function toText(html: string): string {
+// Named entities EXCEPT &amp;, which must come last, then whitespace collapse
+// and trim. Split out of toText so toTextRegions can run it per-region before
+// joining rather than once over an already-joined string - see toTextRegions.
+function finish(s: string): string {
+  return s
+    .replace(/&([a-zA-Z][a-zA-Z0-9]{1,31});/g, (raw, name: string) => {
+      const cp = NAMED[name];
+      return cp === undefined ? raw : String.fromCodePoint(cp);
+    })
+    .replace(/&#[xX]([0-9a-fA-F]+);/g, (raw, h: string) => entityChar(parseInt(h, 16), raw))
+    .replace(/&#(\d+);/g, (raw, d: string) => entityChar(Number(d), raw))
+    .replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** The body plus each distinct description value, as separate strings. The
+ *  regions exist because a claim must not be matchable across the join between
+ *  them: `toText`'s flat output concatenates them, and a phrase spanning that
+ *  boundary appears nowhere on the page.
+ *
+ *  Order is the body followed by each description in document order, but an
+ *  empty region is OMITTED, so position is not a reliable label: a page whose
+ *  body normalizes to nothing returns its description at index 0. Callers must
+ *  identify a region by searching it, never by its index. (An earlier draft of
+ *  this comment, and of the plan it came from, said "index 0 is always the
+ *  body"; that is false in exactly that case.)
+ *
+ *  Each region runs the entity/whitespace chain independently and the join is a
+ *  single space, which reproduces `toText` byte for byte because the chain
+ *  trims each part - proven over every fixture in extract-regions.test.ts. */
+export function toTextRegions(html: string): string[] {
   // Strip script and style FIRST, then harvest, then strip tags. The order is
   // load-bearing: a `<meta>` tag written inside a script body is text no reader
   // ever sees, and harvesting from raw HTML would feed it to the classifier as
@@ -156,9 +225,10 @@ export function toText(html: string): string {
   // (2026-09-06-testimonium-design.md:101). The order below is what both
   // rankings require, so nothing turns on which governs - but the two citations
   // point in opposite directions and each must name its own spec to stay
-  // readable. This function's own docstring already names the hazard for script
-  // bodies generally; harvesting before the strip would bypass the protection
-  // it was built around.
+  // readable. `toText`'s docstring below names the hazard for script bodies
+  // generally - this code moved here from that function, so the self-reference
+  // it used to carry would now point at the wrong docstring; harvesting before
+  // the strip would bypass the protection it was built around.
   const stripped = html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ");
@@ -178,17 +248,18 @@ export function toText(html: string): string {
     .replace(/<style\b[\s\S]*?(?:<\/style>|$)/gi, " ")
     .replace(/<!--[\s\S]*?(?:-->|$)/g, " ")
     .replace(/<template\b[\s\S]*?(?:<\/template>|$)/gi, " ");
-  const described = descriptionText(forHarvest);
-  const body = stripped.replace(/<[^>]*>/g, " ");
-  return (described ? `${body} ${described}` : body)
-    // Named entities EXCEPT &amp;, which must come last.
-    .replace(/&([a-zA-Z][a-zA-Z0-9]{1,31});/g, (raw, name: string) => {
-      const cp = NAMED[name];
-      return cp === undefined ? raw : String.fromCodePoint(cp);
-    })
-    .replace(/&#[xX]([0-9a-fA-F]+);/g, (raw, h: string) => entityChar(parseInt(h, 16), raw))
-    .replace(/&#(\d+);/g, (raw, d: string) => entityChar(Number(d), raw))
-    .replace(/&amp;/g, "&")
-    .replace(/\s+/g, " ")
-    .trim();
+  const body = finish(stripped.replace(/<[^>]*>/g, " "));
+  const out = body ? [body] : [];
+  for (const v of descriptionValues(forHarvest)) {
+    const f = finish(v);
+    if (f) out.push(f);
+  }
+  return out;
+}
+
+/** HTML to visible prose. Script and style bodies are removed before tags are
+ *  stripped, or their contents would land in the extracted text and a claim
+ *  could "match" against a JSON blob. */
+export function toText(html: string): string {
+  return toTextRegions(html).join(" ");
 }

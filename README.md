@@ -30,7 +30,8 @@ essay.claims.json      phrases you copied, by hand, out of each cited source
 
 `essay.claims.json` is keyed by the exact URL as it appears in the footnote,
 each value an array of phrases that must appear verbatim (case- and
-whitespace-insensitive) in the extracted text of that page:
+whitespace-insensitive) within a SINGLE EXTRACTION REGION of that page - its
+body, or one of its `description` meta values:
 
 ```json
 {
@@ -197,6 +198,14 @@ before you trust a green run to mean more than it does.
   repair, and no plan has yet taken it. It is disclosed here rather than
   promised to a plan. See `docs/calibration-2026-09.md` for how this was
   checked.
+- **A `description` whose attribute VALUE is padded with whitespace is read
+  from 0.6.0 onward.** `<meta name=" description " content="...">` harvests,
+  where 0.5.0 read nothing and where a browser also reads nothing - HTML5
+  matches standard metadata names exactly. This is deliberate and more
+  permissive than either, and it is disclosed because it moves text in the
+  ADDING direction: on a page sitting just under the prose floor, extra text can
+  lift it over, and a page over the floor can be accused where a page under it
+  is only ever `unreachable`.
 - **Since 0.5.0, a claim that appears only in a page's `description` meta tag
   can return `supported`.** `toText` harvests `description`, `og:description`
   and `twitter:description` content, so a page carrying almost no body text can
@@ -208,6 +217,17 @@ before you trust a green run to mean more than it does.
   because the attesting text is metadata rather than body prose, and because it
   is common - 88% of 549 measured live pages carry such a description. See
   `docs/description-movement-0-5-0.md`.
+- **A quote inside an UNQUOTED attribute value desyncs tag-boundary detection**, so a
+  meta-shaped string sitting inside a LATER quoted attribute value can be harvested even
+  though no browser renders it as an element at all. Verified: `<div title=O'Brien><span
+  data-x='A > <meta name="description" content="INJECTED"> B'>` harvests `INJECTED` - the
+  unquoted `title` ends at the first `>`, which HTML5 places inside the following
+  single-quoted `data-x`, so the `<meta>` text a description regex would key on is inert
+  markup a browser never turns into an element. `<div title=O'Brien>` on its own is ordinary
+  content, not an attack - the apostrophe only matters once a later attribute's value happens
+  to contain the quote-and-angle-bracket shape that reads as a tag. This predates 0.6.0 and is
+  not closed by it. See `docs/superpowers/specs/2026-09-20-testimonium-0-6-0-design.md`
+  section 7.
 - **The audience is small**, and that is a limit, not a roadmap item - the
   way `urtext` says three of seven analyzers find nothing in a Python repo.
   Direct fit is people who already keep verbatim source quotes and are
@@ -394,7 +414,10 @@ the prose floor.
 
 The claims file is the cost. `harvest` reads your draft and every source it
 cites, and proposes as candidate claims the phrases that appear verbatim in
-both - the sentences you copied out while writing. It writes them to
+both - the sentences you copied out while writing. A phrase must lie inside one
+extraction region of the source, so a run that only exists by reading across the
+boundary between a page's body and its `description` is never proposed: it is
+not a sequence any reader encounters. It writes them to
 `<doc>.claims.draft.json`. It never writes `<doc>.claims.json`.
 
 ```

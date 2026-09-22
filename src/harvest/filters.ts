@@ -46,10 +46,14 @@ export interface FilterInput {
  * frequency, boilerplate rules, already-claimed. A span is attributed to the
  * FIRST filter that drops it, which is what makes the counts readable.
  *
- * `norm(span)` is computed once per span, and every read's `normText` was
+ * `norm(span)` is computed once per span, and every read's `normRegions` was
  * computed once when it was read (Fable F18): the frequency filter is a
- * substring test between two already-normalized strings, never a
- * `phraseFound` that re-normalizes a source body per span.
+ * substring test between an already-normalized span and an already-normalized
+ * REGION, never a `phraseFound` that re-normalizes a source body per span -
+ * and never a test against a read's flat, joined text either (Task 5): a span
+ * votes only if some single region of some other read carries it whole, so a
+ * run that exists solely across that other source's own body/description join
+ * can never cast a vote.
  */
 export function applyFilters(input: FilterInput): FilterResult {
   const kept: string[] = [];
@@ -71,17 +75,24 @@ export function applyFilters(input: FilterInput): FilterResult {
 
     const n = norm(span);
 
-    // 2. Cross-source frequency (13 Q5, primary). `normText.includes(n)` is
-    //    exactly phraseFound(read.text, span) with the haystack normalized
-    //    once, at read time. `other.key !== input.source.key` is a defensive
-    //    self-exclusion guard, not a restatement of the caller's contract: a
-    //    caller that wrongly includes the source in its own `others` must
-    //    not silently drop every proposal (controller ruling, fix round 1;
-    //    Important 6). Belt AND suspenders with the `others` docstring
-    //    above - Task 8 pins the caller's side separately.
+    // 2. Cross-source frequency (13 Q5, primary). `read.normRegions.some(t =>
+    //    t.includes(n))` asks whether ONE region of the other read carries the
+    //    span whole - never whether the read's flat, joined text does (Task
+    //    5): a span present only across that read's own region join is a run
+    //    `check()` could never find there either, so it must not be able to
+    //    drop a proposal by looking like it was shared. Each region string was
+    //    normalized once, at read time (Fable F18), so this is still a
+    //    substring test between two already-normalized strings, never a
+    //    `phraseFound` that re-normalizes a source body per span.
+    //    `other.key !== input.source.key` is a defensive self-exclusion
+    //    guard, not a restatement of the caller's contract: a caller that
+    //    wrongly includes the source in its own `others` must not silently
+    //    drop every proposal (controller ruling, fix round 1; Important 6).
+    //    Belt AND suspenders with the `others` docstring above - Task 8 pins
+    //    the caller's side separately.
     if (
       input.others.some(
-        (other) => other.key !== input.source.key && other.reads.some((read) => read.normText.includes(n)),
+        (other) => other.key !== input.source.key && other.reads.some((read) => read.normRegions.some((t) => t.includes(n))),
       )
     ) {
       frequency += 1;

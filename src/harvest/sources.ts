@@ -6,17 +6,30 @@ import { normalizeUrl, type ClaimsFile } from "../io/claims.js";
 import type { RuleSet } from "../rules/load.js";
 import { norm } from "../text/normalize.js";
 
-/** One readable read of one URL, with the two forms of its text harvest
- *  needs. */
+/** One readable read of one URL, with the forms of its text harvest needs. */
 export interface HarvestRead {
   readonly rung: RungId;
   /** The extracted text, which proposals are cut from. */
   readonly text: string;
-  /** `norm(text)`, computed ONCE per read (Fable F18). The frequency filter
-   *  asks every other source's every read about every span; recomputing
-   *  norm() inside that loop is O(spans x sources x |text|) over bodies that
-   *  run to tens of thousands of characters. */
-  readonly normText: string;
+  /** `text`'s regions (`SignalResult.regions`): the body plus each distinct
+   *  description value, never joined. `harvest()` calls `commonSpans` once
+   *  PER region instead of once over the flat `text`, so no candidate it
+   *  proposes can be a run that exists only where two regions' text happens
+   *  to sit next to each other (Task 5; spec criterion 3). Regions are not
+   *  positionally labelled - an empty one is omitted - so a caller must
+   *  search this list, never index into it. */
+  readonly regions: readonly string[];
+  /** `regions.map(norm)`, computed ONCE per read (Fable F18). The frequency
+   *  filter asks every other source's every read about every span; before
+   *  Task 5 this memoized `norm(text)` over the single flat string, and the
+   *  filter tested `normText.includes(n)` - a span could therefore vote
+   *  present when it matched another source only ACROSS that source's own
+   *  region join, a run absent from every one of that source's regions.
+   *  Task 5's accepted delta: fewer frequency drops (a join-crossing vote no
+   *  longer counts), and every span that DOES still drop is one that lives,
+   *  in full, inside some other source's actual region - so a surviving
+   *  proposal stays matchable the same way `check()` will match it. */
+  readonly normRegions: readonly string[];
 }
 
 export interface HarvestSource {
@@ -136,7 +149,8 @@ export async function scanSources(
       reads: readable.map((r) => ({
         rung: r.rung,
         text: r.computed.text,
-        normText: norm(r.computed.text),
+        regions: r.computed.regions,
+        normRegions: r.computed.regions.map(norm),
       })),
       rungsAttempted: attempted,
       redirectedTo: moved ? moved.computed.finalUrl : null,

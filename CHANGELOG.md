@@ -1,5 +1,78 @@
 # Changelog
 
+## 0.6.0 - 2026-09-22
+
+Two tightenings against false attestation, and a measurement against the same 618 live URLs
+0.5.0 measured, because a change to a committed surface earns one every time.
+
+- **A claim can no longer match across the join between two extraction regions.** `check()`
+  and `harvest()` used to match against `toText`'s flat concatenation of the page body and
+  every harvested description value, so a claim spanning the seam between two of them - the
+  tail of the body running into the head of a description, or two separate description tags
+  that are never adjacent on any rendering - could match text that exists nowhere on the page
+  as a sequence. Matching is now confined to a single extraction region. This closes on
+  `harvest` as well as `check`: a proposal spanning a join would otherwise have had the tool
+  accuse an author over its own suggested claim. `toText`'s own output does not change - it is
+  still the flat join, still the committed surface it has been since 0.3.0 - because a claim's
+  match *position* moved, not the text itself; tasks 2 and 3 each diffed `text`/`proseChars`
+  across every fixture between the pre- and post-fix commits and found 0 mismatches.
+  **`<doc>.evidence.json` excerpts do change, on ordinary pages and not only on the seam
+  cases.** An excerpt is now located inside the region that matched, so a claim ending the
+  body no longer draws the following description into its trailing context: the passage
+  loses a trailing ellipsis and any publisher blurb that used to ride along. That is the
+  intended repair - the old passage conjoined two things a reader never sees adjacent - but
+  it is a committed surface, and the README tells authors to commit that file.
+- **A `<meta>` tag's `name`/`property` and `content` are now read by parsing its attributes,
+  not by matching two regexes against the whole tag string.** `IS_DESCRIPTION` and
+  `CONTENT_ATTR` matched a substring appearing anywhere in the tag - inside another attribute's
+  name, or inside another attribute's value - so `<meta name="keywords" content="'x'
+  name='description' LEAKED">` harvested the leaked fragment as if it were a real description,
+  and `<meta name="description" data-content="WRONG" content="THE REAL DESCRIPTION">` harvested
+  `WRONG` from `data-content` and lost the real description entirely, because the `Set`-based
+  dedup never saw it. Both regexes are gone; the tag's attributes are parsed into name/value
+  pairs and only the genuine `content` attribute is read. One deliberate widening rides
+  along and is not a substring-bug shape: the attribute VALUE is trimmed before comparison,
+  so `<meta name=" description " content="...">` now harvests where 0.5.0 read nothing.
+  That is more permissive than a browser too - HTML5 matches standard metadata names
+  exactly - and it moves text in the ADDING direction, which is the direction that can lift
+  a page over the prose floor.
+- **Pages green today can go red, on both routes, and this release does not know how many.**
+  The region fix turns a claim that only ever matched by reading across a join into a correct
+  miss: on a page that clears the prose floor and is not vetoed, that is a `supported` becoming
+  a correct `unsupported` naming the claim - not a regression to fix in this tool, but a CI run
+  that was green yesterday and is red today. The attribute fix moves matches in both directions
+  on a malformed tag: a leaked fragment or a `data-content` collision stops matching, the real
+  description starts. Four constructed cases exercise all four transitions against the real
+  0.6.0 build (`docs/description-movement-0-6-0.md`, "Question 2"): a keyword-tag leak and a
+  `data-content` collision (the attribute fix, one losing a false match and gaining the true
+  one on the same page), and a body-description join and a description-description join (the
+  region fix, both losing a match that only ever existed across the seam). **The measurement
+  below cannot say, and does not claim, how many of the 618 live pages actually lose a match
+  this way**: the harness passes no claims (`claims: []`) because the claim text these URLs
+  were cited for lives in a database this repository cannot read, so the four cases above are
+  answered from constructed fixtures, disclosed in advance rather than found after publication.
+  They prove the mechanism is real; they say nothing about its live incidence. Read "zero
+  movement" below as exactly that measurement, not as "nobody is affected" - only the first was
+  measured.
+- **Measured against the same 618 source URLs 0.5.0 measured** (`docs/description-movement-0-6-0.md`).
+  Every absolute count below is conditioned on the harness's simplified rung selection - the
+  first rung returning a 2xx with a non-empty body - which is NOT `check()`'s escalation
+  ladder, so these are not the figures a real run would report; only the before/after deltas
+  are independent of it:
+  618 of 618 measured, 551 yielded a reading, 534 non-vetoed. **Zero floor crossings in either
+  direction. Zero rows where the extracted text
+  differs at all** - not the weaker "zero crossings": the exact string is identical on all 551
+  readings, and 486 of those 551 carry a harvested description in both arms, so the zero is a
+  real measurement of agreement, not an absence of anything to disagree over. Zero veto flips,
+  zero challenge-signature flips. This figure measures the attribute-parsing fix only, and only
+  its effect on `toText`'s byte output - the region fix changes matching, not extraction, so it
+  cannot move a `toText` diff by construction (see the bullet above for how it was checked
+  instead).
+- **This repository's own doctrine (`src/text/normalize.ts:7-11`) treats a change to committed
+  output as breaking, which argues for a major bump; it ships as minor on the narrower ground
+  that `^0.5.0` in a consumer's dependency range excludes `0.6.0`, so nobody receives this
+  change without choosing to take it.**
+
 ## 0.5.0 - 2026-09-19
 
 One additive change to what `toText` extracts, the deduplication rule that
@@ -26,7 +99,8 @@ URLs because a change to a committed surface earns one.
   of body text. It does not make excerpts invariant: a claim matching at the
   very end of the body can now draw appended description text into its trailing
   context window, so an excerpt may gain a trailing ellipsis or a sentence of
-  publisher blurb.
+  publisher blurb. **(Closed in 0.6.0: excerpts are located within the matching
+  region, so neither half of that sentence is true any more.)**
 - **This changes `toText`'s output, which has been a committed surface since
   0.3.0.** A caller diffing its own prose against a source's extracted text,
   or comparing extraction snapshots across a version bump, will see new
