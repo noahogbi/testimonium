@@ -344,8 +344,11 @@ README is triggered.
 - **Live pages, and the raw data is session-local**, same as
   `docs/description-movement-0-5-0.md`'s own limit: a page can change
   between two runs, nothing here is reproducible byte-for-byte from the
-  URLs alone, and the raw NDJSON (`.superpowers/sdd/2026-09-21-testimonium-0-6-0/description-movement-0-6-0.ndjson`)
-  is git-ignored and not in the repository.
+  URLs alone, and the raw NDJSON (`.superpowers/sdd/2026-09-21-testimonium-0-6-0/description-movement-0-6-0.ndjson`,
+  fetched 2026-09-22, roughly 99 MB - larger than 0.5.0's ~51 MB because each
+  row also carries `regionsAfter`, `bodyBefore` and `describedBefore` for a
+  duplicate check no row ended up needing) is git-ignored and not in the
+  repository.
 - **Question 2 is answered from constructed fixtures, not the live corpus**,
   disclosed in advance rather than found after publication - see "Question
   2" above for why (`claims: []`, no claim text reachable from this repo).
