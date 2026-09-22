@@ -60,6 +60,21 @@ export interface SpanResult {
  * "billion", and `norm(span)` is then absent from `norm(sourceText)`, which
  * holds "6bn". The page is working perfectly; nothing is broken.
  *
+ * SINCE TASK 5, `sourceText` HERE IS ONE REGION, NEVER A READ'S FLAT,
+ * JOINED `text`. `harvest()` calls `commonSpans` once per element of
+ * `read.regions` (src/harvest.ts), specifically so a span can never be
+ * built by extending across the join between two regions - so this is NOT a
+ * new failure path opened by that change, it is the same proof, restated
+ * over a narrower `sourceText`. A digit-magnitude straddle can no longer
+ * arise AT a region boundary - "spent 6" ending one region and "billion
+ * dollars" opening the next is exactly the join-crossing run Task 5 exists
+ * to stop proposing, so it never reaches this function to straddle anything.
+ * It still arises WITHIN a region exactly as before: a single body paragraph
+ * or a single description value can itself contain the digit and the
+ * magnitude word close enough together to straddle a span's edge, and the
+ * proof below does not depend on which substring of the page `sourceText`
+ * happens to be.
+ *
  * THIS IS THE ONLY WAY ASSERTION 1 CAN FAIL. The span is `sourceText.slice`d
  * through the map, so it is a raw substring of the source whatever the map
  * says - a wrong offset yields a DIFFERENT substring, never a non-substring -

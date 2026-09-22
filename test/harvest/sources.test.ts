@@ -4,7 +4,7 @@ import { parseClaimsFile } from "../../src/io/claims.js";
 import { computeSignals } from "../../src/classify/signals.js";
 import { THRESHOLDS, proseVolume } from "../../src/classify/thresholds.js";
 import { isBlocked } from "../../src/classify/verdict.js";
-import { toText } from "../../src/text/extract.js";
+import { toText, toTextRegions } from "../../src/text/extract.js";
 import { norm } from "../../src/text/normalize.js";
 import type { Fetcher, RawResponse, RungId } from "../../src/fetch/types.js";
 import type { Footnote } from "../../src/adapters/types.js";
@@ -47,13 +47,15 @@ describe("scanSources", () => {
     expect(fetches).toBe(1);
   });
 
-  it("pins the shape of a source's reads: rung, extracted text, and its norm", async () => {
+  it("pins the shape of a source's reads: rung, extracted text, its regions, and their norms", async () => {
     // Review r1, Important 1: the earlier tests pin which URLs become
-    // sources but never what a source CONTAINS. Task 7's frequency filter
-    // reads normText directly (spec 8.2 step 3); an unnormalized normText
+    // sources but never what a source CONTAINS. Task 5's frequency filter
+    // reads normRegions directly (spec 8.2 step 3); an unnormalized
+    // normRegions, or one built from the flat `text` instead of per region,
     // would silently under-drop boilerplate with nothing here going red.
-    // Built from toText/norm THEMSELVES, not restated, so a change to either
-    // function cannot desynchronize this pin from what they actually do.
+    // Built from toText/toTextRegions/norm THEMSELVES, not restated, so a
+    // change to any of the three cannot desynchronize this pin from what they
+    // actually do.
     //
     // The readable read is deliberately CURL, not node: a hardcoded
     // `rung: "node"` mutation would pass this assertion vacuously if the
@@ -62,7 +64,10 @@ describe("scanSources", () => {
       fetcher: stub({ node: { rawBody: WALL, status: 202 }, curl: { rawBody: DOC_BODY, status: 200 } }),
     });
     const extracted = toText(DOC_BODY);
-    expect(scan.sources[0]!.reads).toEqual([{ rung: "curl", text: extracted, normText: norm(extracted) }]);
+    const regions = toTextRegions(DOC_BODY);
+    expect(scan.sources[0]!.reads).toEqual([
+      { rung: "curl", text: extracted, regions, normRegions: regions.map(norm) },
+    ]);
     expect(scan.sources[0]!.rungsAttempted).toEqual(["node", "curl"]);
   });
 

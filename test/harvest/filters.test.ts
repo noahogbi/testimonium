@@ -8,7 +8,15 @@ import type { Rule } from "../../src/rules/challenge.js";
 const source = (url: string, ...texts: string[]): HarvestSource => ({
   url,
   key: url,
-  reads: texts.map((text, i) => ({ rung: i === 0 ? "node" : "curl", text, normText: norm(text) })),
+  reads: texts.map((text, i) => ({
+    rung: i === 0 ? "node" : "curl",
+    text,
+    // One region per fixture text: these helper-built reads have no separate
+    // description to split out, so their whole text is the (only) region -
+    // the same shape a real page with no `<meta description>` produces.
+    regions: [text],
+    normRegions: [norm(text)],
+  })),
   rungsAttempted: ["node"],
   redirectedTo: null,
 });
@@ -113,24 +121,29 @@ describe("applyFilters", () => {
     expect(r.drops.frequency).toBe(0);
   });
 
-  it("filter 2 reads the read's own normText, never recomputing norm(read.text) (Task 5's exact defect)", () => {
-    // With the `source()` helper, normText is always norm(text) by
-    // construction, so a mutation substituting `norm(read.text)` for
-    // `read.normText` has nothing to disagree with (review finding,
+  it("filter 2 reads the read's own normRegions, never recomputing norm(read.text) (Task 5's exact defect)", () => {
+    // With the `source()` helper, normRegions is always [norm(text)] by
+    // construction, so a mutation substituting `[norm(read.text)]` for
+    // `read.normRegions` has nothing to disagree with (review finding,
     // Important 3 - the sentence Task 5 was caught violating stays unpinned
     // without this). Built by hand instead: this other source's stored
-    // normText deliberately disagrees with norm(its own text) - a stand-in
+    // normRegions deliberately disagrees with norm(its own text) - a stand-in
     // for a stale/pre-computed value. Correct code trusts the STORED value
     // and drops ONE; code that recomputes norm(read.text) would see
     // unrelated filler text, find no match, and keep it.
-    const staleNormText: HarvestSource = {
+    const staleNormRegions: HarvestSource = {
       url: "https://f.com/b",
       key: "https://f.com/b",
-      reads: [{ rung: "node", text: "completely unrelated filler text", normText: norm(ONE) }],
+      reads: [{
+        rung: "node",
+        text: "completely unrelated filler text",
+        regions: ["completely unrelated filler text"],
+        normRegions: [norm(ONE)],
+      }],
       rungsAttempted: ["node"],
       redirectedTo: null,
     };
-    const r = applyFilters({ ...base, source: source("https://e.com/a", ONE), spans: [ONE], others: [staleNormText] });
+    const r = applyFilters({ ...base, source: source("https://e.com/a", ONE), spans: [ONE], others: [staleNormRegions] });
     expect(r.kept).toEqual([]);
     expect(r.drops.frequency).toBe(1);
   });
