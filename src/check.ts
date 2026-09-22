@@ -132,11 +132,26 @@ function assemble(
   const evidence: Evidence[] = claims.flatMap((claim) => {
     const r = locatedBy.get(claim);
     if (!r) return [];
-    // `?? ""` and NOT `?? r.computed.text`: spec criterion 4 names null as the
-    // acceptable fallback, and the flat text is exactly the join-spanning passage
-    // the criterion forbids. `excerptFor("", ...)` returns null.
-    const region = r.computed.regions.find((x) => phraseFound(x, claim)) ?? "";
-    return [{ claims: [claim], excerpt: excerptFor(region, claim), rung: r.rung }];
+    // Try EVERY matching region, not just the first. A region can match the
+    // claim and still fail to excerpt it: `excerptFor`'s fold deliberately omits
+    // norm()'s length-changing substitutions, so a body reading "6.5 billion
+    // dollars" matches the claim "6.5bn dollars" while excerpting null, and a
+    // description reading "6.5bn dollars" excerpts it perfectly. Stopping at the
+    // first MATCHING region instead of the first EXCERPTABLE one silently
+    // dropped evidence the pre-region flat lookup used to find by scanning past
+    // the un-excerptable occurrence.
+    //
+    // Order is body first, then descriptions, so a region a reader actually sees
+    // still wins over metadata whenever both can excerpt. Falling back to null
+    // is correct and renders nothing; falling back to the FLAT text would return
+    // exactly the join-spanning passage this release exists to prevent.
+    let excerpt: string | null = null;
+    for (const region of r.computed.regions) {
+      if (!phraseFound(region, claim)) continue;
+      excerpt = excerptFor(region, claim);
+      if (excerpt !== null) break;
+    }
+    return [{ claims: [claim], excerpt, rung: r.rung }];
   });
 
   return { v, evidence: dedupeEvidence(evidence), missedAll, won };
