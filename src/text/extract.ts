@@ -146,15 +146,15 @@ function* tagsIn(html: string): Generator<string> {
   }
 }
 
-/** Text a page carries in description attributes. Harvested AFTER script and
- *  style bodies are removed but BEFORE the tag strip: `<[^>]*>` discards
- *  attribute values wholesale - which is why a page whose only prose lives in
- *  its description reads as unreadable - while a `<meta>` sitting in text no
- *  reader's browser actually renders - a script body, an inert `<template>`,
- *  a comment - must not be harvested at all. Deduplicated: the three tags
- *  almost always carry one sentence, and counting it three times inflates
- *  prose toward the 4,500 floor. */
-function descriptionText(html: string): string {
+/** Text a page carries in description attributes, one entry per distinct
+ *  value. Harvested AFTER script and style bodies are removed but BEFORE the
+ *  tag strip: `<[^>]*>` discards attribute values wholesale - which is why a
+ *  page whose only prose lives in its description reads as unreadable -
+ *  while a `<meta>` sitting in text no reader's browser actually renders - a
+ *  script body, an inert `<template>`, a comment - must not be harvested at
+ *  all. Deduplicated: the three tags almost always carry one sentence, and
+ *  counting it three times inflates prose toward the 4,500 floor. */
+function descriptionValues(html: string): string[] {
   const seen = new Set<string>();
   for (const tag of tagsIn(html)) {
     if (!/^<meta\b/i.test(tag)) continue;
@@ -170,13 +170,34 @@ function descriptionText(html: string): string {
     const value = attrs.get("content")?.trim();
     if (value) seen.add(value);
   }
-  return [...seen].join(" ");
+  return [...seen];
 }
 
-/** HTML to visible prose. Script and style bodies are removed before tags are
- *  stripped, or their contents would land in the extracted text and a claim
- *  could "match" against a JSON blob. */
-export function toText(html: string): string {
+// Named entities EXCEPT &amp;, which must come last, then whitespace collapse
+// and trim. Split out of toText so toTextRegions can run it per-region before
+// joining rather than once over an already-joined string - see toTextRegions.
+function finish(s: string): string {
+  return s
+    .replace(/&([a-zA-Z][a-zA-Z0-9]{1,31});/g, (raw, name: string) => {
+      const cp = NAMED[name];
+      return cp === undefined ? raw : String.fromCodePoint(cp);
+    })
+    .replace(/&#[xX]([0-9a-fA-F]+);/g, (raw, h: string) => entityChar(parseInt(h, 16), raw))
+    .replace(/&#(\d+);/g, (raw, d: string) => entityChar(Number(d), raw))
+    .replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** The body plus each distinct description value, as separate strings. The
+ *  regions exist because a claim must not be matchable across the join between
+ *  them: `toText`'s flat output concatenates them, and a phrase spanning that
+ *  boundary appears nowhere on the page. Index 0 is always the body.
+ *
+ *  Each region runs the entity/whitespace chain independently and the join is a
+ *  single space, which reproduces `toText` byte for byte because the chain
+ *  trims each part - proven over every fixture in extract-regions.test.ts. */
+export function toTextRegions(html: string): string[] {
   // Strip script and style FIRST, then harvest, then strip tags. The order is
   // load-bearing: a `<meta>` tag written inside a script body is text no reader
   // ever sees, and harvesting from raw HTML would feed it to the classifier as
@@ -209,17 +230,18 @@ export function toText(html: string): string {
     .replace(/<style\b[\s\S]*?(?:<\/style>|$)/gi, " ")
     .replace(/<!--[\s\S]*?(?:-->|$)/g, " ")
     .replace(/<template\b[\s\S]*?(?:<\/template>|$)/gi, " ");
-  const described = descriptionText(forHarvest);
-  const body = stripped.replace(/<[^>]*>/g, " ");
-  return (described ? `${body} ${described}` : body)
-    // Named entities EXCEPT &amp;, which must come last.
-    .replace(/&([a-zA-Z][a-zA-Z0-9]{1,31});/g, (raw, name: string) => {
-      const cp = NAMED[name];
-      return cp === undefined ? raw : String.fromCodePoint(cp);
-    })
-    .replace(/&#[xX]([0-9a-fA-F]+);/g, (raw, h: string) => entityChar(parseInt(h, 16), raw))
-    .replace(/&#(\d+);/g, (raw, d: string) => entityChar(Number(d), raw))
-    .replace(/&amp;/g, "&")
-    .replace(/\s+/g, " ")
-    .trim();
+  const body = finish(stripped.replace(/<[^>]*>/g, " "));
+  const out = body ? [body] : [];
+  for (const v of descriptionValues(forHarvest)) {
+    const f = finish(v);
+    if (f) out.push(f);
+  }
+  return out;
+}
+
+/** HTML to visible prose. Script and style bodies are removed before tags are
+ *  stripped, or their contents would land in the extracted text and a claim
+ *  could "match" against a JSON blob. */
+export function toText(html: string): string {
+  return toTextRegions(html).join(" ");
 }
