@@ -1,5 +1,5 @@
 import { phraseFound } from "../text/normalize.js";
-import { toText } from "../text/extract.js";
+import { toTextRegions } from "../text/extract.js";
 import { THRESHOLDS, proseVolume, slugLabelOverlap } from "./thresholds.js";
 import { matchesChallengePath, matchesChallengeSignature, type Rule } from "../rules/challenge.js";
 import type { RuleSet } from "../rules/load.js";
@@ -23,6 +23,7 @@ export interface SignalInput {
 export interface SignalResult {
   readonly signals: Signals;
   readonly text: string;
+  readonly regions: readonly string[];
   /** The URL this read was actually classified under, after redirects - what
    *  the fetcher reported, or the URL asked for when it reported none.
    *
@@ -145,14 +146,17 @@ export function computeSignals(input: SignalInput): SignalResult {
   // Normalised ONCE, here, so no veto below can depend on how a fetcher chose
   // to case its keys. See byLowercasedName.
   const headers = byLowercasedName(input.headers);
-  const text = toText(input.rawBody);
-  const matchedClaims = input.claims.filter((c) => phraseFound(text, c));
-  const missedClaims = input.claims.filter((c) => !phraseFound(text, c));
+  const regions = toTextRegions(input.rawBody);
+  const text = regions.join(" ");
+  const inAnyRegion = (c: string) => regions.some((r) => phraseFound(r, c));
+  const matchedClaims = input.claims.filter(inAnyRegion);
+  const missedClaims = input.claims.filter((c) => !inAnyRegion(c));
   const sigRule = matchesChallengeSignature(text, input.rules?.signatures);
   const pathRule = matchesChallengePath(input.finalUrl, input.rules?.paths);
 
   return {
     text,
+    regions,
     finalUrl: input.finalUrl,
     matchedClaims,
     missedClaims,
