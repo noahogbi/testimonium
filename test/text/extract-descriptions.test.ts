@@ -203,4 +203,12 @@ describe("toText: description attributes", () => {
     const h = `<meta name="author" property="og:description" content="Author plus OG.">${BODY}`;
     expect(toText(h)).toContain("Author plus OG.");
   });
+
+  it("does NOT harvest a duplicated name attribute where the FIRST name is not a description", () => {
+    // The defining evidence of the route-2 fix, named in the spec's grammar table:
+    // 0.5.0 harvested this because IS_DESCRIPTION matched the SUBSTRING `name="description"`
+    // anywhere in the tag. First-occurrence parsing sees name="keywords" and stops.
+    const h = `<meta name="keywords" name="description" content="DUP_NAME_LEAK">${BODY}`;
+    expect(toText(h)).not.toContain("DUP_NAME_LEAK");
+  });
 });

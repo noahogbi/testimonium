@@ -71,14 +71,6 @@ const NAMED: Readonly<Record<string, number>> = {
   Phi: 0x3a6, Omega: 0x3a9,
 };
 
-/** Text a page carries in description attributes. Harvested AFTER script and
- *  style bodies are removed but BEFORE the tag strip: `<[^>]*>` discards
- *  attribute values wholesale - which is why a page whose only prose lives in
- *  its description reads as unreadable - while a `<meta>` sitting in text no
- *  reader's browser actually renders - a script body, an inert `<template>`,
- *  a comment - must not be harvested at all. Deduplicated: the three tags
- *  almost always carry one sentence, and counting it three times inflates
- *  prose toward the 4,500 floor. */
 /** A tag's attributes, by lowercased name, FIRST occurrence winning. Replaces
  *  two regexes that matched substrings of the whole tag: `\bcontent\s*=` fired
  *  inside `data-content`, and both fired inside another attribute's VALUE, so
@@ -154,6 +146,14 @@ function* tagsIn(html: string): Generator<string> {
   }
 }
 
+/** Text a page carries in description attributes. Harvested AFTER script and
+ *  style bodies are removed but BEFORE the tag strip: `<[^>]*>` discards
+ *  attribute values wholesale - which is why a page whose only prose lives in
+ *  its description reads as unreadable - while a `<meta>` sitting in text no
+ *  reader's browser actually renders - a script body, an inert `<template>`,
+ *  a comment - must not be harvested at all. Deduplicated: the three tags
+ *  almost always carry one sentence, and counting it three times inflates
+ *  prose toward the 4,500 floor. */
 function descriptionText(html: string): string {
   const seen = new Set<string>();
   for (const tag of tagsIn(html)) {
