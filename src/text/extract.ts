@@ -163,7 +163,12 @@ function descriptionValues(html: string): string[] {
     // value, rather than preferring `name` blindly: a tag carrying BOTH
     // `name="author"` and `property="og:description"` is real, and 0.5.0
     // harvested it. `.trim()` here newly harvests `name=" description "`,
-    // which 0.5.0 did not - strictly more permissive, and matches a browser.
+    // which 0.5.0 did not. This is a DELIBERATE WIDENING on a well-formed
+    // page, in the text-ADDING direction, and it is more permissive than a
+    // browser rather than equal to it: HTML5 matches standard metadata names
+    // exactly, so `name=" description "` selects nothing for a browser. An
+    // earlier comment here claimed this "matches a browser"; that was false.
+    // Disclosed in the 0.6.0 spec's grammar table and in the changelog.
     const candidates = [attrs.get("name"), attrs.get("property")];
     const key = candidates.map((v) => (v ?? "").trim().toLowerCase()).find((v) => DESCRIPTION_VALUES.has(v));
     if (!key) continue;

@@ -161,12 +161,16 @@ function oldDescriptionText(html) {
 /** The old code's entity-decode/whitespace-collapse tail, split out so it can
  *  run on the body and the description separately (for duplicate analysis,
  *  storing the two parts distinctly) as well as on the concatenation (for
- *  `oldToTextPreRoute2`, kept for the fidelity re-check). Finishing each part
- *  separately then joining with one literal space is PROVABLY equivalent to
- *  finishing the joined string in one pass: the entity regexes never match
- *  across a space, and the old code always joins body/described with exactly
- *  one literal space - the same equivalence Task 2 proved for the new code's
- *  per-region `finish`, applied to the old code's two-part case. */
+ *  `oldToTextPreRoute2`). Finishing each part separately then joining is NOT
+ *  equivalent to finishing the joined string in one pass, and an earlier version
+ *  of this comment claimed it was "PROVABLY equivalent". Counterexample: a page
+ *  whose body strips to nothing. The real pre-0.6.0 `toText` trims the leading
+ *  space; the split-finish form keeps it, so `proseBefore` inflates by one and
+ *  `gain` reads -1. No row in the 2026-09-22 run had an empty body region, so
+ *  the published numbers are unaffected - but the 38-fixture re-check could
+ *  never have caught it either, because 0 of the 38 has one. `oldParts` is for
+ *  the per-part duplicate analysis ONLY; `oldToTextPreRoute2` finishes the JOIN
+ *  and is what the measurement calls. */
 function oldFinish(s) {
   return s
     .replace(/&([a-zA-Z][a-zA-Z0-9]{1,31});/g, (raw, name) => {
@@ -197,7 +201,7 @@ function oldParts(html) {
     .replace(/<template\b[\s\S]*?(?:<\/template>|$)/gi, " ");
   const described = oldDescriptionText(forHarvest);
   const body = stripped.replace(/<[^>]*>/g, " ");
-  return { body: oldFinish(body), described: oldFinish(described) };
+  return { body: oldFinish(body), described: oldFinish(described), rawBody: body, rawDescribed: described };
 }
 
 /** The exact pre-0.6.0 (ac71498) `toText`: whole-tag substring matching for
@@ -206,8 +210,10 @@ function oldParts(html) {
  *  than restating the extraction, so there is exactly one place that walks
  *  the tags. */
 function oldToTextPreRoute2(html) {
-  const { body, described } = oldParts(html);
-  return described ? `${body} ${described}` : body;
+  // Finish the JOIN, not the parts - see oldFinish's docstring for the
+  // empty-body counterexample that makes these two forms differ by one byte.
+  const { rawBody, rawDescribed } = oldParts(html);
+  return oldFinish(rawDescribed ? `${rawBody} ${rawDescribed}` : rawBody);
 }
 
 // ---------------------------------------------------------------------------
@@ -405,7 +411,8 @@ async function measureOne(entry, fetcher, rules, delayMs) {
     rawBody: resp.rawBody,
   });
   const { body: oldBody, described: oldDescribed } = oldParts(resp.rawBody);
-  const oldText = oldDescribed ? `${oldBody} ${oldDescribed}` : oldBody;
+  // Byte-faithful to pre-0.6.0 `toText`: finish the join, not the parts.
+  const oldText = oldToTextPreRoute2(resp.rawBody);
   const before = vetoSignalsForText(oldText, resp.rawBody, resp.headers, finalUrl, resp.status, rules);
 
   return {

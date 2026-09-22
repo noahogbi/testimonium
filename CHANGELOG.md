@@ -16,6 +16,12 @@ Two tightenings against false attestation, and a measurement against the same 61
   still the flat join, still the committed surface it has been since 0.3.0 - because a claim's
   match *position* moved, not the text itself; tasks 2 and 3 each diffed `text`/`proseChars`
   across every fixture between the pre- and post-fix commits and found 0 mismatches.
+  **`<doc>.evidence.json` excerpts do change, on ordinary pages and not only on the seam
+  cases.** An excerpt is now located inside the region that matched, so a claim ending the
+  body no longer draws the following description into its trailing context: the passage
+  loses a trailing ellipsis and any publisher blurb that used to ride along. That is the
+  intended repair - the old passage conjoined two things a reader never sees adjacent - but
+  it is a committed surface, and the README tells authors to commit that file.
 - **A `<meta>` tag's `name`/`property` and `content` are now read by parsing its attributes,
   not by matching two regexes against the whole tag string.** `IS_DESCRIPTION` and
   `CONTENT_ATTR` matched a substring appearing anywhere in the tag - inside another attribute's
@@ -24,7 +30,12 @@ Two tightenings against false attestation, and a measurement against the same 61
   and `<meta name="description" data-content="WRONG" content="THE REAL DESCRIPTION">` harvested
   `WRONG` from `data-content` and lost the real description entirely, because the `Set`-based
   dedup never saw it. Both regexes are gone; the tag's attributes are parsed into name/value
-  pairs and only the genuine `content` attribute is read.
+  pairs and only the genuine `content` attribute is read. One deliberate widening rides
+  along and is not a substring-bug shape: the attribute VALUE is trimmed before comparison,
+  so `<meta name=" description " content="...">` now harvests where 0.5.0 read nothing.
+  That is more permissive than a browser too - HTML5 matches standard metadata names
+  exactly - and it moves text in the ADDING direction, which is the direction that can lift
+  a page over the prose floor.
 - **Pages green today can go red, on both routes, and this release does not know how many.**
   The region fix turns a claim that only ever matched by reading across a join into a correct
   miss: on a page that clears the prose floor and is not vetoed, that is a `supported` becoming
@@ -43,7 +54,11 @@ Two tightenings against false attestation, and a measurement against the same 61
   They prove the mechanism is real; they say nothing about its live incidence. Read "zero
   movement" below as exactly that measurement, not as "nobody is affected" - only the first was
   measured.
-- **Measured against the same 618 source URLs 0.5.0 measured** (`docs/description-movement-0-6-0.md`):
+- **Measured against the same 618 source URLs 0.5.0 measured** (`docs/description-movement-0-6-0.md`).
+  Every absolute count below is conditioned on the harness's simplified rung selection - the
+  first rung returning a 2xx with a non-empty body - which is NOT `check()`'s escalation
+  ladder, so these are not the figures a real run would report; only the before/after deltas
+  are independent of it:
   618 of 618 measured, 551 yielded a reading, 534 non-vetoed. **Zero floor crossings in either
   direction. Zero rows where the extracted text
   differs at all** - not the weaker "zero crossings": the exact string is identical on all 551
@@ -84,7 +99,8 @@ URLs because a change to a committed surface earns one.
   of body text. It does not make excerpts invariant: a claim matching at the
   very end of the body can now draw appended description text into its trailing
   context window, so an excerpt may gain a trailing ellipsis or a sentence of
-  publisher blurb.
+  publisher blurb. **(Closed in 0.6.0: excerpts are located within the matching
+  region, so neither half of that sentence is true any more.)**
 - **This changes `toText`'s output, which has been a committed surface since
   0.3.0.** A caller diffing its own prose against a source's extracted text,
   or comparing extraction snapshots across a version bump, will see new

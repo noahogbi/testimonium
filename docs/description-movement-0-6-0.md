@@ -89,11 +89,15 @@ pre-0.5.0 control:
    body without re-fetching) and re-verified against BOTH the genuine
    compiled module and the first, already-verified port: **38 of 38
    identical against each**, confirming the refactor changed nothing.
-4. **Control: the comparison can detect a difference when one exists.** The
-   four constructed cases in "Question 2" below each show the ported old
-   extractor and the current extractor disagreeing, on inputs designed to
-   trigger the substring bug - the instrument is not vacuously reporting "no
-   difference" because it cannot see one.
+4. **Control: the comparison can detect a difference when one exists.**
+   **Cases A and B** in "Question 2" below - the keyword-tag leak and the
+   `data-content` collision - show the ported old extractor and the current one
+   disagreeing, so the instrument is not vacuously reporting "no difference"
+   because it cannot see one. **Cases C and D are NOT controls for this
+   comparison**: they are route-1 cases carrying one ordinary description, where
+   the two extractors agree by construction and only the MATCH position differs.
+   An earlier draft of this sentence claimed all four showed the extractors
+   disagreeing, inflating a two-case control into a four-case one.
 
 Everything downstream of extraction (prose-volume calculation, the five
 vetoes, challenge-signature matching) is computed by a small mirror function
@@ -367,6 +371,9 @@ README is triggered.
   it: the harness takes the first rung returning a 2xx with a non-empty
   body, rather than replaying `check()`'s full escalation ladder. It cancels
   out of the before/after delta (both arms extract the same chosen bytes)
-  and does not cancel out of any absolute figure this report does not
-  report (this report has none, since it never compares against a static
-  baseline).
+  and does NOT cancel out of the absolute figures this report does carry.
+  Every count in "Counts" above - 551 readings, 534 non-vetoed, 487 at or above
+  the floor, 64 below - is conditioned on that simplified selection and is not
+  what `check()`'s ladder would report. An earlier draft of this bullet said the
+  report carried no absolute figures; its own summary table is nothing but
+  absolute figures.

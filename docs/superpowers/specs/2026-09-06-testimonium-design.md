@@ -1217,7 +1217,13 @@ makes a proposal a claim.
    Where a readable read's `finalUrl` differs in path from the URL asked for,
    the report says so beside the proposals: a redirect to the homepage is the
    exposure the author has to look at.
-3. **Common spans**, `commonSpans(docProse, sourceText)`. Both texts are
+3. **Common spans**, `commonSpans(docProse, sourceText)`. *(Amended 2026-09-22,
+   0.6.0: `sourceText` is now ONE EXTRACTION REGION, not the read's flat text.
+   `commonSpans` runs once per region - the body, and each distinct description
+   value - so a span can never be assembled across the join between two of them,
+   because such a span is a sequence no reader encounters. See
+   `docs/superpowers/specs/2026-09-20-testimonium-0-6-0-design.md` section 2.)*
+   Both texts are
    folded with `foldWithMap`, which returns the folded text and one source
    offset per folded code unit. Seeds are the L-grams of the folded source that
    occur in the folded document, L = `harvestSeedChars`; each seed is extended
@@ -1227,7 +1233,9 @@ makes a proposal a claim.
    linear in the source. Proposals are cut from the **source's** typography
    through the offset map, because a claim must be what the source says
    (section 7.3). `norm(text)` is computed once per read and reused by every
-   filter; it is not recomputed per span.
+   filter; it is not recomputed per span. *(Amended 2026-09-22, 0.6.0: once per
+   REGION per read - `HarvestRead.normRegions` - since the flat `normText` memo
+   this sentence described was removed with the region split.)*
 4. **Self-validation, per proposal.** Three assertions, each of which drops
    the span it fails: `phraseFound(sourceText, span)`, so the checker will
    find it; `phraseFound(docProse, span)`, so it is in the author's own draft; and
@@ -1260,8 +1268,8 @@ makes a proposal a claim.
 5. **Filters**, in order, each reporting per URL how many spans it dropped:
    1. *Floor.* `norm(span).length >= THRESHOLDS.minClaimChars` (section 7.3).
    2. *Frequency.* For any *other* normalized URL V in the document with at
-      least one readable read, if `phraseFound(norm(text_R), span)` for any
-      readable read R of V, the span is boilerplate - the outlet's name, a
+      least one readable read, if the span appears in ANY extraction region of
+      any readable read R of V, the span is boilerplate - the outlet's name, a
       cookie notice, a shared byline, or a wire story reprinted by two cited
       outlets - and is dropped. A URL's own reads never vote against its own
       spans. With fewer than two URLs holding a readable read the filter is
