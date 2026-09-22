@@ -51,4 +51,19 @@ describe("toTextRegions", () => {
               `<body><p>Body.</p></body>`;
     expect(toTextRegions(h)).toEqual(["Body.", s]);
   });
+
+  it("omits an empty region rather than emitting a stray separator", () => {
+    // A description that decodes to whitespace only. Without the empty-region
+    // filter this yields a trailing "" and toText gains a trailing separator -
+    // which the 38-fixture hash test does NOT catch, because no fixture is
+    // shaped this way. Verified by mutation.
+    const h = `<meta name="description" content="&nbsp;"><body><p>Body.</p></body>`;
+    expect(toTextRegions(h)).toEqual(["Body."]);
+  });
+
+  it("returns the description at index 0 when the body normalizes to empty", () => {
+    // Position is not a label. Callers must identify a region by searching it.
+    const h = `<meta name="description" content="Real content."><body>   </body>`;
+    expect(toTextRegions(h)).toEqual(["Real content."]);
+  });
 });

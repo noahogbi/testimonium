@@ -168,6 +168,11 @@ function descriptionValues(html: string): string[] {
     const key = candidates.map((v) => (v ?? "").trim().toLowerCase()).find((v) => DESCRIPTION_VALUES.has(v));
     if (!key) continue;
     const value = attrs.get("content")?.trim();
+    // Deduplicated by the RAW attribute text, not the decoded value, so
+    // `Cats &amp; Dogs.` and `Cats &amp;amp; Dogs.` remain two regions even
+    // though they decode alike. Deliberate, and it must stay: decoding first
+    // would change how many regions a page yields and therefore move
+    // `toText`'s byte output, which this release holds fixed.
     if (value) seen.add(value);
   }
   return [...seen];
@@ -192,7 +197,14 @@ function finish(s: string): string {
 /** The body plus each distinct description value, as separate strings. The
  *  regions exist because a claim must not be matchable across the join between
  *  them: `toText`'s flat output concatenates them, and a phrase spanning that
- *  boundary appears nowhere on the page. Index 0 is always the body.
+ *  boundary appears nowhere on the page.
+ *
+ *  Order is the body followed by each description in document order, but an
+ *  empty region is OMITTED, so position is not a reliable label: a page whose
+ *  body normalizes to nothing returns its description at index 0. Callers must
+ *  identify a region by searching it, never by its index. (An earlier draft of
+ *  this comment, and of the plan it came from, said "index 0 is always the
+ *  body"; that is false in exactly that case.)
  *
  *  Each region runs the entity/whitespace chain independently and the join is a
  *  single space, which reproduces `toText` byte for byte because the chain
@@ -208,9 +220,10 @@ export function toTextRegions(html: string): string[] {
   // (2026-09-06-testimonium-design.md:101). The order below is what both
   // rankings require, so nothing turns on which governs - but the two citations
   // point in opposite directions and each must name its own spec to stay
-  // readable. This function's own docstring already names the hazard for script
-  // bodies generally; harvesting before the strip would bypass the protection
-  // it was built around.
+  // readable. `toText`'s docstring below names the hazard for script bodies
+  // generally - this code moved here from that function, so the self-reference
+  // it used to carry would now point at the wrong docstring; harvesting before
+  // the strip would bypass the protection it was built around.
   const stripped = html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ");
