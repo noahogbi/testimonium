@@ -139,4 +139,68 @@ describe("toText: description attributes", () => {
     const h = `<head><!-- housekeeping --><meta name="description" content="Genuine after comment."></head>${BODY}`;
     expect(toText(h)).toContain("Genuine after comment.");
   });
+
+  it("does NOT treat a keywords tag as a description", () => {
+    const h = `<meta name="keywords" content="'x' name='description' LEAKED">${BODY}`;
+    expect(toText(h)).not.toContain("LEAKED");
+  });
+
+  it("does NOT accept data-content as content, and keeps the real description", () => {
+    const h = `<meta name="description" data-content="WRONG" content="THE REAL ONE">${BODY}`;
+    const out = toText(h);
+    expect(out).not.toContain("WRONG");
+    expect(out).toContain("THE REAL ONE");
+  });
+
+  it("does NOT accept a content= that lives inside another attribute's value", () => {
+    const h = `<meta name="description" title='use content="INJECTED" here' content="THE REAL ONE">${BODY}`;
+    const out = toText(h);
+    expect(out).not.toContain("INJECTED");
+    expect(out).toContain("THE REAL ONE");
+  });
+
+  it("matches attribute VALUES case-insensitively, not just names", () => {
+    // Ordinary legacy CMS output. A parser that lowercases names but compares
+    // the value with === "description" drops these silently.
+    expect(toText(`<meta name="DeScRiPtIoN" content="Mixed name.">${BODY}`)).toContain("Mixed name.");
+    expect(toText(`<meta property="OG:Description" content="Mixed prop.">${BODY}`)).toContain("Mixed prop.");
+    expect(toText(`<META name="description" content="Upper tag.">${BODY}`)).toContain("Upper tag.");
+  });
+
+  it("permits whitespace around =", () => {
+    expect(toText(`<meta name = "description" content = "Spaced.">${BODY}`)).toContain("Spaced.");
+  });
+
+  it("still does NOT harvest unquoted attribute values", () => {
+    // Preserves 0.5.0 behaviour exactly; spec section 7 discloses it.
+    expect(toText(`<meta name=description content=UNQUOTED>${BODY}`)).not.toContain("UNQUOTED");
+  });
+
+  it("takes the FIRST duplicate content attribute", () => {
+    const h = `<meta name="description" content="DUP_FIRST" content="DUP_SECOND">${BODY}`;
+    const out = toText(h);
+    expect(out).toContain("DUP_FIRST");
+    expect(out).not.toContain("DUP_SECOND");
+  });
+
+  it("treats a trailing / as inert", () => {
+    // The no-space form appears in fixtures/documents/apnews-com-hub-technology.html.
+    expect(toText(`<meta name="twitter:description" content="Self closed."/>${BODY}`)).toContain("Self closed.");
+  });
+
+  it("micro-divergence: trims the key, so padded whitespace around the value now matches", () => {
+    // 0.5.0's substring regex did not trim; this parser's `.trim()` on the key
+    // is strictly more permissive and matches what a browser does. Decided,
+    // not overlooked - see the comment above the filter in descriptionText.
+    expect(toText(`<meta name=" description " content="Padded name.">${BODY}`)).toContain("Padded name.");
+  });
+
+  it("micro-divergence: prefers property over name when name is not a description value", () => {
+    // 0.5.0's IS_DESCRIPTION regex matched `property="og:description"` as a
+    // substring anywhere in the tag, so a tag also carrying name="author"
+    // still harvested. Preferring `name` blindly here would silently drop it;
+    // the candidates fallback keeps 0.5.0's behaviour.
+    const h = `<meta name="author" property="og:description" content="Author plus OG.">${BODY}`;
+    expect(toText(h)).toContain("Author plus OG.");
+  });
 });

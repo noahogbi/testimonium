@@ -79,8 +79,32 @@ const NAMED: Readonly<Record<string, number>> = {
  *  a comment - must not be harvested at all. Deduplicated: the three tags
  *  almost always carry one sentence, and counting it three times inflates
  *  prose toward the 4,500 floor. */
-const IS_DESCRIPTION = /\b(?:name|property)\s*=\s*(["'])(?:og:|twitter:)?description\1/i;
-const CONTENT_ATTR = /\bcontent\s*=\s*(["'])([\s\S]*?)\1/i;
+/** A tag's attributes, by lowercased name, FIRST occurrence winning. Replaces
+ *  two regexes that matched substrings of the whole tag: `\bcontent\s*=` fired
+ *  inside `data-content`, and both fired inside another attribute's VALUE, so
+ *  the wrong text was harvested and the real description was lost. Values are
+ *  matched case-insensitively by the caller, because `name="Description"` is
+ *  ordinary legacy CMS output.
+ *
+ *  Unquoted values are deliberately NOT collected: 0.5.0 never harvested them,
+ *  and accepting them here would newly harvest `name=description` on pages this
+ *  release is not otherwise changing. */
+function parseAttrs(tag: string): Map<string, string> {
+  const attrs = new Map<string, string>();
+  // Strip the angle brackets. The tag name needs no skipping: it carries no `=`.
+  const body = tag.slice(1, -1);
+  const re = /([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(["'])([\s\S]*?)\2/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(body)) !== null) {
+    // `as string`: the repo runs noUncheckedIndexedAccess, so a matched group
+    // types as string | undefined even though the regex guarantees it here.
+    const name = (m[1] as string).toLowerCase();
+    if (!attrs.has(name)) attrs.set(name, m[3] as string);
+  }
+  return attrs;
+}
+
+const DESCRIPTION_VALUES = new Set(["description", "og:description", "twitter:description"]);
 
 /** Tags, with attribute values respected. A regex cannot do this: `<[^>]*>`
  *  ends the tag at the first `>`, so a `>` inside a quoted attribute value both
@@ -134,9 +158,16 @@ function descriptionText(html: string): string {
   const seen = new Set<string>();
   for (const tag of tagsIn(html)) {
     if (!/^<meta\b/i.test(tag)) continue;
-    if (!IS_DESCRIPTION.test(tag)) continue;
-    const m = CONTENT_ATTR.exec(tag);
-    const value = m?.[2]?.trim();
+    const attrs = parseAttrs(tag);
+    // Prefer whichever of `name=`/`property=` actually carries a description
+    // value, rather than preferring `name` blindly: a tag carrying BOTH
+    // `name="author"` and `property="og:description"` is real, and 0.5.0
+    // harvested it. `.trim()` here newly harvests `name=" description "`,
+    // which 0.5.0 did not - strictly more permissive, and matches a browser.
+    const candidates = [attrs.get("name"), attrs.get("property")];
+    const key = candidates.map((v) => (v ?? "").trim().toLowerCase()).find((v) => DESCRIPTION_VALUES.has(v));
+    if (!key) continue;
+    const value = attrs.get("content")?.trim();
     if (value) seen.add(value);
   }
   return [...seen].join(" ");
