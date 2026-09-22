@@ -10,6 +10,7 @@ import {
 } from "./fetch/read-source.js";
 import type { Fetcher } from "./fetch/types.js";
 import { dedupeEvidence, excerptFor, type Evidence } from "./text/excerpt.js";
+import { phraseFound } from "./text/normalize.js";
 import { belowClaimFloor, claimFloorMessage } from "./io/claims.js";
 import { buildResult, type CitationResult } from "./io/evidence.js";
 import type { RuleSet } from "./rules/load.js";
@@ -130,7 +131,12 @@ function assemble(
   // passage to a document it did not come from.
   const evidence: Evidence[] = claims.flatMap((claim) => {
     const r = locatedBy.get(claim);
-    return r ? [{ claims: [claim], excerpt: excerptFor(r.computed.text, claim), rung: r.rung }] : [];
+    if (!r) return [];
+    // `?? ""` and NOT `?? r.computed.text`: spec criterion 4 names null as the
+    // acceptable fallback, and the flat text is exactly the join-spanning passage
+    // the criterion forbids. `excerptFor("", ...)` returns null.
+    const region = r.computed.regions.find((x) => phraseFound(x, claim)) ?? "";
+    return [{ claims: [claim], excerpt: excerptFor(region, claim), rung: r.rung }];
   });
 
   return { v, evidence: dedupeEvidence(evidence), missedAll, won };
