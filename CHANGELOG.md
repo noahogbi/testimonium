@@ -2,10 +2,11 @@
 
 ## 0.6.2 - 2026-09-23
 
-Closes what 0.6.0 recorded as left open, and **moves no verdict**: `toText` output, every
-`SignalResult` field, every `check()` verdict and excerpt, and every harvest proposal are
-byte-identical to 0.6.1 across the 38 bundled fixtures, compared by a committed script
-(`scripts/fidelity-snapshot.mjs`) run before the first source edit and after the last.
+Closes what 0.6.0 recorded as left open, and **moves no verdict**: `toText` output and every
+`SignalResult` field on all 38 bundled fixtures, `check()` verdicts and excerpts on the 18 long
+enough to yield claims, and one harvest run over the document fixtures are byte-identical to
+0.6.1, compared by a committed script (`scripts/fidelity-snapshot.mjs`) run before the first
+source edit and after the last.
 
 - **`recheck` no longer calls a version change a regression.** A `pipeline drift` row means
   the archived bytes, judged today, disagree with the verdict recorded when they were archived.

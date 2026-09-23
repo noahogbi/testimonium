@@ -35,7 +35,7 @@ export interface HarvestProposal {
   readonly rungs: RungId[];
   readonly drops: FilterDrops;
   readonly floorMessages: string[];
-  /** Self-validation lines from `commonSpans`, never counted as a filter's
+  /** Self-validation lines from `spansAgainst`, never counted as a filter's
    *  work (spec 8.2 step 4).
    *
    *  DO NOT RENDER THESE UNDER A BLANKET `BUG:` PREFIX. Spec 8.2 step 4 used

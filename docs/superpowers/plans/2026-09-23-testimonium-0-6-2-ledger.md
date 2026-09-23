@@ -22,9 +22,10 @@ session shipped its pdftotext fix as 0.6.1 first.
 
 ## Fidelity
 
-`scripts/fidelity-snapshot.mjs` hashed `toText`, every `computeSignals` field, `check()`
-verdicts and excerpts, and one harvest run over the 38 fixtures named by
-`fixtures/totext-0-5-0.json`. The before snapshot was taken at `ca30c08` with `src/`
+`scripts/fidelity-snapshot.mjs` hashed `toText` and every `computeSignals` field on the 38
+fixtures named by `fixtures/totext-0-5-0.json`, `check()` verdicts and excerpts on the 18 of
+them long enough to yield ten-word claims (the other 20 hash `null`), and one harvest run over
+the document fixtures. The before snapshot was taken at `ca30c08` with `src/`
 unmodified, deterministic over two runs, and shown to see a deliberate harvest perturbation.
 The after snapshot at `e2995c7` was **byte-identical** (11,864 bytes both).
 
@@ -48,3 +49,22 @@ is covered by its own render and end-to-end tests.
   gone". False: testimonium's `excerptFor` still uses `indexOf`, now within one region, and the
   spec's `excerpt.mjs` is omnisscientia's parallel copy. The note says exactly that instead.
 - Task 6: reflowed the README paragraph a one-phrase edit overran.
+
+## Final review
+
+One fresh whole-branch review. No Critical. It fuzzed the pre- and post-refactor `commonSpans`
+and `spansAgainst` against each other over 12,000 random inputs (curly quotes, soft hyphens,
+split surrogate pairs, digit-magnitude straddles, `seedChars` in {0, -1, NaN, 1..30}): zero
+mismatches. Fixed in one pass, all comment or release-note text:
+
+- `normBoundaryNote`, `PreparedDraft` and `HarvestProposal.bugs` docstrings named
+  `commonSpans` as what `harvest()` calls; it calls `spansAgainst`.
+- `filters.test.ts`'s normRegions test named a mutation on the removed `read.text`; it now
+  names `read.regions.map(norm)`, verified to redden exactly that test.
+- `dropContained`'s docstring still said "one read's candidates"; it is one region's, and the
+  union it guards is the region union.
+- The CHANGELOG said every `check()` verdict matched across 38 fixtures; the instrument
+  exercises `check()` on 18 of them. It now says so.
+
+Deferred minors: commit `e2995c7`'s message says "six" and holds five of the six section-5
+corrections (the sixth is in `c48aad4`); `HarvestRead.regions`'s docstring has a ragged wrap.

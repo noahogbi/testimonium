@@ -119,15 +119,15 @@ describe("applyFilters", () => {
     expect(r.drops.frequency).toBe(0);
   });
 
-  it("filter 2 reads the read's own normRegions, never recomputing norm(read.text) (Task 5's exact defect)", () => {
-    // With the `source()` helper, normRegions is always [norm(text)] by
-    // construction, so a mutation substituting `[norm(read.text)]` for
+  it("filter 2 reads the read's own normRegions, never recomputing norm over its regions (Task 5's exact defect)", () => {
+    // With the `source()` helper, normRegions is always regions.map(norm)
+    // by construction, so a mutation substituting `read.regions.map(norm)` for
     // `read.normRegions` has nothing to disagree with (review finding,
     // Important 3 - the sentence Task 5 was caught violating stays unpinned
     // without this). Built by hand instead: this other source's stored
-    // normRegions deliberately disagrees with norm(its own text) - a stand-in
+    // normRegions deliberately disagrees with norm(its own regions) - a stand-in
     // for a stale/pre-computed value. Correct code trusts the STORED value
-    // and drops ONE; code that recomputes norm(read.text) would see
+    // and drops ONE; code that recomputes norm over read.regions would see
     // unrelated filler text, find no match, and keep it.
     const staleNormRegions: HarvestSource = {
       url: "https://f.com/b",

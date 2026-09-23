@@ -61,8 +61,8 @@ export interface SpanResult {
  * holds "6bn". The page is working perfectly; nothing is broken.
  *
  * SINCE TASK 5, `sourceText` HERE IS ONE REGION, NEVER A READ'S FLAT,
- * JOINED `text`. `harvest()` calls `commonSpans` once per element of
- * `read.regions` (src/harvest.ts), specifically so a span can never be
+ * JOINED `text`. `harvest()` calls `spansAgainst` (`commonSpans` over a
+ * prepared draft) once per element of `read.regions` (src/harvest.ts), specifically so a span can never be
  * built by extending across the join between two regions - so this is NOT a
  * new failure path opened by that change, it is the same proof, restated
  * over a narrower `sourceText`. A digit-magnitude straddle can no longer
@@ -201,8 +201,8 @@ export function commonSpans(
 }
 
 /** The draft side of `commonSpans`, computed once. The draft is constant
- *  across a `harvest()` run, while `commonSpans` is called once per region,
- *  per read, per source; before 0.6.2 each of those calls re-folded the draft,
+ *  across a `harvest()` run, while spans are sought once per region, per
+ *  read, per source; before 0.6.2 each of those `commonSpans` calls re-folded the draft,
  *  rebuilt its seed index and re-normalized it. `harvest()` prepares it once
  *  and calls `spansAgainst` per region. */
 export interface PreparedDraft {
@@ -379,8 +379,9 @@ export function spansAgainst(draft: PreparedDraft, sourceText: string): SpanResu
  * space because that is where `check()` will compare.
  *
  * ONE implementation of the containment rule, used twice: here over one
- * read's candidates, and in `harvest()` over the union of a URL's several
- * readable reads. A second copy of a rule this small is how the fold table
+ * region's candidates, and in `harvest()` over the union of a URL's regions
+ * and readable reads - where, since 0.6.0, a description repeating a page's
+ * lede yields the same span from two regions. A second copy of a rule this small is how the fold table
  * drifted from `norm()` three times.
  *
  * A later span that CONTAINS an earlier one replaces it, in place, so the
