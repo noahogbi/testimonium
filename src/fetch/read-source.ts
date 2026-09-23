@@ -58,12 +58,14 @@ async function climb(
   exhaustive: boolean,
 ): Promise<void> {
   // One shape, one place. Both the ladder's own rung and the PDF re-route
-  // below feed a RawResponse through the identical seven fields; a field
+  // below feed a RawResponse through the identical eight fields; a field
   // added to that input later needs updating here once, not in two call
   // sites that could silently drift apart.
-  const computeFor = (raw: RawResponse) =>
+  const computeFor = (raw: RawResponse, rung: RungId) =>
     computeSignals({
       rawBody: raw.rawBody,
+      // pdftotext returns extracted plain text; every other rung returns HTML.
+      bodyKind: rung === "pdftotext" ? "text" : "html",
       headers: raw.headers,
       finalUrl: raw.finalUrl || url,
       status: raw.status,
@@ -91,7 +93,7 @@ async function climb(
       response = EMPTY_RESPONSE;
     }
     attempted.push(action.rung);
-    const computed = computeFor(response);
+    const computed = computeFor(response, action.rung);
     reads.push({ rung: action.rung, computed });
 
     // A PDF served from a URL with no .pdf extension. The rung was picked from
@@ -133,7 +135,7 @@ async function climb(
         pdfRead = EMPTY_RESPONSE;
       }
       attempted.push("pdftotext");
-      const pdfComputed = computeFor(pdfRead);
+      const pdfComputed = computeFor(pdfRead, "pdftotext");
       reads.push({ rung: "pdftotext", computed: pdfComputed });
       history.push({ rung: "pdftotext", readable: isReadable(pdfComputed.signals) });
       break;

@@ -1,5 +1,5 @@
 import { phraseFound } from "../text/normalize.js";
-import { toTextRegions } from "../text/extract.js";
+import { plainTextRegions, toTextRegions } from "../text/extract.js";
 import { THRESHOLDS, proseVolume, slugLabelOverlap } from "./thresholds.js";
 import { matchesChallengePath, matchesChallengeSignature, type Rule } from "../rules/challenge.js";
 import type { RuleSet } from "../rules/load.js";
@@ -18,6 +18,13 @@ export interface SignalInput {
   /** Bundled-plus-local rules (Task 15's `loadRules()`). Defaults to the
    *  bundled snapshot when omitted, so every existing caller is unaffected. */
   readonly rules?: RuleSet;
+  /** What `rawBody` IS. "html" (the default) runs the tag stripper and harvests
+   *  description values; "text" is already-extracted prose - the pdftotext
+   *  rung's output - and is only whitespace-collapsed. Running text through the
+   *  tag stripper deletes everything from any "<" to the next ">", so a PDF
+   *  quoting "p < 0.001" lost up to two thirds of its text and every claim in
+   *  the lost span read as missing: a false `unsupported`. */
+  readonly bodyKind?: "html" | "text";
 }
 
 export interface SignalResult {
@@ -146,7 +153,8 @@ export function computeSignals(input: SignalInput): SignalResult {
   // Normalised ONCE, here, so no veto below can depend on how a fetcher chose
   // to case its keys. See byLowercasedName.
   const headers = byLowercasedName(input.headers);
-  const regions = toTextRegions(input.rawBody);
+  const regions =
+    input.bodyKind === "text" ? plainTextRegions(input.rawBody) : toTextRegions(input.rawBody);
   const text = regions.join(" ");
   const inAnyRegion = (c: string) => regions.some((r) => phraseFound(r, c));
   const matchedClaims = input.claims.filter(inAnyRegion);

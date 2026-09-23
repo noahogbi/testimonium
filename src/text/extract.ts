@@ -257,6 +257,16 @@ export function toTextRegions(html: string): string[] {
   return out;
 }
 
+/** Already-extracted plain text (the pdftotext rung) as one region. No tag
+ *  stripping and no entity decoding - neither exists in a text body, and
+ *  stripping is actively destructive there: "p < 0.001 ... x > 3" is prose,
+ *  not a tag. Whitespace is collapsed exactly as `finish` does, so a claim
+ *  that wraps across a line break still matches. */
+export function plainTextRegions(text: string): string[] {
+  const body = text.replace(/\s+/g, " ").trim();
+  return body ? [body] : [];
+}
+
 /** HTML to visible prose. Script and style bodies are removed before tags are
  *  stripped, or their contents would land in the extracted text and a claim
  *  could "match" against a JSON blob. */

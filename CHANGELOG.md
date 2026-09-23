@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.6.1 - 2026-09-23
+
+One correction in the accusation direction.
+
+- **pdftotext output is no longer run through the HTML tag stripper.** Every rung's body went
+  through `toTextRegions`, which deletes everything from a `<` to the next `>`. That is right
+  for HTML and destructive for extracted PDF text, where `p < 0.001` and `x > 3` are prose. A
+  statistics paper could lose most of its text before any claim was tested, and every claim
+  in the lost span read as missing: a false `unsupported` against an accurately quoted source.
+  Measured on three papers cited by one article on 2026-09-23 (curl, `pdftotext -layout`, then
+  the old path): arXiv 2306.07458 fell from 117,217 characters to 38,302; the Green and Chen
+  CSCW 2019 author PDF from 98,794 to 74,787; arXiv 2010.07938 from 85,894 to 54,693. Each
+  missed claim is found in the same extraction without the stripper. `SignalInput` gains an
+  optional `bodyKind: "html" | "text"` (default `"html"`, so every existing caller is
+  unchanged); `readSource` sets `"text"` for the `pdftotext` rung on both paths, the `.pdf`
+  URL and the content-type re-route. Text bodies are whitespace-collapsed only, as
+  `plainTextRegions`. **Verdicts on PDF sources can move from `unsupported` to `supported`,
+  and `proseChars` on PDF reads rises**; HTML reads are byte-identical. This release has NOT
+  yet been measured against the 618-URL corpus the previous two releases were.
+
 ## 0.6.0 - 2026-09-22
 
 Two tightenings against false attestation, and a measurement against the same 618 live URLs
