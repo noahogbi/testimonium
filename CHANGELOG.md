@@ -17,8 +17,13 @@ One correction in the accusation direction.
   unchanged); `readSource` sets `"text"` for the `pdftotext` rung on both paths, the `.pdf`
   URL and the content-type re-route. Text bodies are whitespace-collapsed only, as
   `plainTextRegions`. **Verdicts on PDF sources can move from `unsupported` to `supported`,
-  and `proseChars` on PDF reads rises**; HTML reads are byte-identical. This release has NOT
-  yet been measured against the 618-URL corpus the previous two releases were.
+  and `proseChars` on PDF reads rises**; HTML reads are byte-identical. **Measured on the 618-URL corpus (2026-09-23):**
+  its 16 PDF-shaped URLs are the whole population this change can move. All 16 read; 15
+  extract byte-identically on both paths, and one (a court complaint with six `<`
+  characters) gains 383 characters, 0.7% of its text. The corpus is mostly filings and
+  letters; the loss concentrates in statistics-heavy research papers, where it ran to
+  two thirds of a document. Script: an ad-hoc one-fetch, two-extraction comparison
+  against the stale-build `toText` (the same tag stripper); not committed.
 
 ## 0.6.0 - 2026-09-22
 
