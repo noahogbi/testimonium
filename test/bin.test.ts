@@ -32,6 +32,7 @@ import {
   validateFlags,
 } from "../src/bin.js";
 import { classifyRun } from "../src/run/classify.js";
+import { VERSION } from "../src/version.js";
 
 describe("validateFlags", () => {
   it("accepts a run with no flags at all", () => {
@@ -595,6 +596,43 @@ describe("renderOutcome and the accusation gate", () => {
     const lines = renderOutcome(outcome({ category: "clean", live: "supported", archived: "supported" }), 1).join("\n");
     expect(lines).not.toContain("MISS:");
     expect(lines).not.toContain("SOURCE DRIFT");
+  });
+
+  it("keeps the regression line when the archive was written by this same version", () => {
+    // Same tool on both sides: the archived bytes judging differently from
+    // their recorded verdict has no explanation but this tool.
+    const lines = renderOutcome(
+      outcome({ category: "pipelineDrift", live: "unsupported", archived: "unsupported", recorded: "supported" }),
+      1,
+    );
+    expect(lines[1]).toBe("        This is a regression in testimonium, not a defect in your document.");
+    expect(lines).toHaveLength(2);
+  });
+
+  it("names both versions, and blames nobody, when the archive was written by another version", () => {
+    // 0.6.0 deliberately stopped a claim matching across a region join, so a
+    // 0.5.0 archive of a join-only match now judges unsupported: a tightening
+    // working as designed, which the fixed sentence reported as a regression.
+    const o = outcome({
+      category: "pipelineDrift",
+      live: "unsupported",
+      archived: "unsupported",
+      recorded: "supported",
+      bundledVersionChanged: true,
+      archivedToolVersion: "0.5.0",
+    });
+    const lines = renderOutcome(o, 1);
+    expect(lines.slice(1)).toEqual([
+      `        testimonium ${VERSION} reads these archived bytes differently than 0.5.0`,
+      "        did, which recorded them as supported. See the CHANGELOG between those versions;",
+      "        this is not a defect in your document.",
+    ]);
+    expect(lines.join("\n")).not.toContain("regression");
+    // A DOWNGRADE (archive written by a newer tool) reads just as correctly:
+    // the wording names both versions and never says which is later.
+    const newer = renderOutcome({ ...o, archivedToolVersion: "9.9.9" }, 1).join("\n");
+    expect(newer).toContain(`testimonium ${VERSION} reads these archived bytes differently than 9.9.9`);
+    expect(newer).not.toContain("regression");
   });
 });
 

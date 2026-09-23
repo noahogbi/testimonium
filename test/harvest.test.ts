@@ -114,6 +114,19 @@ describe("harvest", () => {
     expect(r.proposals.map((p) => p.rungs)).toEqual([["node"], ["curl"]]);
   });
 
+  it("proposes a span once when the page's description repeats its lede (the outer dropContained)", async () => {
+    // Per-region scanning finds the lede in the body AND in the description,
+    // and commonSpans deduplicates only within one region. The outer
+    // dropContained over the union is what keeps the draft from listing the
+    // same claim twice - reachable on an ordinary page since 0.6.0.
+    const LEDE = "The committee reported that spending on regional transit rose sharply last year";
+    const FILLER = "<p>Background material about budgets and departmental process.</p>".repeat(120);
+    const pg = `<html><head><meta name="description" content="${LEDE}."></head><body><p>${LEDE}.</p>${FILLER}</body></html>`;
+    const md = [`Our draft notes that ${LEDE.toLowerCase()}, per the report.[^1]`, "", "[^1]: The Report, https://e.com/r", ""].join("\n");
+    const r = await harvest(parseGfmFootnotes(md), { fetcher: stub({ "https://e.com/r": { rawBody: pg, status: 200 } }) });
+    expect(r.proposals.map((p) => p.claims)).toEqual([[LEDE]]);
+  });
+
   it("drops a span a SECOND cited source also carries, and counts it", async () => {
     // Spec 8.2 filter 5.2. Both pages carry the first claim; the second
     // source's readable read votes it down, and the count says which filter

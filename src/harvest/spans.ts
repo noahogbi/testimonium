@@ -61,8 +61,8 @@ export interface SpanResult {
  * holds "6bn". The page is working perfectly; nothing is broken.
  *
  * SINCE TASK 5, `sourceText` HERE IS ONE REGION, NEVER A READ'S FLAT,
- * JOINED `text`. `harvest()` calls `commonSpans` once per element of
- * `read.regions` (src/harvest.ts), specifically so a span can never be
+ * JOINED `text`. `harvest()` calls `spansAgainst` (`commonSpans` over a
+ * prepared draft) once per element of `read.regions` (src/harvest.ts), specifically so a span can never be
  * built by extending across the join between two regions - so this is NOT a
  * new failure path opened by that change, it is the same proof, restated
  * over a narrower `sourceText`. A digit-magnitude straddle can no longer
@@ -131,11 +131,12 @@ export function documentMismatchNote(span: string): string {
 /**
  * First occurrence of every seed-length gram of the folded document.
  *
- * Built once per call so that the scan over the source is a map lookup per
- * position instead of an `indexOf` over the whole document - which is what
- * spec 8.2 step 3 means by a pass "linear in the source". Indexing EVERY
- * occurrence would make the inner step a walk over an occurrence list, which
- * is quadratic on a source and a document that both repeat.
+ * Built once per prepared draft (`prepareDraft`) so that the scan over the
+ * source is a map lookup per position instead of an `indexOf` over the whole
+ * document - which is what spec 8.2 step 3 means by a pass "linear in the
+ * source". Indexing EVERY occurrence would make the inner step a walk over an
+ * occurrence list, which is quadratic on a source and a document that both
+ * repeat.
  *
  * FIRST OCCURRENCE ONLY, and what that costs is measured rather than argued.
  * Against the 45 unrelated pairs of the 10 `document` fixtures, indexing every
@@ -187,26 +188,58 @@ const wordAt = (text: string, i: number): boolean =>
  *
  * `seedChars` exists for `scripts/calibrate-harvest-seed.mjs`, which sweeps
  * it. Nothing in `src/` passes it: the shipped value is the calibrated one.
+ *
+ * `harvest()` calls `spansAgainst` over one `prepareDraft` instead, so the
+ * draft is folded and indexed once per run.
  */
 export function commonSpans(
   docProse: string,
   sourceText: string,
   seedChars: number = THRESHOLDS.harvestSeedChars,
 ): SpanResult {
+  return spansAgainst(prepareDraft(docProse, seedChars), sourceText);
+}
+
+/** The draft side of `commonSpans`, computed once. The draft is constant
+ *  across a `harvest()` run, while spans are sought once per region, per
+ *  read, per source; before 0.6.2 each of those `commonSpans` calls re-folded the draft,
+ *  rebuilt its seed index and re-normalized it. `harvest()` prepares it once
+ *  and calls `spansAgainst` per region. */
+export interface PreparedDraft {
+  readonly seedChars: number;
+  readonly doc: ReturnType<typeof foldWithMap>;
+  readonly index: Map<string, number>;
+  /** `norm(docProse)`: `phraseFound`'s haystack side for the draft, hoisted -
+   *  see the note in `spansAgainst` where `normSource` is bound. */
+  readonly normDoc: string;
+}
+
+export function prepareDraft(docProse: string, seedChars: number = THRESHOLDS.harvestSeedChars): PreparedDraft {
+  const doc = foldWithMap(docProse);
+  return {
+    seedChars,
+    doc,
+    index: seedChars > 0 ? seedIndex(doc.folded, seedChars) : new Map(),
+    normDoc: norm(docProse),
+  };
+}
+
+/** `commonSpans` over a prepared draft. See `commonSpans` for the contract. */
+export function spansAgainst(draft: PreparedDraft, sourceText: string): SpanResult {
   const candidates: string[] = [];
   const bugs: string[] = [];
+  const { seedChars, doc, index, normDoc } = draft;
   if (seedChars <= 0) return { spans: [], bugs };
 
-  const doc = foldWithMap(docProse);
   const src = foldWithMap(sourceText);
-  const index = seedIndex(doc.folded, seedChars);
 
   // Spec 8.2 step 3, last clause: "`norm(text)` is computed once per read and
   // reused by every filter; it is not recomputed per span." `phraseFound(h, p)`
   // is `norm(h).includes(norm(p))`, so calling it per candidate re-normalizes
-  // the WHOLE source and the WHOLE document once for every proposal. These two
-  // bindings are that same rule with the haystack side hoisted: a MEMOIZATION
-  // of `phraseFound`, not a second definition of it.
+  // the WHOLE source and the WHOLE document once for every proposal.
+  // `normSource` here and `normDoc` on the prepared draft are that same rule
+  // with the haystack side hoisted: a MEMOIZATION of `phraseFound`, not a
+  // second definition of it.
   //
   // Inlining a rule is how the fold table drifted from `norm()` three times, so
   // the equivalence is pinned rather than asserted in a comment:
@@ -216,7 +249,6 @@ export function commonSpans(
   // change to `phraseFound` or to `norm` breaks a red test instead of silently
   // diverging from what `check()` will do.
   const normSource = norm(sourceText);
-  const normDoc = norm(docProse);
 
   let i = 0;
   while (i + seedChars <= src.folded.length) {
@@ -347,8 +379,9 @@ export function commonSpans(
  * space because that is where `check()` will compare.
  *
  * ONE implementation of the containment rule, used twice: here over one
- * read's candidates, and in `harvest()` over the union of a URL's several
- * readable reads. A second copy of a rule this small is how the fold table
+ * region's candidates, and in `harvest()` over the union of a URL's regions
+ * and readable reads - where, since 0.6.0, a description repeating a page's
+ * lede yields the same span from two regions. A second copy of a rule this small is how the fold table
  * drifted from `norm()` three times.
  *
  * A later span that CONTAINS an earlier one replaces it, in place, so the

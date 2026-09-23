@@ -2,7 +2,7 @@ import type { Document } from "./adapters/types.js";
 import { buildFetcher } from "./fetch/build-fetcher.js";
 import type { Fetcher, RungId } from "./fetch/types.js";
 import { applyFilters, type FilterDrops } from "./harvest/filters.js";
-import { commonSpans, dropContained } from "./harvest/spans.js";
+import { dropContained, prepareDraft, spansAgainst } from "./harvest/spans.js";
 import { scanSources } from "./harvest/sources.js";
 import type { ClaimsFile } from "./io/claims.js";
 import type { RuleSet } from "./rules/load.js";
@@ -35,7 +35,7 @@ export interface HarvestProposal {
   readonly rungs: RungId[];
   readonly drops: FilterDrops;
   readonly floorMessages: string[];
-  /** Self-validation lines from `commonSpans`, never counted as a filter's
+  /** Self-validation lines from `spansAgainst`, never counted as a filter's
    *  work (spec 8.2 step 4).
    *
    *  DO NOT RENDER THESE UNDER A BLANKET `BUG:` PREFIX. Spec 8.2 step 4 used
@@ -113,26 +113,31 @@ export async function harvest(doc: Document, opts: HarvestOptions = {}): Promise
   });
 
   const proposals: HarvestProposal[] = [];
+  // Folded, indexed and normalized ONCE: the draft is the same for every
+  // region of every read of every source (see PreparedDraft).
+  const draft = prepareDraft(doc.prose);
   for (const source of scan.sources) {
-    // The union over this URL's readable reads, containment-deduped by the
-    // same function commonSpans uses on one read's candidates. ONE
-    // implementation of the containment rule, two call sites - which is why
-    // Task 5 extracted `dropContained` instead of inlining it.
+    // The union over this URL's readable reads and their regions,
+    // containment-deduped by the same function `spansAgainst` uses on one
+    // region's candidates. ONE implementation of the containment rule, two
+    // call sites - which is why Task 5 extracted `dropContained` instead of
+    // inlining it.
     //
-    // NO FIXTURE CAN EXERCISE THE UNION TODAY, and that is a fact about the
-    // ladder rather than about this loop: on harvest's path `nextAction`
-    // stops the moment a read is readable - check()'s continueReading
-    // escalation (spec 0.2.0 section 4) is the one exception, and harvest
-    // never takes it (src/harvest/sources.ts) - so `source.reads` holds at
-    // most one entry and `commonSpans` has already deduped it. Removing the
-    // `dropContained`
-    // call below therefore breaks no test, so it was verified by injecting
-    // the second read instead - duplicating `readable` in `scanSources`
-    // makes this loop propose the same span twice without it and once with
-    // it (measured 2026-09-09). The characterization test in
-    // test/harvest.test.ts goes red under that same injection, which is what
-    // makes a future ladder change arrive as a red test rather than as a
-    // draft file quietly listing every claim twice.
+    // TWO unions pass through here, and only one is theoretical.
+    //
+    // Across READS it still is: on harvest's path `nextAction` stops the
+    // moment a read is readable - check()'s continueReading escalation (spec
+    // 0.2.0 section 4) is the one exception, and harvest never takes it
+    // (src/harvest/sources.ts) - so `source.reads` holds at most one entry.
+    // The characterization test in test/harvest.test.ts goes red if that
+    // changes (verified 2026-09-09 by duplicating `readable` in `scanSources`).
+    //
+    // Across REGIONS it is not, since 0.6.0 scanned each read per region: a
+    // page whose description repeats its lede yields the same span from both
+    // regions, and `spansAgainst` deduplicates only within one call. Removing
+    // the `dropContained` call below makes that ordinary page propose its
+    // lede twice - pinned in test/harvest.test.ts ("proposes a span once when
+    // the page's description repeats its lede").
     const candidates: string[] = [];
     const bugs: string[] = [];
     // `found.bugs` is carried, never swallowed: a dropped line is the one
@@ -144,7 +149,7 @@ export async function harvest(doc: Document, opts: HarvestOptions = {}): Promise
     // `normBoundaryNote` line with nothing broken anywhere. Both sides of the
     // assertion pair are now pinned in test/harvest.test.ts.
     for (const read of source.reads) {
-      // Per region, not over read.text's flat join (Task 5; spec criterion
+      // Per region, not over the regions' flat join (Task 5; spec criterion
       // 3): a span common to the draft and the CONCATENATION of two regions
       // can be a run that exists on neither region alone - the join between a
       // page's body and its description is not a place an author's copy ever
@@ -155,7 +160,7 @@ export async function harvest(doc: Document, opts: HarvestOptions = {}): Promise
       // `dropContained` call below - ONE containment pass over the union,
       // same as before this loop scanned by region instead of once per read.
       for (const region of read.regions) {
-        const found = commonSpans(doc.prose, region);
+        const found = spansAgainst(draft, region);
         bugs.push(...found.bugs);
         candidates.push(...found.spans);
       }

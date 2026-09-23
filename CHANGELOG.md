@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.6.2 - 2026-09-23
+
+Closes what 0.6.0 recorded as left open, and **moves no verdict**: `toText` output and every
+`SignalResult` field on all 38 bundled fixtures, `check()` verdicts and excerpts on the 18 long
+enough to yield claims, and one harvest run over the document fixtures are byte-identical to
+0.6.1, compared by a committed script (`scripts/fidelity-snapshot.mjs`) run before the first
+source edit and after the last.
+
+- **`recheck` no longer calls a version change a regression.** A `pipeline drift` row means
+  the archived bytes, judged today, disagree with the verdict recorded when they were archived.
+  When the archive was written by a different testimonium version, that is often a deliberate
+  tightening - 0.6.0 stopped a claim matching across a region join, so every 0.5.0 archive of
+  such a match lands here - and the report said "This is a regression in testimonium". It now
+  names both versions and points at the CHANGELOG between them. Same-version drift still says
+  regression. The category and the exit code (2) are unchanged.
+- **Harvest folds and indexes the draft once per run**, not once per region per read per
+  source. Cost only; proposals are unchanged. The unused `HarvestRead.text` field is removed
+  (internal; not exported).
+- **Four tests that could pass without testing anything now have an assertion that can
+  fail**, each shown red under a mutation of the property it names; and the `dropContained`
+  union that 0.6.0's per-region scanning made reachable is now pinned by a test.
+- Six stale comments and citations corrected.
+
+Still open, deliberately: an unbounded description-region count, and the challenge-signature
+and slug-overlap checks reading the flat join. Both change what the tool computes, so neither
+fits a release whose promise is that nothing moves.
+
 ## 0.6.1 - 2026-09-23
 
 One correction in the accusation direction.

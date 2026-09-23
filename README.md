@@ -222,12 +222,12 @@ before you trust a green run to mean more than it does.
   though no browser renders it as an element at all. Verified: `<div title=O'Brien><span
   data-x='A > <meta name="description" content="INJECTED"> B'>` harvests `INJECTED` - the
   unquoted `title` ends at the first `>`, which HTML5 places inside the following
-  single-quoted `data-x`, so the `<meta>` text a description regex would key on is inert
-  markup a browser never turns into an element. `<div title=O'Brien>` on its own is ordinary
-  content, not an attack - the apostrophe only matters once a later attribute's value happens
-  to contain the quote-and-angle-bracket shape that reads as a tag. This predates 0.6.0 and is
-  not closed by it. See `docs/superpowers/specs/2026-09-20-testimonium-0-6-0-design.md`
-  section 7.
+  single-quoted `data-x`, so the `<meta>` text the attribute parse would read as a
+  description is inert markup a browser never turns into an element. `<div title=O'Brien>`
+  on its own is ordinary content, not an attack - the apostrophe only matters once a later
+  attribute's value happens to contain the quote-and-angle-bracket shape that reads as a
+  tag. This predates 0.6.0 and is not closed by it. See
+  `docs/superpowers/specs/2026-09-20-testimonium-0-6-0-design.md` section 7.
 - **The audience is small**, and that is a limit, not a roadmap item - the
   way `urtext` says three of seven analyzers find nothing in a Python repo.
   Direct fit is people who already keep verbatim source quotes and are

@@ -21,13 +21,17 @@ describe("excerpt provenance", () => {
               `<body><p>Body.</p></body>`;
     const r = await check("https://x.test/a", ["met again in march quietly"], { fetcher: fetcherFor(h) as never });
     expect(r.verdict).toBe("supported");
-    const ex = r.evidence?.[0]?.excerpt ?? "";
+    const ex = r.evidence?.[0]?.excerpt;
+    // Non-null FIRST: with `?? ""` a null excerpt passed the not.toContain
+    // below, so the test could not tell "excerpt from one region" from "no
+    // excerpt at all".
+    expect(ex).toEqual(expect.any(String));
     // Pre-change the excerpt reads "...The board met again in march quietly..." -
     // a passage conjoining two separate meta tags as one sequence.
     expect(ex).not.toContain("The board met again in march");
   });
 
-  it("falls through to a later region when the first match cannot be excerpted", () => {
+  it("falls through to a later region when the first match cannot be excerpted", async () => {
     // The body MATCHES via norm's billion->bn fold but cannot be excerpted,
     // because excerptFor's fold deliberately omits length-changing folds. The
     // description carries the literal text and excerpts perfectly. Stopping at
@@ -39,5 +43,12 @@ describe("excerpt provenance", () => {
     expect(phraseFound(regions[0] as string, claim)).toBe(true);   // body matches
     expect(excerptFor(regions[0] as string, claim)).toBeNull();    // but cannot excerpt
     expect(excerptFor(regions[1] as string, claim)).not.toBeNull(); // a later one can
+    // The OBSERVED behaviour, through check(). The assertions above re-derive
+    // the traversal by hand and stay green if check() itself regresses -
+    // reverting all of 049da8f left them green. This one does not: stopping
+    // at the first MATCHING region yields a null excerpt here.
+    const r = await check("https://x.test/a", [claim], { fetcher: fetcherFor(page) as never });
+    expect(r.verdict).toBe("supported");
+    expect(r.evidence?.[0]?.excerpt).toBe("Report says the deal was worth 6.5bn dollars in total, analysts noted.");
   });
 });

@@ -65,5 +65,15 @@ describe("harvest proposals are check-matchable (per region)", () => {
     }));
 
     for (const claim of draft.allClaims) expect(claim).not.toContain(spanning);
+    // THE POSITIVE CONTROL. The loop above passes over an empty list, so on its
+    // own it could not tell "harvest refused the spanning phrase" from "harvest
+    // proposed nothing". Per-region scanning splits the phrase into the two
+    // real runs either side of the join, each inside one region - measured
+    // 2026-09-23 against this exact page. Reverting per-region scanning
+    // proposes the spanning run instead, and this equality goes red.
+    expect(draft.allClaims).toEqual([
+      "The committee reviewed the",
+      "quarterly filings without objection at the March session",
+    ]);
   });
 });

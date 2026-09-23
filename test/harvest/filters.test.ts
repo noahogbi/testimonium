@@ -5,18 +5,16 @@ import { norm } from "../../src/text/normalize.js";
 import { THRESHOLDS } from "../../src/classify/thresholds.js";
 import type { Rule } from "../../src/rules/challenge.js";
 
-const source = (url: string, ...texts: string[]): HarvestSource => ({
+const source = (url: string, ...reads: (string | readonly string[])[]): HarvestSource => ({
   url,
   key: url,
-  reads: texts.map((text, i) => ({
-    rung: i === 0 ? "node" : "curl",
-    text,
-    // One region per fixture text: these helper-built reads have no separate
-    // description to split out, so their whole text is the (only) region -
-    // the same shape a real page with no `<meta description>` produces.
-    regions: [text],
-    normRegions: [norm(text)],
-  })),
+  reads: reads.map((read, i) => {
+    // A string is a read with one region - the shape a real page with no
+    // `<meta description>` produces. An array is a read's regions, given
+    // separately, which is what a page WITH a description produces.
+    const regions = typeof read === "string" ? [read] : [...read];
+    return { rung: i === 0 ? "node" : "curl", regions, normRegions: regions.map(norm) };
+  }),
   rungsAttempted: ["node"],
   redirectedTo: null,
 });
@@ -121,22 +119,21 @@ describe("applyFilters", () => {
     expect(r.drops.frequency).toBe(0);
   });
 
-  it("filter 2 reads the read's own normRegions, never recomputing norm(read.text) (Task 5's exact defect)", () => {
-    // With the `source()` helper, normRegions is always [norm(text)] by
-    // construction, so a mutation substituting `[norm(read.text)]` for
+  it("filter 2 reads the read's own normRegions, never recomputing norm over its regions (Task 5's exact defect)", () => {
+    // With the `source()` helper, normRegions is always regions.map(norm)
+    // by construction, so a mutation substituting `read.regions.map(norm)` for
     // `read.normRegions` has nothing to disagree with (review finding,
     // Important 3 - the sentence Task 5 was caught violating stays unpinned
     // without this). Built by hand instead: this other source's stored
-    // normRegions deliberately disagrees with norm(its own text) - a stand-in
+    // normRegions deliberately disagrees with norm(its own regions) - a stand-in
     // for a stale/pre-computed value. Correct code trusts the STORED value
-    // and drops ONE; code that recomputes norm(read.text) would see
+    // and drops ONE; code that recomputes norm over read.regions would see
     // unrelated filler text, find no match, and keep it.
     const staleNormRegions: HarvestSource = {
       url: "https://f.com/b",
       key: "https://f.com/b",
       reads: [{
         rung: "node",
-        text: "completely unrelated filler text",
         regions: ["completely unrelated filler text"],
         normRegions: [norm(ONE)],
       }],
@@ -146,6 +143,32 @@ describe("applyFilters", () => {
     const r = applyFilters({ ...base, source: source("https://e.com/a", ONE), spans: [ONE], others: [staleNormRegions] });
     expect(r.kept).toEqual([]);
     expect(r.drops.frequency).toBe(1);
+  });
+
+  it("filter 2 votes with every region of another source, and never across that source's own join", () => {
+    // In the SECOND region only: a filter that consulted only the first region
+    // of another source would keep ONE here.
+    const inDescription = applyFilters({
+      ...base,
+      source: source("https://e.com/a", ONE),
+      spans: [ONE],
+      others: [source("https://f.com/b", ["Unrelated body text about the weather.", ONE])],
+    });
+    expect(inDescription.kept).toEqual([]);
+    expect(inDescription.drops.frequency).toBe(1);
+
+    // ACROSS the join only: the other source's body ends with ONE's first half
+    // and its description opens with the second. No region carries ONE, so it
+    // is not a reprint and must survive (0.6.0 Task 5's accepted delta).
+    const half = ONE.indexOf(" spending");
+    const acrossJoin = applyFilters({
+      ...base,
+      source: source("https://e.com/a", ONE),
+      spans: [ONE],
+      others: [source("https://f.com/b", [ONE.slice(0, half), ONE.slice(half + 1)])],
+    });
+    expect(acrossJoin.kept).toHaveLength(1);
+    expect(acrossJoin.drops.frequency).toBe(0);
   });
 
   it("filter 3 tests a boilerplate rule against norm(span), not the raw span", () => {
