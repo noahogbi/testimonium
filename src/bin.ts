@@ -94,7 +94,22 @@ export function renderOutcome(o: CitationOutcome, n: number, rungsAttempted: rea
     for (const m of o.missed) lines.push(`        MISS: "${m}"`);
   } else if (o.category === "pipelineDrift") {
     lines.push(`  [${n}] pipeline drift - ${o.url} (live ${o.live}, archived bytes ${o.archived})${bundled}`);
-    lines.push("        This is a regression in testimonium, not a defect in your document.");
+    // The tool version, not the rules: `bundledVersionChanged` is computed as
+    // `entry.toolVersion !== input.toolVersion` (archive/compare.ts), whatever
+    // its name suggests. Same version: A disagreeing with R has no explanation
+    // but this tool. Different version: the reading of the same bytes changed
+    // across releases, which is often a deliberate tightening - 0.6.0 stopped
+    // a claim matching across a region join, and every 0.5.0 archive of such a
+    // match lands here. Either way the exit code is 2; only the attribution
+    // was wrong. A pipelineDrift row always has an archive entry, so neither
+    // interpolated value can be null here.
+    if (o.bundledVersionChanged) {
+      lines.push(`        testimonium ${VERSION} reads these archived bytes differently than ${o.archivedToolVersion}`);
+      lines.push(`        did, which recorded them as ${o.recorded}. See the CHANGELOG between those versions;`);
+      lines.push("        this is not a defect in your document.");
+    } else {
+      lines.push("        This is a regression in testimonium, not a defect in your document.");
+    }
   } else if (o.category === "gone") {
     // `archivedAt` is when the baseline was established or last MATERIALLY
     // changed - the store preserves an entry that changed in nothing

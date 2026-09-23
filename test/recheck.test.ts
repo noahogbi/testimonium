@@ -7,6 +7,7 @@ import * as checkModule from "../src/check.js";
 import { buildArchiveEntry } from "../src/archive/record.js";
 import { archiveIndexPath, writeArchive } from "../src/archive/store.js";
 import { VERSION } from "../src/version.js";
+import { classifyRecheckRun, renderOutcome } from "../src/bin.js";
 import type { Fetcher, RawResponse, RungId } from "../src/fetch/types.js";
 import type { RuleSet } from "../src/rules/load.js";
 import type { FetcherOptions } from "../src/fetch/default-fetcher.js";
@@ -112,6 +113,37 @@ describe("recheck", () => {
     seed(dir, WITHOUT_CLAIM);
     const r = await recheck(CITATIONS, { archiveDir: dir, fetcher: live(WITH_CLAIM) });
     expect(r.outcomes[0]?.category).toBe("pipelineDrift");
+  });
+
+  it("the 0.6.0 ledger's case: a 0.5.0 archive of a join-only match is pipeline drift, attributed to the version change", async () => {
+    // The claim exists only across the body|description join, which 0.5.0
+    // matched and 0.6.0 deliberately stopped matching. Live and archived arms
+    // both now judge it unsupported against a recorded `supported`: pipeline
+    // drift, exit 2 - and before 0.6.2 the report called it a regression.
+    const FILLER = "<p>Background material about budgets and departmental process.</p>".repeat(120);
+    const page =
+      `<meta name="description" content="quarterly filings without objection at the March session.">` +
+      `<html><title>The Committee Report</title><body>${FILLER}<p>The committee reviewed the</p></body></html>`;
+    const claim = "reviewed the quarterly filings without objection";
+    const dir = tmpArchive();
+    const staged = buildArchiveEntry({
+      verdict: "supported",
+      claims: [claim],
+      reads: [{ rung: "node", response: { rawBody: page, status: 200, headers: { "content-type": "text/html" }, finalUrl: "", bytes: page.length } }],
+      toolVersion: "0.5.0",
+      localRulesHash: null,
+      pdftotextVersion: null,
+      archivedAt: "2026-09-19T00:00:00.000Z",
+    });
+    writeArchive(dir, new Map([[URL, staged]]));
+
+    const r = await recheck([{ url: URL, label: "The Committee Report", claims: [claim] }], { archiveDir: dir, fetcher: live(page) });
+    const o = r.outcomes[0]!;
+    expect([o.category, o.live, o.archived, o.recorded]).toEqual(["pipelineDrift", "unsupported", "unsupported", "supported"]);
+    expect(classifyRecheckRun({ sourceDrift: 0, pipelineDrift: 1, gone: 0 }, {})).toBe(2);
+    const text = renderOutcome(o, 1).join("\n");
+    expect(text).toContain(`testimonium ${VERSION} reads these archived bytes differently than 0.5.0`);
+    expect(text).not.toContain("regression");
   });
 
   it("reports no baseline, and never accuses, when nothing was ever archived", async () => {
