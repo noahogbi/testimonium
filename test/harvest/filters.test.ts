@@ -5,17 +5,16 @@ import { norm } from "../../src/text/normalize.js";
 import { THRESHOLDS } from "../../src/classify/thresholds.js";
 import type { Rule } from "../../src/rules/challenge.js";
 
-const source = (url: string, ...texts: string[]): HarvestSource => ({
+const source = (url: string, ...reads: (string | readonly string[])[]): HarvestSource => ({
   url,
   key: url,
-  reads: texts.map((text, i) => ({
-    rung: i === 0 ? "node" : "curl",
-    // One region per fixture text: these helper-built reads have no separate
-    // description to split out, so their whole text is the (only) region -
-    // the same shape a real page with no `<meta description>` produces.
-    regions: [text],
-    normRegions: [norm(text)],
-  })),
+  reads: reads.map((read, i) => {
+    // A string is a read with one region - the shape a real page with no
+    // `<meta description>` produces. An array is a read's regions, given
+    // separately, which is what a page WITH a description produces.
+    const regions = typeof read === "string" ? [read] : [...read];
+    return { rung: i === 0 ? "node" : "curl", regions, normRegions: regions.map(norm) };
+  }),
   rungsAttempted: ["node"],
   redirectedTo: null,
 });
@@ -144,6 +143,32 @@ describe("applyFilters", () => {
     const r = applyFilters({ ...base, source: source("https://e.com/a", ONE), spans: [ONE], others: [staleNormRegions] });
     expect(r.kept).toEqual([]);
     expect(r.drops.frequency).toBe(1);
+  });
+
+  it("filter 2 votes with every region of another source, and never across that source's own join", () => {
+    // In the SECOND region only: a filter that consulted only the first region
+    // of another source would keep ONE here.
+    const inDescription = applyFilters({
+      ...base,
+      source: source("https://e.com/a", ONE),
+      spans: [ONE],
+      others: [source("https://f.com/b", ["Unrelated body text about the weather.", ONE])],
+    });
+    expect(inDescription.kept).toEqual([]);
+    expect(inDescription.drops.frequency).toBe(1);
+
+    // ACROSS the join only: the other source's body ends with ONE's first half
+    // and its description opens with the second. No region carries ONE, so it
+    // is not a reprint and must survive (0.6.0 Task 5's accepted delta).
+    const half = ONE.indexOf(" spending");
+    const acrossJoin = applyFilters({
+      ...base,
+      source: source("https://e.com/a", ONE),
+      spans: [ONE],
+      others: [source("https://f.com/b", [ONE.slice(0, half), ONE.slice(half + 1)])],
+    });
+    expect(acrossJoin.kept).toHaveLength(1);
+    expect(acrossJoin.drops.frequency).toBe(0);
   });
 
   it("filter 3 tests a boilerplate rule against norm(span), not the raw span", () => {
