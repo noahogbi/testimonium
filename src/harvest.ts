@@ -2,7 +2,7 @@ import type { Document } from "./adapters/types.js";
 import { buildFetcher } from "./fetch/build-fetcher.js";
 import type { Fetcher, RungId } from "./fetch/types.js";
 import { applyFilters, type FilterDrops } from "./harvest/filters.js";
-import { commonSpans, dropContained } from "./harvest/spans.js";
+import { dropContained, prepareDraft, spansAgainst } from "./harvest/spans.js";
 import { scanSources } from "./harvest/sources.js";
 import type { ClaimsFile } from "./io/claims.js";
 import type { RuleSet } from "./rules/load.js";
@@ -113,6 +113,9 @@ export async function harvest(doc: Document, opts: HarvestOptions = {}): Promise
   });
 
   const proposals: HarvestProposal[] = [];
+  // Folded, indexed and normalized ONCE: the draft is the same for every
+  // region of every read of every source (see PreparedDraft).
+  const draft = prepareDraft(doc.prose);
   for (const source of scan.sources) {
     // The union over this URL's readable reads, containment-deduped by the
     // same function commonSpans uses on one read's candidates. ONE
@@ -144,7 +147,7 @@ export async function harvest(doc: Document, opts: HarvestOptions = {}): Promise
     // `normBoundaryNote` line with nothing broken anywhere. Both sides of the
     // assertion pair are now pinned in test/harvest.test.ts.
     for (const read of source.reads) {
-      // Per region, not over read.text's flat join (Task 5; spec criterion
+      // Per region, not over the regions' flat join (Task 5; spec criterion
       // 3): a span common to the draft and the CONCATENATION of two regions
       // can be a run that exists on neither region alone - the join between a
       // page's body and its description is not a place an author's copy ever
@@ -155,7 +158,7 @@ export async function harvest(doc: Document, opts: HarvestOptions = {}): Promise
       // `dropContained` call below - ONE containment pass over the union,
       // same as before this loop scanned by region instead of once per read.
       for (const region of read.regions) {
-        const found = commonSpans(doc.prose, region);
+        const found = spansAgainst(draft, region);
         bugs.push(...found.bugs);
         candidates.push(...found.spans);
       }

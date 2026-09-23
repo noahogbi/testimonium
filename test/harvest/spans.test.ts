@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { commonSpans, dropContained } from "../../src/harvest/spans.js";
+import { commonSpans, dropContained, prepareDraft, spansAgainst } from "../../src/harvest/spans.js";
 import { THRESHOLDS } from "../../src/classify/thresholds.js";
 import { norm, phraseFound } from "../../src/text/normalize.js";
 
@@ -285,5 +285,26 @@ describe("dropContained", () => {
 
   it("drops a span that normalizes to nothing", () => {
     expect(dropContained(["", "   ", "a real span here"])).toEqual(["a real span here"]);
+  });
+});
+
+describe("prepareDraft / spansAgainst", () => {
+  it("returns exactly what commonSpans returns, over one prepared draft reused for several sources", () => {
+    const draft =
+      "The committee reported that spending rose sharply in the third quarter, " +
+      "and the review of procurement practices is still ongoing, officials said.";
+    const sources = [
+      "Officials said the committee reported that spending rose sharply in the third quarter of the year.",
+      "Separately, the review of procurement practices is still ongoing according to the ministry.",
+      "Nothing shared with the draft appears anywhere in this sentence at all.",
+      "",
+    ];
+    const prepared = prepareDraft(draft);
+    for (const s of sources) expect(spansAgainst(prepared, s)).toEqual(commonSpans(draft, s));
+    // Non-vacuous: at least two sources really do share a span with the draft.
+    expect(sources.filter((s) => commonSpans(draft, s).spans.length > 0).length).toBeGreaterThanOrEqual(2);
+    // Review Focus 3 and 4: an empty draft, and a non-positive seed, yield nothing and never throw.
+    expect(spansAgainst(prepareDraft(""), sources[0]!)).toEqual({ spans: [], bugs: [] });
+    expect(commonSpans(draft, sources[0]!, 0)).toEqual({ spans: [], bugs: [] });
   });
 });

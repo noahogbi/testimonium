@@ -9,11 +9,10 @@ import { norm } from "../text/normalize.js";
 /** One readable read of one URL, with the forms of its text harvest needs. */
 export interface HarvestRead {
   readonly rung: RungId;
-  /** The extracted text, which proposals are cut from. */
-  readonly text: string;
-  /** `text`'s regions (`SignalResult.regions`): the body plus each distinct
-   *  description value, never joined. `harvest()` calls `commonSpans` once
-   *  PER region instead of once over the flat `text`, so no candidate it
+  /** The read's extraction regions (`SignalResult.regions`), which proposals
+   *  are cut from: the body plus each distinct description value, never
+   *  joined. `harvest()` calls `spansAgainst` once PER region instead of once
+   *  over their flat join, so no candidate it
    *  proposes can be a run that exists only where two regions' text happens
    *  to sit next to each other (Task 5; spec criterion 3). Regions are not
    *  positionally labelled - an empty one is omitted - so a caller must
@@ -148,7 +147,6 @@ export async function scanSources(
       key,
       reads: readable.map((r) => ({
         rung: r.rung,
-        text: r.computed.text,
         regions: r.computed.regions,
         normRegions: r.computed.regions.map(norm),
       })),

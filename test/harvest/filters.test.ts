@@ -10,7 +10,6 @@ const source = (url: string, ...texts: string[]): HarvestSource => ({
   key: url,
   reads: texts.map((text, i) => ({
     rung: i === 0 ? "node" : "curl",
-    text,
     // One region per fixture text: these helper-built reads have no separate
     // description to split out, so their whole text is the (only) region -
     // the same shape a real page with no `<meta description>` produces.
@@ -136,7 +135,6 @@ describe("applyFilters", () => {
       key: "https://f.com/b",
       reads: [{
         rung: "node",
-        text: "completely unrelated filler text",
         regions: ["completely unrelated filler text"],
         normRegions: [norm(ONE)],
       }],
