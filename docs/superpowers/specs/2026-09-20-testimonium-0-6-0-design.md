@@ -43,6 +43,10 @@ the design spec. The two rank oppositely and both are quoted in `src/text/extrac
 `norm(haystack).includes(norm(phrase))` (`src/text/normalize.ts:53`). Any claim straddling a
 join between concatenated regions matches, though no reader could encounter that sequence.
 
+*Note, 2026-09-23 (0.6.2):* `src/classify/signals.ts:148-150` is cited here as the defect as it
+stood at `ac71498`. Those lines were rewritten by this release's own fix (`1e2a864`), so read
+them at `ac71498`, not at HEAD.
+
 **Verified at both joins:** body|description ("The committee reviewed the" + "quarterly
 filings without objection.") and description|description ("The board met in March." +
 "Revenue rose twelve percent."). A fix treating the harvest as one merged block leaves the

@@ -101,6 +101,11 @@ decline was written against defeating a paywall's truncation, and
   (`excerpt.mjs` `indexOf`), so description text placed before the body would
   win against body text and silently change the rendered passage on rows that
   are already `supported`. Legal under §11's excerpt class, but gratuitous.
+  *Note, 2026-09-23 (0.6.2):* in testimonium, `excerptFor` no longer sees one flat string.
+  Since 0.6.0 (`049da8f`) `check()` calls it per region, in body-first order, and takes the
+  first region that both matches and yields an excerpt; `indexOf` now finds the first match
+  WITHIN that region. The ordering argument still holds, but it rests on region order, not on
+  where description text sits in one string. omnisscientia's `excerpt.mjs` is not affected.
 
 ### 3.4 What it moves, measured
 

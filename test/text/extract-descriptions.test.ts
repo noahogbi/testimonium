@@ -192,7 +192,7 @@ describe("toText: description attributes", () => {
     // 0.5.0's substring regex did not trim; this parser's `.trim()` on the key
     // is more permissive than 0.5.0 AND than a browser - HTML5 matches
     // metadata names exactly. A deliberate widening, disclosed. Decided,
-    // not overlooked - see the comment above the filter in descriptionText.
+    // not overlooked - see the comment above the key selection in descriptionValues.
     expect(toText(`<meta name=" description " content="Padded name.">${BODY}`)).toContain("Padded name.");
   });
 

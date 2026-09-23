@@ -24,7 +24,8 @@ export interface Signals {
    *  a read. But 404/410 IS the origin stating the resource does not exist,
    *  and that it is authoritative about. Calibration forced this: a real ECB
    *  404 serving 13,452 characters of nav chrome cleared every body-derived
-   *  test - prose above two of nine real documents, overlap 1.00 - and no
+   *  test - prose above two of the ten document fixtures (one of the nine real
+   *  captures, since the other is constructed), overlap 1.00 - and no
    *  threshold pair could reject it. Body shape cannot see what the status
    *  line says plainly. */
   readonly documentGone: boolean;
