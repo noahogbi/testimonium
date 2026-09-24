@@ -138,3 +138,21 @@ describe("matchesChallengeSignatureIn", () => {
     expect(matchesChallengeSignatureIn(["the sticky wall"], [G])?.note).toBe("G");
   });
 });
+
+describe("the flat and path matchers with a stateful (g) caller-built rule", () => {
+  // The same lastIndex hazard matchesChallengeSignatureIn guards against: a
+  // RuleSet built in code from g/y literals leaves lastIndex past a match, so
+  // an identical second call would start mid-string and miss. A rules FILE
+  // cannot produce one (loadRules sets no flags); a programmatic caller can.
+  it("matchesChallengeSignature answers the same on two identical calls", () => {
+    const G: Rule = { pattern: /sticky wall/g, lastConfirmed: "2026-01-01", note: "G" };
+    expect(matchesChallengeSignature("the sticky wall", [G])?.note).toBe("G");
+    expect(matchesChallengeSignature("the sticky wall", [G])?.note).toBe("G");
+  });
+
+  it("matchesChallengePath answers the same on two identical calls", () => {
+    const P: Rule = { pattern: /\/wall\//g, lastConfirmed: "2026-01-01", note: "P" };
+    expect(matchesChallengePath("https://e.com/wall/x", [P])?.note).toBe("P");
+    expect(matchesChallengePath("https://e.com/wall/x", [P])?.note).toBe("P");
+  });
+});

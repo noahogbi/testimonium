@@ -794,6 +794,33 @@ describe("check with a local RuleSet (Task 15)", () => {
     });
   });
 
+  it("reports the ESCALATED winner's own firedRule and vetoed, never the first read's", async () => {
+    // check()'s escalation (spec 0.2.0 section 4): node reads a readable page
+    // that misses the claim, so check() tries curl before accusing. curl is
+    // larger, readable, and carries a signature on a body far too long to
+    // veto. The winner moves to curl, and firedRule - with its vetoed - must
+    // come from curl, the read the verdict was computed from.
+    const MISS = "revenue fell in the fourth quarter";
+    const filler = (s: string) => `${s} `.repeat(120);
+    const nodeBody = `<html><body>${filler("The committee report discusses departmental budgets at length.")}</body></html>`;
+    const curlBody =
+      `<html><body>${filler("The committee report discusses departmental budgets at length.")}` +
+      `${filler("Further background on procurement practices and staffing.")} Please solve the puzzle to continue.</body></html>`;
+    expect(proseVolume(toText(nodeBody))).toBeGreaterThanOrEqual(THRESHOLDS.minProseChars);
+    expect(proseVolume(toText(curlBody))).toBeGreaterThan(proseVolume(toText(nodeBody)));
+    const r = await check("https://e.com/a", [MISS], {
+      fetcher: stub({ node: { rawBody: nodeBody, status: 200 }, curl: { rawBody: curlBody, status: 200 } }),
+      rules: RULES_WITH_LOCAL_SIGNATURE,
+    });
+    expect(r.rungsAttempted).toEqual(["node", "curl"]);
+    expect(r.verdict).toBe("unsupported");
+    expect(r.firedRule).toEqual({
+      lastConfirmed: "2026-08-01",
+      note: "local puzzle wall, unknown to the bundled list",
+      vetoed: false,
+    });
+  });
+
   it("marks a challenge-path veto as vetoed: true", async () => {
     const r = await check("https://e.com/a", [CLAIM], {
       fetcher: stub({ node: { rawBody: SHORT_WALL_BODY, status: 200, finalUrl: "https://e.com/cdn-cgi/challenge-platform/h/b" } }, ["node"]),
