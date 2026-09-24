@@ -101,8 +101,10 @@ export function matchesChallengeSignature(text: string, signatures: readonly Rul
  *  region order, decides which rule is reported, so that when several match,
  *  the answer is the one the flat matcher gave, minus join-only matches.
  *
- *  `lastIndex` is reset before each test: a local rule file may carry a `g`
- *  or `y` pattern, and RegExp.test on one is stateful across calls. */
+ *  `lastIndex` is reset before each test. A rules FILE cannot set flags -
+ *  `loadRules` builds `new RegExp(pattern)` with none - but a programmatic
+ *  caller can pass a `RuleSet` built from `g` or `y` regex literals, and
+ *  RegExp.test on one is stateful across calls. */
 export function matchesChallengeSignatureIn(
   regions: readonly string[],
   signatures: readonly Rule[] = CHALLENGE_SIGNATURES,

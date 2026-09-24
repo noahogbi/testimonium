@@ -42,3 +42,25 @@ tests). The tests are as the plan wrote them; only its arithmetic was wrong. 52 
   than against the figures in `docs/calibration-2026-09.md` - the same question, a stricter
   instrument. The scratch worktree's `node_modules` junction was unlinked before the worktree
   was removed, and the real `node_modules` checked intact.
+
+## Final review
+
+One fresh whole-branch review: 0 Critical, no code defect. It probed every Review Focus item on
+the built package, re-ran the measurement (identical but for timing), reproduced the cost ratio
+(~100x), and confirmed the openai.com page is the only per-region signature match in all 551
+rows. Fixed in one pass, all documentation:
+
+- Two docstrings stranded by insertion (`descriptionValues`, `renderOutcome`) reattached.
+- `matchesChallengeSignatureIn` said a rules file may carry `g`/`y` flags; it cannot
+  (`loadRules` uses `new RegExp(pattern)`). It now names a caller-built `RuleSet`.
+- The report called the cap a pure function of recorded regions; it counts raw values the
+  recording lacks. Corrected, and added as a limit, with the one-read-per-URL limit; the
+  PDF limit, which described an empty subset, replaced. The table's cap row now credits the
+  `toText` hash row, which is what proves it for the fixtures.
+- README scoped `vetoed: false` to bundled signatures; local ones behave the same, and only when
+  no path rule matched.
+- CHANGELOG: a `firedRule` from a pre-0.7.0 evidence file has no `vetoed`; treat as unknown.
+
+Deferred minors: `matchesChallengeSignature` (flat) and `matchesChallengePath` stay stateful for a
+caller-built `g`/`y` rule (pre-existing; no in-tree caller can reach it); a `check()` test
+pinning the escalated winner's `vetoed` (guaranteed structurally by `firedRuleOf`).

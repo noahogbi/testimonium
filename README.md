@@ -326,10 +326,10 @@ will eventually surprise a real user if it isn't said here first.
   fixture for this route** - the largest non-vetoed challenge in it is 1,180
   characters, comfortably under the floor - so unlike the one above it is
   disclosed here and in `docs/calibration-2026-09.md`, not pinned by a test.
-  Since 0.7.0 such a result is marked: when a bundled signature matched the
-  padded body, its `firedRule` carries `vetoed: false`. That marks a match, not
-  a wall - an ordinary article can match a signature too
-  (`docs/region-movement-0-7-0.md`).
+  Since 0.7.0 such a result is marked: when a signature - bundled or local -
+  matched the padded body and no challenge path did, its `firedRule` carries
+  `vetoed: false`. That marks a match, not a wall - an ordinary article can
+  match a signature too (`docs/region-movement-0-7-0.md`).
 - **N5's binary check has three known evasions, and every one of them is a
   route to a false accusation.** All three need the same precondition: an
   absent or lying `content-type`. A server that truthfully declares a

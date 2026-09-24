@@ -8,15 +8,17 @@
 
 Nothing moved. No fixture and no corpus page changed its `toText` output, crossed the region
 cap, or changed its challenge-signature result. The hard stops did not trigger. Two results -
-one fixture, one live page - now carry a `firedRule` with `vetoed: false`, which is the
+one fixture, one recorded page - would carry a `firedRule` with `vetoed: false`, which is the
 provenance change working as designed, not a movement.
 
 ## Why no live fetch was needed
 
 All three changes act on extraction regions, and 0.6.0's movement run (fetched 2026-09-22)
-recorded every page's regions (`regionsAfter`). The cap and the signature match are pure
-functions of those regions, so the frozen recording answers both questions for the same 618
-URLs without re-hitting 618 publishers. The fixtures are read from their bytes.
+recorded every page's regions (`regionsAfter`). The signature match is a pure function of
+those regions. The cap nearly is: it counts distinct RAW description values, and a value that
+decodes to nothing (`&nbsp;`) uses a slot without leaving a region, so the recording shows the
+cap's result, not its count - see Limits. The fixtures are read from their bytes, where both
+are exact.
 
 ## Populations
 
@@ -33,7 +35,7 @@ than 3 distinct descriptions; the cap is 8.
 | check | fixtures | corpus | hard stop? |
 | --- | --- | --- | --- |
 | `toText` differs from the 0.5.0/0.6.x hash | 0 of 38 | not applicable (no bytes) | no |
-| over the region cap (more than 9 regions) | 0 | 0 of 551 | no |
+| over the region cap | 0 (proven by the `toText` row: an unmoved extraction lost nothing) | 0 of 551 with more than 3 distinct descriptions | no |
 | signature result differs, flat join vs one region | 0 | 0 of 551 | no |
 | signature matched but did not veto (`vetoed: false`) | 1 | 1 | never a stop |
 
@@ -78,7 +80,14 @@ two. The floor sweep still reports 4,902 satisfying floors in `[1380, 6281]`, as
 
 - The corpus rows carry regions but no claims, so this shows where vetoes and regions move,
   not which live claims would change verdict - the same limit the 0.6.0 report disclosed.
-- Rows recorded before 0.6.1 include PDF reads extracted with the HTML tag stripper. Those rows
-  are single-region or vetoed either way and cannot carry a join.
+- The recording is one read per URL, under 0.6.0's simplified rung selection (the first 2xx
+  with a body), as the 0.6.0 CHANGELOG disclosed. A page whose OTHER rung carries a join-only
+  signature phrase is unmeasured.
+- The cap counts raw values before decoding, so a page with enough descriptions that decode to
+  nothing (`&nbsp;`, `&#160;`) can push a real description past the cap while the recording
+  shows it as fewer regions. No page in the recording has more than 3 distinct descriptions,
+  but raw counts are not in the recording, so this case is unmeasurable here.
+- No PDF read is among the 551 rows: all 67 pdftotext rows recorded no regions and are
+  skipped.
 - The recording is 2026-09-22's pages. A page that has since grown a ninth distinct description
   or a join-only signature phrase would not appear here.

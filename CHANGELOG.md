@@ -23,7 +23,8 @@ changed its challenge-signature result (`docs/region-movement-0-7-0.md`).
   `--explain-fetch` now says "rule matched, did not veto (page too long)". Measured, one live
   page carries `vetoed: false`, and it is an ordinary article whose prose matched the Turnstile
   pattern ("verify the result. humans remain in control"): a match, not a wall. Additive: an
-  output field gained, none removed.
+  output field gained, none removed. A `firedRule` read back from an evidence file written
+  before 0.7.0 has no `vetoed`; treat its absence as unknown, not as `false`.
 
 ## 0.6.2 - 2026-09-23
 

@@ -138,6 +138,9 @@ It reports:
 can show where vetoes and regions move, not which live claims would change verdict - the same
 limit the 0.6.0 report disclosed. Regions recorded before 0.6.1 include PDF reads extracted with
 the HTML stripper; those rows are vetoed or single-region either way and cannot carry a join.
+*Note, 2026-09-23 (final review):* that PDF subset is empty - all 67 pdftotext rows recorded no
+regions and are skipped. The report's Limits replace this sentence with the two limits that do
+apply: one read per URL, and the cap counting raw values the recording does not carry.
 
 **Hard stops before the release commit:** any page with more than 8 distinct descriptions, or
 any page whose veto changes, is reported to the owner before continuing. A page whose

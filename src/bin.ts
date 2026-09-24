@@ -59,6 +59,14 @@ export function classifyRecheckRun(t: RecheckTally, opts: { readonly failOnGone?
   return 0;
 }
 
+/** The `--explain-fetch` provenance line. A rule that matched without vetoing
+ *  (a signature on a body too long to veto) must not read as having fired. */
+export function explainFetchLine(rule: FiredRule, nowMs: number): string {
+  const age = Math.round((nowMs - Date.parse(rule.lastConfirmed)) / 86_400_000);
+  const what = rule.vetoed ? "rule fired" : "rule matched, did not veto (page too long)";
+  return `        ${what}: ${rule.note} (last confirmed ${age} days ago)`;
+}
+
 /**
  * The per-outcome report lines for `recheck`, pulled out of `main` so THE
  * ACCUSATION GATE IS A PURE FUNCTION A TEST CAN DRIVE DIRECTLY, rather than a
@@ -79,14 +87,6 @@ export function classifyRecheckRun(t: RecheckTally, opts: { readonly failOnGone?
  * renders as "tried: " with nothing named, which is still correct, just
  * silent about the ladder.
  */
-/** The `--explain-fetch` provenance line. A rule that matched without vetoing
- *  (a signature on a body too long to veto) must not read as having fired. */
-export function explainFetchLine(rule: FiredRule, nowMs: number): string {
-  const age = Math.round((nowMs - Date.parse(rule.lastConfirmed)) / 86_400_000);
-  const what = rule.vetoed ? "rule fired" : "rule matched, did not veto (page too long)";
-  return `        ${what}: ${rule.note} (last confirmed ${age} days ago)`;
-}
-
 export function renderOutcome(o: CitationOutcome, n: number, rungsAttempted: readonly string[] = []): string[] {
   const lines: string[] = [];
   // The BUNDLED rules moving is named as a likely cause and changes

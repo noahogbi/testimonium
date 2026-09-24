@@ -146,14 +146,6 @@ function* tagsIn(html: string): Generator<string> {
   }
 }
 
-/** Text a page carries in description attributes, one entry per distinct
- *  value. Harvested AFTER script and style bodies are removed but BEFORE the
- *  tag strip: `<[^>]*>` discards attribute values wholesale - which is why a
- *  page whose only prose lives in its description reads as unreadable -
- *  while a `<meta>` sitting in text no reader's browser actually renders - a
- *  script body, an inert `<template>`, a comment - must not be harvested at
- *  all. Deduplicated: the three tags almost always carry one sentence, and
- *  counting it three times inflates prose toward the 4,500 floor. */
 /** At most this many DISTINCT description values become regions. A resource
  *  bound, not a calibrated threshold, so it lives here and not in THRESHOLDS:
  *  every claim is tested against every region, so an uncapped page costs
@@ -163,6 +155,14 @@ function* tagsIn(html: string): Generator<string> {
  *  page with more than 8 distinct descriptions (spec 0.7.0 section 2). */
 export const MAX_DESCRIPTION_REGIONS = 8;
 
+/** Text a page carries in description attributes, one entry per distinct
+ *  value. Harvested AFTER script and style bodies are removed but BEFORE the
+ *  tag strip: `<[^>]*>` discards attribute values wholesale - which is why a
+ *  page whose only prose lives in its description reads as unreadable -
+ *  while a `<meta>` sitting in text no reader's browser actually renders - a
+ *  script body, an inert `<template>`, a comment - must not be harvested at
+ *  all. Deduplicated: the three tags almost always carry one sentence, and
+ *  counting it three times inflates prose toward the 4,500 floor. */
 function descriptionValues(html: string): string[] {
   const seen = new Set<string>();
   for (const tag of tagsIn(html)) {
