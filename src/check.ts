@@ -14,6 +14,8 @@ import { phraseFound } from "./text/normalize.js";
 import { belowClaimFloor, claimFloorMessage } from "./io/claims.js";
 import { buildResult, type CitationResult } from "./io/evidence.js";
 import type { RuleSet } from "./rules/load.js";
+import type { Rule } from "./rules/challenge.js";
+import type { SignalResult } from "./classify/signals.js";
 
 export interface CheckOptions {
   /** Bring your own reader - a headless browser, a paid proxy - behind the
@@ -40,6 +42,15 @@ export interface CheckOptions {
 // cannot fail a run; run-level policy belongs to the caller and lives in the
 // CLI's classifyRun. An option the function ignores is worse than no option.
 
+/** `firedRule` and whether it decided the verdict, from ONE read. `firedRule`
+ *  is `pathRule ?? sigRule` (classify/signals.ts), so it vetoed exactly when
+ *  the path veto fired, or the signature veto did - a signature on a body at
+ *  or past maxChallengeChars matched and vetoed nothing. */
+function firedRuleOf(c: SignalResult): { rule: Rule; vetoed: boolean } | null {
+  if (!c.firedRule) return null;
+  return { rule: c.firedRule, vetoed: c.signals.challengePath || c.signals.challengeSignature };
+}
+
 /**
  * Reduce every rung's read into one verdict, one evidence list and the read
  * that WON - i.e. the read the verdict and `firedRule` are computed from.
@@ -65,7 +76,7 @@ export interface CheckOptions {
  * provenance. The result stays coherent (provenance always follows the read
  * the verdict was actually computed from), so this is not a defect - only a
  * visible field the escalation call can move without moving the verdict that
- * licenses it.
+ * licenses it. Since 0.7.0 that provenance says so: its `vetoed` is false.
  */
 function assemble(
   claims: readonly string[],
@@ -268,6 +279,6 @@ export async function check(
     // result cannot reach here with this list empty.
     missed: a.v === "unsupported" ? a.missedAll : [],
     isPdfUrl: source.pdfUrl,
-    firedRule: a.won.computed.firedRule,
+    firedRule: firedRuleOf(a.won.computed),
   });
 }

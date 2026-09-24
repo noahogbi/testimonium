@@ -765,11 +765,41 @@ describe("check with a local RuleSet (Task 15)", () => {
     expect(r.firedRule).toEqual({
       lastConfirmed: "2026-08-01",
       note: "local puzzle wall, unknown to the bundled list",
+      vetoed: true,
     });
     // Still no renderable fields on a non-supported verdict - firedRule is
     // provenance, not evidence.
     expect(r).not.toHaveProperty("evidence");
     expect(r).not.toHaveProperty("retrievedAt");
+  });
+
+  it("marks a signature that matched a body too long to veto as vetoed: false", async () => {
+    // The padded-wall trace (README, known gaps): the signature matched, the
+    // body is past maxChallengeChars so it vetoed nothing, and the verdict was
+    // computed as for any page. firedRule stays - it is the only visible trace
+    // of that gap - and now says it did not decide the verdict.
+    const LONG =
+      `<html><body>The committee report states that ${CLAIM}. Please solve the puzzle to continue. ` +
+      `${"Background material about budgets and departmental process. ".repeat(20)}</body></html>`;
+    expect(proseVolume(toText(LONG))).toBeGreaterThanOrEqual(THRESHOLDS.maxChallengeChars);
+    const r = await check("https://e.com/a", [CLAIM], {
+      fetcher: stub({ node: { rawBody: LONG, status: 200 } }, ["node"]),
+      rules: RULES_WITH_LOCAL_SIGNATURE,
+    });
+    expect(r.verdict).toBe("supported");
+    expect(r.firedRule).toEqual({
+      lastConfirmed: "2026-08-01",
+      note: "local puzzle wall, unknown to the bundled list",
+      vetoed: false,
+    });
+  });
+
+  it("marks a challenge-path veto as vetoed: true", async () => {
+    const r = await check("https://e.com/a", [CLAIM], {
+      fetcher: stub({ node: { rawBody: SHORT_WALL_BODY, status: 200, finalUrl: "https://e.com/cdn-cgi/challenge-platform/h/b" } }, ["node"]),
+    });
+    expect(r.verdict).toBe("unreachable");
+    expect(r.firedRule).toEqual({ lastConfirmed: "2026-09-06", note: "Cloudflare challenge platform.", vetoed: true });
   });
 });
 

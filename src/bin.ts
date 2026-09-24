@@ -10,7 +10,7 @@ import type { CitationOutcome } from "./archive/compare.js";
 import { parseGfmFootnotes } from "./adapters/gfm-footnotes.js";
 import { joinClaims, parseClaimsFile, type Joined } from "./io/claims.js";
 import { buildDraft, draftInTheWay, writeDraftFile } from "./io/draft.js";
-import { writeEvidenceFile, type CitationResult } from "./io/evidence.js";
+import { writeEvidenceFile, type CitationResult, type FiredRule } from "./io/evidence.js";
 import { loadRules, type RuleSet } from "./rules/load.js";
 import { VERSION } from "./version.js";
 import { archiveKeyFor, sha256Hex } from "./archive/format.js";
@@ -79,6 +79,14 @@ export function classifyRecheckRun(t: RecheckTally, opts: { readonly failOnGone?
  * renders as "tried: " with nothing named, which is still correct, just
  * silent about the ladder.
  */
+/** The `--explain-fetch` provenance line. A rule that matched without vetoing
+ *  (a signature on a body too long to veto) must not read as having fired. */
+export function explainFetchLine(rule: FiredRule, nowMs: number): string {
+  const age = Math.round((nowMs - Date.parse(rule.lastConfirmed)) / 86_400_000);
+  const what = rule.vetoed ? "rule fired" : "rule matched, did not veto (page too long)";
+  return `        ${what}: ${rule.note} (last confirmed ${age} days ago)`;
+}
+
 export function renderOutcome(o: CitationOutcome, n: number, rungsAttempted: readonly string[] = []): string[] {
   const lines: string[] = [];
   // The BUNDLED rules moving is named as a likely cause and changes
@@ -766,8 +774,7 @@ export async function main(argv: string[]): Promise<number> {
       console.log(`  [${c.n}] supported (${c.claims.length} claims) - ${c.url}`);
     }
     if (flags.has("--explain-fetch") && r.firedRule) {
-      const age = Math.round((Date.now() - Date.parse(r.firedRule.lastConfirmed)) / 86_400_000);
-      console.log(`        rule fired: ${r.firedRule.note} (last confirmed ${age} days ago)`);
+      console.log(explainFetchLine(r.firedRule, Date.now()));
     }
   }
   // not_applicable is signposted, never silenced: a clause resting on a primary
