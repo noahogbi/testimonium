@@ -88,9 +88,20 @@ export const CHALLENGE_PATHS: readonly Rule[] = [
   { pattern: /^https?:\/\/consent\.[^/?#]+([/?#]|$)/, lastConfirmed: "2026-09-11", note: "Consent-wall redirect host, e.g. consent.youtube.com. Anchored to the HOST: the previous path form vetoed any URL containing a /consent/ segment, including a regulator's own guidance on consent, which is a document and not a wall. The tail accepts a path, query, fragment or end-of-string, because curl's url_effective need not add a normalizing slash." },
 ];
 
+/** `pattern.test(s)` from a clean start. A `RuleSet` built in code may carry a
+ *  `g` or `y` regex literal, and RegExp.test on one is stateful across calls:
+ *  it leaves `lastIndex` past a match, so an identical second test starts
+ *  mid-string and misses. A rules FILE cannot produce one - `loadRules` builds
+ *  `new RegExp(pattern)` with no flags. Every matcher here tests through this,
+ *  so none can give two answers to one input. */
+function testFresh(pattern: RegExp, s: string): boolean {
+  pattern.lastIndex = 0;
+  return pattern.test(s);
+}
+
 export function matchesChallengeSignature(text: string, signatures: readonly Rule[] = CHALLENGE_SIGNATURES): Rule | null {
   const n = norm(text);
-  return signatures.find((r) => r.pattern.test(n)) ?? null;
+  return signatures.find((r) => testFresh(r.pattern, n)) ?? null;
 }
 
 /** `matchesChallengeSignature` over extraction regions, never their join: the
@@ -100,26 +111,17 @@ export function matchesChallengeSignature(text: string, signatures: readonly Rul
  *  argument 0.6.0 applied to claims (spec 0.7.0 section 3). Rule order, not
  *  region order, decides which rule is reported, so that when several match,
  *  the answer is the one the flat matcher gave, minus join-only matches.
+
  *
- *  `lastIndex` is reset before each test. A rules FILE cannot set flags -
- *  `loadRules` builds `new RegExp(pattern)` with none - but a programmatic
- *  caller can pass a `RuleSet` built from `g` or `y` regex literals, and
- *  RegExp.test on one is stateful across calls. */
+ *  Tests through `testFresh`, as every matcher here does. */
 export function matchesChallengeSignatureIn(
   regions: readonly string[],
   signatures: readonly Rule[] = CHALLENGE_SIGNATURES,
 ): Rule | null {
   const normed = regions.map(norm);
-  return (
-    signatures.find((r) =>
-      normed.some((n) => {
-        r.pattern.lastIndex = 0;
-        return r.pattern.test(n);
-      }),
-    ) ?? null
-  );
+  return signatures.find((r) => normed.some((n) => testFresh(r.pattern, n))) ?? null;
 }
 
 export function matchesChallengePath(finalUrl: string, paths: readonly Rule[] = CHALLENGE_PATHS): Rule | null {
-  return paths.find((r) => r.pattern.test(finalUrl)) ?? null;
+  return paths.find((r) => testFresh(r.pattern, finalUrl)) ?? null;
 }

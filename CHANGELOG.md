@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.7.1 - 2026-09-24
+
+One correction for programmatic callers; nothing else moves.
+
+- **Every challenge matcher now tests from a clean `lastIndex`.** 0.7.0 reset it only in the
+  per-region signature matcher. The flat signature matcher and the path matcher still gave an
+  identical second call a different answer when a `RuleSet` built in code carried a `g` or `y`
+  regex literal: a match leaves `lastIndex` past it, so the next test starts mid-string and
+  misses. All three now share one reset. No bundled rule carries those flags and a rules file
+  cannot (`loadRules` sets none), so a verdict could only differ for a caller passing its own
+  stateful rules - and for that caller it was wrong.
+- A test now pins that an escalated read's `firedRule` and `vetoed` come from the read that
+  won, which 0.7.0 guaranteed by construction.
+
 ## 0.7.0 - 2026-09-23
 
 Three changes to what the tool computes or reports, each measured offline against the 38

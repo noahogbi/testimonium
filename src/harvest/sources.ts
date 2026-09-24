@@ -12,11 +12,11 @@ export interface HarvestRead {
   /** The read's extraction regions (`SignalResult.regions`), which proposals
    *  are cut from: the body plus each distinct description value, never
    *  joined. `harvest()` calls `spansAgainst` once PER region instead of once
-   *  over their flat join, so no candidate it
-   *  proposes can be a run that exists only where two regions' text happens
-   *  to sit next to each other (Task 5; spec criterion 3). Regions are not
-   *  positionally labelled - an empty one is omitted - so a caller must
-   *  search this list, never index into it. */
+   *  over their flat join, so no candidate it proposes can be a run that
+   *  exists only where two regions' text happens to sit next to each other
+   *  (Task 5; spec criterion 3). Regions are not positionally labelled - an
+   *  empty one is omitted - so a caller must search this list, never index
+   *  into it. */
   readonly regions: readonly string[];
   /** `regions.map(norm)`, computed ONCE per read (Fable F18). The frequency
    *  filter asks every other source's every read about every span; before
