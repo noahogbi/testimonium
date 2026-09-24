@@ -1,7 +1,7 @@
 import { phraseFound } from "../text/normalize.js";
 import { plainTextRegions, toTextRegions } from "../text/extract.js";
 import { THRESHOLDS, proseVolume, slugLabelOverlap } from "./thresholds.js";
-import { matchesChallengePath, matchesChallengeSignature, type Rule } from "../rules/challenge.js";
+import { matchesChallengePath, matchesChallengeSignatureIn, type Rule } from "../rules/challenge.js";
 import type { RuleSet } from "../rules/load.js";
 import type { Signals } from "./verdict.js";
 
@@ -159,7 +159,9 @@ export function computeSignals(input: SignalInput): SignalResult {
   const inAnyRegion = (c: string) => regions.some((r) => phraseFound(r, c));
   const matchedClaims = input.claims.filter(inAnyRegion);
   const missedClaims = input.claims.filter((c) => !inAnyRegion(c));
-  const sigRule = matchesChallengeSignature(text, input.rules?.signatures);
+  // Within one region, never across a join (spec 0.7.0 section 3). The length
+  // conjunction below still measures the whole extraction.
+  const sigRule = matchesChallengeSignatureIn(regions, input.rules?.signatures);
   const pathRule = matchesChallengePath(input.finalUrl, input.rules?.paths);
 
   return {
