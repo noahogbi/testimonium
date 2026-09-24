@@ -22,6 +22,7 @@ import {
   claimsPathFor,
   draftPathFor,
   evidencePathFor,
+  explainFetchLine,
   failOnFor,
   harvestSummaryLine,
   jsonOutcome,
@@ -1021,4 +1022,18 @@ describe("main(): CLI --identity pass-through to each command (fix round 1, Impo
       },
     ),
   );
+});
+
+describe("explainFetchLine", () => {
+  const NOW = Date.parse("2026-09-23T00:00:00.000Z");
+  it("says a vetoing rule fired", () => {
+    expect(explainFetchLine({ lastConfirmed: "2026-09-08", note: "Cloudflare noscript line", vetoed: true }, NOW)).toBe(
+      "        rule fired: Cloudflare noscript line (last confirmed 15 days ago)",
+    );
+  });
+  it("says a non-vetoing match did not decide the verdict", () => {
+    expect(explainFetchLine({ lastConfirmed: "2026-09-08", note: "Cloudflare noscript line", vetoed: false }, NOW)).toBe(
+      "        rule matched, did not veto (page too long): Cloudflare noscript line (last confirmed 15 days ago)",
+    );
+  });
 });

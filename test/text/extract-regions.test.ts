@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { toText, toTextRegions } from "../../src/text/extract.js";
+import { MAX_DESCRIPTION_REGIONS, toText, toTextRegions } from "../../src/text/extract.js";
 
 describe("toTextRegions", () => {
   it("joins back to exactly what toText returns, over every fixture", () => {
@@ -65,5 +65,24 @@ describe("toTextRegions", () => {
     // Position is not a label. Callers must identify a region by searching it.
     const h = `<meta name="description" content="Real content."><body>   </body>`;
     expect(toTextRegions(h)).toEqual(["Real content."]);
+  });
+});
+
+describe("the description region cap", () => {
+  const BODY = "<body><p>Body.</p></body>";
+  const metas = (vals: readonly string[]) => vals.map((v) => `<meta name="description" content="${v}">`).join("");
+
+  it("keeps at most MAX_DESCRIPTION_REGIONS distinct descriptions, even from 5,000", () => {
+    // Every claim is tested against every region, so an uncapped hostile page
+    // costs claims x regions: 5,000 descriptions and 50 claims took ~2.4 s at
+    // 0.6.2. The body is never capped.
+    const vals = Array.from({ length: 5000 }, (_, i) => `Distinct description ${i}.`);
+    expect(MAX_DESCRIPTION_REGIONS).toBe(8);
+    expect(toTextRegions(metas(vals) + BODY)).toEqual(["Body.", ...vals.slice(0, 8)]);
+  });
+
+  it("drops the ninth distinct value, and a duplicate does not use up a slot", () => {
+    const vals = ["V0.", "V0.", "V1.", "V2.", "V3.", "V4.", "V5.", "V6.", "V7.", "V8."];
+    expect(toTextRegions(metas(vals) + BODY)).toEqual(["Body.", "V0.", "V1.", "V2.", "V3.", "V4.", "V5.", "V6.", "V7."]);
   });
 });

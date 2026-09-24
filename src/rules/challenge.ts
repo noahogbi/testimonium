@@ -93,6 +93,33 @@ export function matchesChallengeSignature(text: string, signatures: readonly Rul
   return signatures.find((r) => r.pattern.test(n)) ?? null;
 }
 
+/** `matchesChallengeSignature` over extraction regions, never their join: the
+ *  first rule IN RULE ORDER whose pattern matches some single region. A phrase
+ *  that exists only across the seam between the body and a description, or
+ *  between two descriptions, is nowhere on the page as a sequence - the same
+ *  argument 0.6.0 applied to claims (spec 0.7.0 section 3). Rule order, not
+ *  region order, decides which rule is reported, so that when several match,
+ *  the answer is the one the flat matcher gave, minus join-only matches.
+ *
+ *  `lastIndex` is reset before each test. A rules FILE cannot set flags -
+ *  `loadRules` builds `new RegExp(pattern)` with none - but a programmatic
+ *  caller can pass a `RuleSet` built from `g` or `y` regex literals, and
+ *  RegExp.test on one is stateful across calls. */
+export function matchesChallengeSignatureIn(
+  regions: readonly string[],
+  signatures: readonly Rule[] = CHALLENGE_SIGNATURES,
+): Rule | null {
+  const normed = regions.map(norm);
+  return (
+    signatures.find((r) =>
+      normed.some((n) => {
+        r.pattern.lastIndex = 0;
+        return r.pattern.test(n);
+      }),
+    ) ?? null
+  );
+}
+
 export function matchesChallengePath(finalUrl: string, paths: readonly Rule[] = CHALLENGE_PATHS): Rule | null {
   return paths.find((r) => r.pattern.test(finalUrl)) ?? null;
 }

@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.7.0 - 2026-09-23
+
+Three changes to what the tool computes or reports, each measured offline against the 38
+bundled fixtures and the regions 0.6.0 recorded for 618 live URLs (fetched 2026-09-22):
+nothing moved. No fixture or page changed its `toText` output, crossed the region cap, or
+changed its challenge-signature result (`docs/region-movement-0-7-0.md`).
+
+- **At most eight distinct description values become regions.** Every claim is tested against
+  every region, so a page with thousands of `description` tags cost claims x regions: 50 claims
+  on a 5,000-description page took ~2.4 s, and now take 24 ms over 9 regions. No real page in
+  the 618-URL run carried more than 3 distinct descriptions. Past the cap text is removed, which
+  is the accusation direction, so it is only reachable on a page with more than 8.
+- **A challenge signature must match within one extraction region.** It matched against the
+  join of the page body and its description values, so a signature phrase split across that
+  seam - text that is nowhere on the page as a sequence - could veto a short page. The one
+  flat-join read 0.6.0 left. Fewer vetoes is the only direction this can move; measured, it
+  moved none. `slugLabelOverlap` is unchanged: no verdict reads it.
+- **`firedRule` gains `vetoed`.** True for a challenge-path veto and for a signature veto on a
+  short body; false for a signature that matched a body too long to veto. That case is kept -
+  it is the only trace of a wall padded past every veto - but it no longer reads as a veto, and
+  `--explain-fetch` now says "rule matched, did not veto (page too long)". Measured, one live
+  page carries `vetoed: false`, and it is an ordinary article whose prose matched the Turnstile
+  pattern ("verify the result. humans remain in control"): a match, not a wall. Additive: an
+  output field gained, none removed. A `firedRule` read back from an evidence file written
+  before 0.7.0 has no `vetoed`; treat its absence as unknown, not as `false`.
+
 ## 0.6.2 - 2026-09-23
 
 Closes what 0.6.0 recorded as left open, and **moves no verdict**: `toText` output and every

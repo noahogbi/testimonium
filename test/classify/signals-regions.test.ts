@@ -31,4 +31,19 @@ describe("per-region matching", () => {
               `<body><p>Revenue was 12</p></body>`;
     expect(sig(h, ["billion users grew"]).signals.matched).toBe(1);
   });
+
+  it("a short page whose signature phrase exists only across a region join is not vetoed by it", () => {
+    // Measured 2026-09-23 at 0.6.2: the join-only page below WAS vetoed
+    // (challengeSignature true, firedRule "JS-disabled shell, imperative phrasing.").
+    const joinOnly =
+      `<meta name="description" content="javascript on to read this page.">` +
+      `<html><body><p>Our report on transit spending. Please turn</p></body></html>`;
+    const inRegion = `<html><body><p>Our report on transit spending. Please turn javascript on to read this page.</p></body></html>`;
+    const claims = ["our report on transit spending"];
+    expect(sig(joinOnly, claims).regions).toEqual(["Our report on transit spending. Please turn", "javascript on to read this page."]);
+    expect(sig(joinOnly, claims).signals.challengeSignature).toBe(false);
+    expect(sig(joinOnly, claims).firedRule).toBeNull();
+    expect(sig(inRegion, claims).signals.challengeSignature).toBe(true);
+    expect(sig(inRegion, claims).firedRule?.note).toBe("JS-disabled shell, imperative phrasing.");
+  });
 });

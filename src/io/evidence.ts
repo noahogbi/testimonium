@@ -16,6 +16,11 @@ import type { Rule } from "../rules/challenge.js";
 export interface FiredRule {
   readonly lastConfirmed: string;
   readonly note: string;
+  /** True when this rule decided the verdict: every path rule, and a signature
+   *  rule when the body was short enough for it to veto. False for a signature
+   *  that matched a body too long to veto - reported because that is the only
+   *  trace of a wall padded past every veto (README, known gaps). Added 0.7.0. */
+  readonly vetoed: boolean;
 }
 
 export interface CitationResult {
@@ -60,9 +65,11 @@ export interface BuildInput {
    *  and an HTML url never uses pdftotext. Without it the flag is wrong in
    *  both directions. */
   readonly isPdfUrl: boolean;
-  /** The full Rule that fired, if any - `computeSignals`'s output. Stripped
-   *  down to `{ lastConfirmed, note }` on the way into `CitationResult`. */
-  readonly firedRule?: Rule | null;
+  /** The full Rule that fired, if any - `computeSignals`'s output - and
+   *  whether it vetoed. Stripped down to `{ lastConfirmed, note, vetoed }` on
+   *  the way into `CitationResult`. One object, so the rule and its `vetoed`
+   *  can only come from the same read. */
+  readonly firedRule?: { readonly rule: Rule; readonly vetoed: boolean } | null;
 }
 
 /**
@@ -113,7 +120,15 @@ export function buildResult(input: BuildInput): CitationResult {
     // verdict at all, unlike evidence/retrievedAt below (gated to
     // "supported" and "unsupported" since 0.2.0 section 2; still never on
     // "unreachable" or "unclaimed").
-    ...(input.firedRule ? { firedRule: { lastConfirmed: input.firedRule.lastConfirmed, note: input.firedRule.note } } : {}),
+    ...(input.firedRule
+      ? {
+          firedRule: {
+            lastConfirmed: input.firedRule.rule.lastConfirmed,
+            note: input.firedRule.rule.note,
+            vetoed: input.firedRule.vetoed,
+          },
+        }
+      : {}),
   };
   if (input.verdict === "unsupported") {
     return { ...base, missed: input.missed, evidence: input.evidence, retrievedAt: new Date().toISOString() };
