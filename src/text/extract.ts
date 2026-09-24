@@ -154,6 +154,15 @@ function* tagsIn(html: string): Generator<string> {
  *  script body, an inert `<template>`, a comment - must not be harvested at
  *  all. Deduplicated: the three tags almost always carry one sentence, and
  *  counting it three times inflates prose toward the 4,500 floor. */
+/** At most this many DISTINCT description values become regions. A resource
+ *  bound, not a calibrated threshold, so it lives here and not in THRESHOLDS:
+ *  every claim is tested against every region, so an uncapped page costs
+ *  claims x regions. Measured over 0.6.0's 618-URL run, no real page carried
+ *  more than 3 distinct descriptions; 8 is more than twice that. Past the cap
+ *  text is REMOVED, which is the accusation direction - reachable only on a
+ *  page with more than 8 distinct descriptions (spec 0.7.0 section 2). */
+export const MAX_DESCRIPTION_REGIONS = 8;
+
 function descriptionValues(html: string): string[] {
   const seen = new Set<string>();
   for (const tag of tagsIn(html)) {
@@ -179,6 +188,9 @@ function descriptionValues(html: string): string[] {
     // would change how many regions a page yields and therefore move
     // `toText`'s byte output, which this release holds fixed.
     if (value) seen.add(value);
+    // First 8 DISTINCT raw values in document order. A duplicate never grows
+    // `seen`, so it cannot use up a slot.
+    if (seen.size === MAX_DESCRIPTION_REGIONS) break;
   }
   return [...seen];
 }
