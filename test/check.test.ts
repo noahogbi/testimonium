@@ -40,8 +40,8 @@ describe("check", () => {
     // 0.8.0 added the redirect gate this test used to pin the absence of
     // (spec 0.8.0 section 5). It fires only when a read lands on a site root
     // or an ancestor of the cited path. This redirect lands on a different
-    // article on a different host - the shape of every one of the 15
-    // legitimate redirects measured on 2026-09-25 - so it passes the gate,
+    // article on a different host - the shape of the cross-site moves among
+    // the 15 legitimate redirects measured on 2026-09-25 - so it passes the gate,
     // stays `supported`, and carries no redirectedTo.
     const r = await check("https://e.com/committee-report", ["spending rose sharply"], {
       fetcher: stub({
@@ -65,8 +65,30 @@ describe("check", () => {
     expect(r.verdict).toBe("unreachable");
     expect(r.redirectedTo).toBe("https://e.com/");
     expect(r).not.toHaveProperty("missed");
-    // A gated read is not an accusation, so it does not spend the escalation.
-    expect(r.rungsAttempted).toEqual(["node"]);
+    // The miss still spends the escalation (it keys on the pre-gate verdict):
+    // curl here reads nothing, so node's moved read wins and is gated again.
+    expect(r.rungsAttempted).toEqual(["node", "curl"]);
+  });
+
+  it("still climbs when the first rung was bounced to the root, and attests from the rung that read the page", async () => {
+    // Final review, Important 1. A UA-dependent bounce - node sent to the
+    // homepage, curl served the cited page - is ordinary bot handling. 0.7.1
+    // climbed on the miss and attested from curl. The gate must not suppress
+    // that climb: escalation keys on the PRE-gate verdict, and the gate is
+    // applied again to whatever the climb returns.
+    const r = await check("https://e.com/reports/2024-annual", ["spending rose sharply"], {
+      fetcher: stub({
+        node: {
+          rawBody: `<html><body>${"Welcome to our homepage, with news and features from across the site. ".repeat(120)}</body></html>`,
+          status: 200,
+          finalUrl: "https://e.com/",
+        },
+        curl: { rawBody: LONG_PROSE, status: 200 },
+      }),
+    });
+    expect(r.rungsAttempted).toEqual(["node", "curl"]);
+    expect(r.verdict).toBe("supported");
+    expect(r).not.toHaveProperty("redirectedTo");
   });
 
   it("still attests a claim found on a moved-away page, and says where it was served from", async () => {

@@ -9,16 +9,22 @@
  * root or an ancestor of its path. So "moved away" is exactly those two shapes,
  * which is the removed-page-to-homepage failure `check()` must not accuse over,
  * and fires on none of the 15. Any path change would have fired on all 15; a
- * cross-site clause, on the two domain migrations.
+ * cross-site clause, on the two READABLE domain migrations (four cross-site
+ * URLs in all).
  *
  * Scheme, host, query and fragment are not compared: a homepage on another site
- * is still a homepage. Paths are percent-decoded (raw on a malformed escape),
+ * is still a homepage. One exception: a cited ROOT that carries a query
+ * (`/?p=123`, a WordPress short link) addresses a page, so landing on the bare
+ * root counts as moved away. Paths are percent-decoded (raw on a malformed escape),
  * lowercased and stripped of trailing slashes. An empty or unparseable URL is no
  * evidence of a move.
  *
  * KNOWN LIMIT: a removed page redirected to an unrelated ARTICLE path is not
  * caught - by URL shape it is indistinguishable from the 10 legitimate
- * same-site moves measured above (README, measured limits).
+ * same-site moves measured above (README, measured limits). And the opposite
+ * direction: a canonical rewrite of the cited page itself to the root
+ * (`/index.html` -> `/`, `/home` -> `/`) reads as moved away, so a genuine miss
+ * there is withheld as `unreachable` - the safe direction, and disclosed.
  */
 export function movedAway(cited: string, landed: string): boolean {
   if (!landed) return false;
@@ -27,7 +33,9 @@ export function movedAway(cited: string, landed: string): boolean {
   if (!c || !l) return false;
   const pc = normPath(c);
   const pl = normPath(l);
-  if (pl === "/") return pc !== "/";
+  // A cited root WITH a query (`/?p=123`) addresses a page, not the homepage:
+  // landing on the bare root, no query, is a move away (final review, 0.8.0).
+  if (pl === "/") return pc !== "/" || (c.search !== "" && l.search === "");
   return pc.startsWith(pl + "/");
 }
 

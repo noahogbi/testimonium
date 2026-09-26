@@ -12,7 +12,11 @@ One gate the README called unbuilt, chosen from a live measurement.
   that page is really there, so `supported` stands. Either way the result carries a new
   optional `redirectedTo`, and the CLI prints "moved to ..." or "served from ...". When
   escalation reaches a second rung, a readable read that stayed on the cited page is preferred
-  to one that moved, so a genuine accusation from the unmoved rung is kept.
+  to one that moved, so a genuine accusation from the unmoved rung is kept. The escalation
+  itself still fires on a miss before the gate, so a first rung bounced to the homepage while
+  the next is served the cited page still attests, as in 0.7.1. A cited root carrying a query
+  (`/?p=123`, a WordPress short link) counts as a page, so its redirect to the bare homepage is
+  gated too.
 - **Why the rule is that narrow.** All 618 URLs cited by published bulletin issues were read on
   2026-09-25 (`docs/data/redirects-2026-09-25/`): 603 landed on the cited page, and the 15 that
   redirected were every one the same article at a new address - a dropped section segment, a
@@ -21,7 +25,9 @@ One gate the README called unbuilt, chosen from a live measurement.
   no verdict in that corpus, and its effect is pinned by constructed tests
   (`docs/redirect-movement-0-8-0.md`).
 - **Still not caught:** a removed page redirected to an unrelated article path, which by URL
-  shape is indistinguishable from the legitimate moves above.
+  shape is indistinguishable from the legitimate moves above. **Over-caught, in the safe
+  direction:** a canonical rewrite of the cited page itself to the root (`/index.html` -> `/`)
+  reads as moved away, so a genuine miss there becomes `unreachable`.
 
 Additive: `CitationResult.redirectedTo` gained, nothing removed. Verdicts can move only from
 `unsupported` to `unreachable`, never toward an accusation.

@@ -53,7 +53,9 @@ under `/legislation/billstatus` (a mutation of `moved.ts` that drops the boundar
 - `test/classify/moved.test.ts`: roots on the same and other hosts, ancestors, the 15 real
   redirects, same-page variants, children, cited roots, siblings, bad input, encodings.
 - `test/check.test.ts`: a miss on a root redirect is `unreachable` with `redirectedTo` and
-  does not spend the escalation; a claim found there is `supported` with `redirectedTo`; with
+  still spends the escalation, since that keys on the verdict before the gate; a first rung
+  bounced to the root while curl reads the cited page is `supported` from curl, as in 0.7.1;
+  a claim found is `supported` with `redirectedTo`; with
   the accusation on the unmoved rung and curl landing on the root with more prose, the verdict
   is `unsupported` from node, with no `redirectedTo`; a redirect to another host's article still
   attests with no `redirectedTo`.

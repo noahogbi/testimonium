@@ -60,7 +60,7 @@ export function classifyRecheckRun(t: RecheckTally, opts: { readonly failOnGone?
 }
 
 /** The `unreachable` report line. Silent to a reader, NEVER to the author:
- *  URL, where it was moved to if the redirect gate withheld an accusation
+ *  URL, where the winning read landed when it moved away from the cited URL
  *  (spec 0.8.0), and rung history. */
 export function unreachableLine(n: number, url: string, r: CitationResult): string {
   const moved = r.redirectedTo ? `moved to ${r.redirectedTo}; ` : "";

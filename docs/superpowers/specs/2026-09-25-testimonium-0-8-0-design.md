@@ -97,6 +97,14 @@ In `check.ts` `assemble`:
 (`continueReading`); a gated read is no longer an accusation, so it no longer triggers that
 climb. A second rung reached for other reasons is judged by the same rule.
 
+*Note, 2026-09-25 (final review):* the sentence above was wrong, and so was the code that
+followed it. Suppressing the climb lost an attestation 0.7.1 made: a first rung bounced to the
+root by UA-dependent bot handling, with the next rung served the cited page, went from
+`supported` to `unreachable`. The climb now keys on the verdict BEFORE the gate, and the gate
+is applied again to what the climb returns, so the only verdict movement left is
+`unsupported` to `unreachable`. Also from the review: a cited root with a query
+(`/?p=123`) is treated as a page, not the root.
+
 **`reachability()` and `harvest()` are unchanged.** Reachability accuses nobody; harvest keeps
 its broader path-change report, which asks the author to look rather than deciding anything.
 
@@ -118,7 +126,8 @@ its broader path-change report, which asks the author to look rather than decidi
 ## 6. Measurement and release
 
 - **Committed data:** `docs/data/redirects-2026-09-25/redirects.ndjson` (618 rows, ~219 KB) and
-  `analyze.mjs`, beside a short README naming the fetch date, the identity string used (no
+  `measure.mjs` (the script as it ran; the analysis is `scripts/redirect-movement-0-8-0.mjs`),
+  beside a short README naming the fetch date, the identity string used (no
   contact address, so sec.gov rows may read as unreachable), and that a re-run will not
   reproduce it.
 - **Movement:** with the committed recording, report how many judged reads `movedAway` fires

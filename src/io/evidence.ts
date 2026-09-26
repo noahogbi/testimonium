@@ -54,9 +54,11 @@ export interface CitationResult {
   readonly firedRule?: FiredRule;
   /** Where the winning read landed, present ONLY when it moved away from the
    *  cited URL - a site root or an ancestor of the cited path (classify/moved.ts).
-   *  On `unreachable` it says why the tool would not accuse; on `supported`, that
-   *  the claim was found on the page the cited URL now serves, not the one the
-   *  author cited. Added 0.8.0. */
+   *  It names where the read landed, on any verdict. On `unreachable` that is
+   *  usually why the tool would not accuse (the redirect gate), though a veto on
+   *  that read - a 404 served at the root - can be the reason instead; on
+   *  `supported`, the claim was found on the page the cited URL now serves, not
+   *  the one the author cited. Added 0.8.0. */
   readonly redirectedTo?: string;
 }
 

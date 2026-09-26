@@ -33,6 +33,19 @@ describe("movedAway", () => {
     expect(movedAway("https://e.com/a/%E0%A4%A/b", "https://e.com/a/%E0%A4%A")).toBe(true);
   });
 
+  it("treats a query-addressed page at the root as a page, not the root", () => {
+    // Final review, Important 2. `/?p=123` (WordPress short links, `?id=`,
+    // `?article=`) has path `/`, so a removal redirect to the bare homepage
+    // read as "cited root, never moved" and was still accused.
+    expect(movedAway("https://e.com/?p=123", "https://e.com/")).toBe(true);
+    expect(movedAway("https://e.com/?p=123", "https://e.com")).toBe(true);
+    // Narrow: a canonical move to the article's own path is not moved away,
+    // nor is the same query, nor a landing that still carries a query.
+    expect(movedAway("https://e.com/?p=123", "https://e.com/2024/post/")).toBe(false);
+    expect(movedAway("https://e.com/?p=123", "https://e.com/?p=123")).toBe(false);
+    expect(movedAway("https://e.com/?p=123", "https://e.com/?lang=en")).toBe(false);
+  });
+
   it("does not fire on any of the 15 redirects measured on 2026-09-25 - each is the same article at a new address", () => {
     const MEASURED: [string, string][] = [
       ["https://www.euronews.com/my-europe/2026/09/10/the-eu-got-access-to-anthropics-most-powerful-model-three-months-later", "https://www.euronews.com/2026/09/10/the-eu-got-access-to-anthropics-most-powerful-model-three-months-later"],

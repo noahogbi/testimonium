@@ -83,7 +83,7 @@ function assemble(
   url: string,
   claims: readonly string[],
   reads: readonly Read[],
-): { v: Verdict; evidence: Evidence[]; missedAll: string[]; won: Read } {
+): { v: Verdict; judged: Verdict; evidence: Evidence[]; missedAll: string[]; won: Read } {
   // A full match is its own proof of a read (verdict.ts), so a rung that
   // reached `supported` settles it. Discarding that read merely because a later
   // rung returned a longer body is how a citation the tool ALREADY verified
@@ -177,7 +177,7 @@ function assemble(
     return [{ claims: [claim], excerpt, rung: r.rung }];
   });
 
-  return { v, evidence: dedupeEvidence(evidence), missedAll, won };
+  return { v, judged, evidence: dedupeEvidence(evidence), missedAll, won };
 }
 
 /**
@@ -271,7 +271,12 @@ export async function check(
   // This fires on EVERY unsupported with a rung untried, which includes the
   // ordinary healthy-page case, not just a shell. That cost is accepted; the
   // origin retried on every miss too.
-  if (a.v === "unsupported" && hasUntriedClimbableRung(source.attempted, fetcher.rungs, source.pdfUrl)) {
+  // Keyed on the PRE-gate verdict (final review, 0.8.0): a first rung bounced
+  // to the site root is gated to `unreachable`, but a later rung may be served
+  // the cited page - UA-dependent bot handling - and 0.7.1 climbed and attested
+  // from it. The climb costs the one fetch 0.7.1 already spent, and the gate is
+  // applied again to whatever the second assemble returns.
+  if (a.judged === "unsupported" && hasUntriedClimbableRung(source.attempted, fetcher.rungs, source.pdfUrl)) {
     const more = await continueReading(url, claims, readOpts, source);
     reads = more.reads;
     attempted = more.attempted;

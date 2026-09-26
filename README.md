@@ -310,8 +310,12 @@ will eventually surprise a real user if it isn't said here first.
   path cannot accuse - it is `unreachable`, and the result carries
   `redirectedTo`. A redirect after removal to an unrelated ARTICLE path is
   still judged on its own, because by URL shape it cannot be told from a
-  legitimate move (`docs/redirect-movement-0-8-0.md` measured 15 of those and
-  no root or ancestor redirect at all). `harvest` compares it more broadly,
+  legitimate move (`docs/redirect-movement-0-8-0.md` measured 15 legitimate moves,
+  and no root or ancestor redirect at all). A cited root with a query
+  (`/?p=123`) counts as a page, so its redirect to the bare homepage is gated
+  too; a canonical rewrite of a page to the root (`/index.html` -> `/`) reads
+  as moved away, which withholds a genuine accusation there - the safe
+  direction. `harvest` compares it more broadly,
   reporting a proposal from a read whose final path differs from the cited
   path at all, and gates on nothing. A vetoed
   wall on the first rung leaves no trace on such a result beyond
