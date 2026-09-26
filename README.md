@@ -301,15 +301,19 @@ will eventually surprise a real user if it isn't said here first.
   ACCEPTED EXPOSURE in `test/check.test.ts`.
   The route is not specific to error chrome: any readable read reached after
   a vetoed or sub-floor one is judged on its own, whatever document it is -
-  a soft-404 landing page, the target of a redirect after removal, a
+  a soft-404 landing page, a redirect after removal to another article, a
   mirror's home page - because no signal the classifier gates on
   distinguishes the same page at 200 from a different document at 200 (the
   classifier computes slug overlap and the head markers and gates on
-  neither; the GATE also never compares a read's `finalUrl` with the URL it
-  was asked for, so a redirect away from the citation is observable and, in
-  `check`, unobserved - a gate left unbuilt, not a limit of the signals.
-  `harvest` does compare it, and reports a proposal from a read whose final
-  path differs from the cited path; it gates on nothing either). A vetoed
+  neither). Since 0.8.0 `check` does compare a read's `finalUrl` with the
+  cited URL: a read that landed on a site root or an ancestor of the cited
+  path cannot accuse - it is `unreachable`, and the result carries
+  `redirectedTo`. A redirect after removal to an unrelated ARTICLE path is
+  still judged on its own, because by URL shape it cannot be told from a
+  legitimate move (`docs/redirect-movement-0-8-0.md` measured 15 of those and
+  no root or ancestor redirect at all). `harvest` compares it more broadly,
+  reporting a proposal from a read whose final path differs from the cited
+  path at all, and gates on nothing. A vetoed
   wall on the first rung leaves no trace on such a result beyond
   `rungsAttempted`; a sub-floor read leaves one whenever it matched a claim
   no readable read carried, since its matches still enter the union and drop

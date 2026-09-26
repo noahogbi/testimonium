@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.8.0 - 2026-09-25
+
+One gate the README called unbuilt, chosen from a live measurement.
+
+- **`check` no longer accuses over a page the cited URL redirected away from.** A cited page
+  that is removed and redirected to its site's homepage or a section landing page was read,
+  judged as a document, found not to carry the claims, and reported `unsupported` - an
+  accusation over a page the author never cited. Now a read that lands on a **site root** or an
+  **ancestor of the cited path** cannot accuse: the verdict is `unreachable`. A claim found on
+  that page is really there, so `supported` stands. Either way the result carries a new
+  optional `redirectedTo`, and the CLI prints "moved to ..." or "served from ...". When
+  escalation reaches a second rung, a readable read that stayed on the cited page is preferred
+  to one that moved, so a genuine accusation from the unmoved rung is kept.
+- **Why the rule is that narrow.** All 618 URLs cited by published bulletin issues were read on
+  2026-09-25 (`docs/data/redirects-2026-09-25/`): 603 landed on the cited page, and the 15 that
+  redirected were every one the same article at a new address - a dropped section segment, a
+  renamed post, a stripped leading zero, a domain move. None landed on a root or an ancestor.
+  "Any path change" would have fired on all 15; this rule fires on none. It therefore moves
+  no verdict in that corpus, and its effect is pinned by constructed tests
+  (`docs/redirect-movement-0-8-0.md`).
+- **Still not caught:** a removed page redirected to an unrelated article path, which by URL
+  shape is indistinguishable from the legitimate moves above.
+
+Additive: `CitationResult.redirectedTo` gained, nothing removed. Verdicts can move only from
+`unsupported` to `unreachable`, never toward an accusation.
+
 ## 0.7.1 - 2026-09-24
 
 One correction for programmatic callers; nothing else moves.
