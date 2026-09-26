@@ -52,6 +52,14 @@ export interface CitationResult {
   readonly evidence?: readonly Evidence[];
   readonly retrievedAt?: string;
   readonly firedRule?: FiredRule;
+  /** Where the winning read landed, present ONLY when it moved away from the
+   *  cited URL - a site root or an ancestor of the cited path (classify/moved.ts).
+   *  It names where the read landed, on any verdict. On `unreachable` that is
+   *  usually why the tool would not accuse (the redirect gate), though a veto on
+   *  that read - a 404 served at the root - can be the reason instead; on
+   *  `supported`, the claim was found on the page the cited URL now serves, not
+   *  the one the author cited. Added 0.8.0. */
+  readonly redirectedTo?: string;
 }
 
 export interface BuildInput {
@@ -70,6 +78,8 @@ export interface BuildInput {
    *  the way into `CitationResult`. One object, so the rule and its `vetoed`
    *  can only come from the same read. */
   readonly firedRule?: { readonly rule: Rule; readonly vetoed: boolean } | null;
+  /** The winning read's finalUrl when it moved away; see CitationResult. */
+  readonly redirectedTo?: string;
 }
 
 /**
@@ -129,6 +139,7 @@ export function buildResult(input: BuildInput): CitationResult {
           },
         }
       : {}),
+    ...(input.redirectedTo ? { redirectedTo: input.redirectedTo } : {}),
   };
   if (input.verdict === "unsupported") {
     return { ...base, missed: input.missed, evidence: input.evidence, retrievedAt: new Date().toISOString() };

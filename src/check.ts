@@ -16,6 +16,7 @@ import { buildResult, type CitationResult } from "./io/evidence.js";
 import type { RuleSet } from "./rules/load.js";
 import type { Rule } from "./rules/challenge.js";
 import type { SignalResult } from "./classify/signals.js";
+import { movedAway } from "./classify/moved.js";
 
 export interface CheckOptions {
   /** Bring your own reader - a headless browser, a paid proxy - behind the
@@ -79,9 +80,10 @@ function firedRuleOf(c: SignalResult): { rule: Rule; vetoed: boolean } | null {
  * licenses it. Since 0.7.0 that provenance says so: its `vetoed` is false.
  */
 function assemble(
+  url: string,
   claims: readonly string[],
   reads: readonly Read[],
-): { v: Verdict; evidence: Evidence[]; missedAll: string[]; won: Read } {
+): { v: Verdict; judged: Verdict; evidence: Evidence[]; missedAll: string[]; won: Read } {
   // A full match is its own proof of a read (verdict.ts), so a rung that
   // reached `supported` settles it. Discarding that read merely because a later
   // rung returned a longer body is how a citation the tool ALREADY verified
@@ -111,7 +113,12 @@ function assemble(
   // moves. (Its one inherited shape, a full match assembled across unvetoed
   // sub-floor reads, is pinned as an accepted exposure in check.test.ts.)
   const largest = reads.reduce((a, b) => (b.computed.signals.proseChars > a.computed.signals.proseChars ? b : a));
-  const won = proven ?? bestReadable(reads) ?? largest;
+  // A readable read that STAYED on the cited page is preferred to one that
+  // moved away (spec 0.8.0 section 4): escalation can reach a second rung that
+  // redirected to the site root with more prose, and letting it win would turn
+  // the unmoved rung's genuine accusation into `unreachable`.
+  const stayed = reads.filter((r) => !movedAway(url, r.computed.finalUrl));
+  const won = proven ?? bestReadable(stayed) ?? bestReadable(reads) ?? largest;
 
   // A claim located by ANY rung is proven present - a match is proof of a read.
   // Assembling across reads is what stops an `unsupported` verdict that names
@@ -135,7 +142,12 @@ function assemble(
   }
   const missedAll = claims.filter((c) => !locatedBy.has(c));
 
-  const v = verdict({ ...won.computed.signals, matched: claims.length - missedAll.length });
+  const judged = verdict({ ...won.computed.signals, matched: claims.length - missedAll.length });
+  // THE REDIRECT GATE (spec 0.8.0 section 2). A read that landed on a site root
+  // or an ancestor of the cited path is not the page the author cited, so a
+  // miss there accuses nobody. Only the accusation is gated: a claim FOUND on
+  // that page is really there, and `supported` stands with redirectedTo.
+  const v = judged === "unsupported" && movedAway(url, won.computed.finalUrl) ? "unreachable" : judged;
 
   // Each claim's excerpt and rung come from the read that actually LOCATED it.
   // Quoting the winning read for a claim another rung found would attach a
@@ -165,7 +177,7 @@ function assemble(
     return [{ claims: [claim], excerpt, rung: r.rung }];
   });
 
-  return { v, evidence: dedupeEvidence(evidence), missedAll, won };
+  return { v, judged, evidence: dedupeEvidence(evidence), missedAll, won };
 }
 
 /**
@@ -248,7 +260,7 @@ export async function check(
 
   let reads = source.reads;
   let attempted = source.attempted;
-  let a = assemble(claims, reads);
+  let a = assemble(url, claims, reads);
 
   // Escalate before accusing (spec 0.2.0 section 4). `unsupported` is the only
   // verdict that accuses an author, and the ladder stops at the first readable
@@ -259,11 +271,16 @@ export async function check(
   // This fires on EVERY unsupported with a rung untried, which includes the
   // ordinary healthy-page case, not just a shell. That cost is accepted; the
   // origin retried on every miss too.
-  if (a.v === "unsupported" && hasUntriedClimbableRung(source.attempted, fetcher.rungs, source.pdfUrl)) {
+  // Keyed on the PRE-gate verdict (final review, 0.8.0): a first rung bounced
+  // to the site root is gated to `unreachable`, but a later rung may be served
+  // the cited page - UA-dependent bot handling - and 0.7.1 climbed and attested
+  // from it. The climb costs the one fetch 0.7.1 already spent, and the gate is
+  // applied again to whatever the second assemble returns.
+  if (a.judged === "unsupported" && hasUntriedClimbableRung(source.attempted, fetcher.rungs, source.pdfUrl)) {
     const more = await continueReading(url, claims, readOpts, source);
     reads = more.reads;
     attempted = more.attempted;
-    a = assemble(claims, reads);
+    a = assemble(url, claims, reads);
   }
 
   return buildResult({
@@ -280,5 +297,6 @@ export async function check(
     missed: a.v === "unsupported" ? a.missedAll : [],
     isPdfUrl: source.pdfUrl,
     firedRule: firedRuleOf(a.won.computed),
+    ...(movedAway(url, a.won.computed.finalUrl) ? { redirectedTo: a.won.computed.finalUrl } : {}),
   });
 }
