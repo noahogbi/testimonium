@@ -36,11 +36,13 @@ describe("check", () => {
     expect(r.evidence?.length).toBeGreaterThan(0);
   });
 
-  it("a redirect to another host or path is not observed: finalUrl never gates", async () => {
-    // finalUrl is captured on every read (src/fetch/read-source.ts) and used
-    // only for N2's path patterns and the slug anchor; this test fails
-    // loudly if a redirect gate is ever added without a spec amendment
-    // (README "Measured limits" discloses it).
+  it("a redirect to another host AND another article path is not moved away: it still attests", async () => {
+    // 0.8.0 added the redirect gate this test used to pin the absence of
+    // (spec 0.8.0 section 5). It fires only when a read lands on a site root
+    // or an ancestor of the cited path. This redirect lands on a different
+    // article on a different host - the shape of every one of the 15
+    // legitimate redirects measured on 2026-09-25 - so it passes the gate,
+    // stays `supported`, and carries no redirectedTo.
     const r = await check("https://e.com/committee-report", ["spending rose sharply"], {
       fetcher: stub({
         node: {
@@ -52,7 +54,46 @@ describe("check", () => {
     });
     expect(r.verdict).toBe("supported");
     expect(r).not.toHaveProperty("firedRule");
+    expect(r).not.toHaveProperty("redirectedTo");
     expect(r.rungsAttempted).toEqual(["node"]);
+  });
+
+  it("does not accuse over a page that redirected to the site root: unreachable, and says where it landed", async () => {
+    const r = await check("https://e.com/reports/2024-annual", ["revenue fell in the fourth quarter"], {
+      fetcher: stub({ node: { rawBody: LONG_PROSE, status: 200, finalUrl: "https://e.com/" } }),
+    });
+    expect(r.verdict).toBe("unreachable");
+    expect(r.redirectedTo).toBe("https://e.com/");
+    expect(r).not.toHaveProperty("missed");
+    // A gated read is not an accusation, so it does not spend the escalation.
+    expect(r.rungsAttempted).toEqual(["node"]);
+  });
+
+  it("still attests a claim found on a moved-away page, and says where it was served from", async () => {
+    const r = await check("https://e.com/reports/2024-annual", ["spending rose sharply"], {
+      fetcher: stub({ node: { rawBody: LONG_PROSE, status: 200, finalUrl: "https://e.com/" } }),
+    });
+    expect(r.verdict).toBe("supported");
+    expect(r.redirectedTo).toBe("https://e.com/");
+  });
+
+  it("keeps a genuine accusation from the unmoved rung when escalation lands on the root", async () => {
+    // Review Focus 4. node reads the cited page and misses, so check() climbs;
+    // curl lands on the site root with MORE prose. Without preferring the read
+    // that stayed, curl would win and the real accusation would become
+    // `unreachable`.
+    const bigger = `<html><body>${"Welcome to our homepage, with news and features from across the site. ".repeat(200)}</body></html>`;
+    expect(proseVolume(toText(bigger))).toBeGreaterThan(proseVolume(toText(LONG_PROSE)));
+    const r = await check("https://e.com/reports/2024-annual", ["revenue fell in the fourth quarter"], {
+      fetcher: stub({
+        node: { rawBody: LONG_PROSE, status: 200 },
+        curl: { rawBody: bigger, status: 200, finalUrl: "https://e.com/" },
+      }),
+    });
+    expect(r.rungsAttempted).toEqual(["node", "curl"]);
+    expect(r.verdict).toBe("unsupported");
+    expect(r.missed).toEqual(["revenue fell in the fourth quarter"]);
+    expect(r).not.toHaveProperty("redirectedTo");
   });
 
   it("returns unsupported when a claim is absent from a document we read", async () => {
