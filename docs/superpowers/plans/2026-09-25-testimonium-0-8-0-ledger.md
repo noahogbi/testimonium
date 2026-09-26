@@ -30,12 +30,13 @@
 
 ## Rulings made during execution
 
-- Task 1: the file-writing tool turned the test's `é` escape into a literal accented
+- Task 1: the file-writing tool turned the test's `\u00e9` escape into a literal accented
   character; the non-ASCII sweep caught it, and it was rewritten as the ASCII escape. The source
   file was written by heredoc to avoid the same rewrite. Test semantics unchanged.
 - Task 1 finding, not a ruling: the "no `/` boundary" mutation also reddens the 15-redirect
   test - ilga.gov's `billstatus.asp` would read as under `billstatus` - so the boundary is
   load-bearing on real data, not only on the constructed sibling case.
+- Release: `npm pack` is 85 files, up from 83 - `dist/classify/moved.js` and its `.d.ts`.
 - Task 5: the README's list of unguarded routes said "the target of a redirect after
   removal"; narrowed to "a redirect after removal to another article", since root and ancestor
   redirects are now gated.
