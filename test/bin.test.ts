@@ -28,7 +28,9 @@ import {
   jsonOutcome,
   main,
   renderOutcome,
+  supportedLine,
   tallyFor,
+  unreachableLine,
   USAGE,
   validateFlags,
 } from "../src/bin.js";
@@ -1035,5 +1037,20 @@ describe("explainFetchLine", () => {
     expect(explainFetchLine({ lastConfirmed: "2026-09-08", note: "Cloudflare noscript line", vetoed: false }, NOW)).toBe(
       "        rule matched, did not veto (page too long): Cloudflare noscript line (last confirmed 15 days ago)",
     );
+  });
+});
+
+describe("verdict lines and redirectedTo", () => {
+  it("names where an unreachable page was moved to, and says nothing when it was not", () => {
+    const moved = { ...citationResult("unreachable"), rungsAttempted: ["node"] as const, redirectedTo: "https://e.com/" };
+    expect(unreachableLine(3, "https://e.com/r", moved)).toBe("  [3] unreachable - https://e.com/r (moved to https://e.com/; tried: node)");
+    const plain = { ...citationResult("unreachable"), rungsAttempted: ["node", "curl"] as const };
+    expect(unreachableLine(3, "https://e.com/r", plain)).toBe("  [3] unreachable - https://e.com/r (tried: node, curl)");
+  });
+
+  it("says a supported claim was served from another page when it was", () => {
+    const moved = { ...citationResult("supported"), redirectedTo: "https://e.com/" };
+    expect(supportedLine(2, "https://e.com/r", 1, moved)).toBe("  [2] supported (1 claims) - https://e.com/r (served from https://e.com/)");
+    expect(supportedLine(2, "https://e.com/r", 1, citationResult("supported"))).toBe("  [2] supported (1 claims) - https://e.com/r");
   });
 });

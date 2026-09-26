@@ -59,6 +59,22 @@ export function classifyRecheckRun(t: RecheckTally, opts: { readonly failOnGone?
   return 0;
 }
 
+/** The `unreachable` report line. Silent to a reader, NEVER to the author:
+ *  URL, where it was moved to if the redirect gate withheld an accusation
+ *  (spec 0.8.0), and rung history. */
+export function unreachableLine(n: number, url: string, r: CitationResult): string {
+  const moved = r.redirectedTo ? `moved to ${r.redirectedTo}; ` : "";
+  const trunc = r.ladderTruncated ? `, ladder truncated: ${r.rungsAvailable.join(", ")} only` : "";
+  return `  [${n}] unreachable - ${url} (${moved}tried: ${r.rungsAttempted.join(", ")}${trunc})`;
+}
+
+/** The `supported` report line; names the page a claim was found on when the
+ *  cited URL now serves a different one. */
+export function supportedLine(n: number, url: string, claimCount: number, r: CitationResult): string {
+  const served = r.redirectedTo ? ` (served from ${r.redirectedTo})` : "";
+  return `  [${n}] supported (${claimCount} claims) - ${url}${served}`;
+}
+
 /** The `--explain-fetch` provenance line. A rule that matched without vetoing
  *  (a signature on a body too long to veto) must not read as having fired. */
 export function explainFetchLine(rule: FiredRule, nowMs: number): string {
@@ -768,10 +784,9 @@ export async function main(argv: string[]): Promise<number> {
     } else if (r.verdict === "unreachable") {
       unreachable++;
       // Silent to a reader, NEVER to the author: URL and rung history, always.
-      const trunc = r.ladderTruncated ? `, ladder truncated: ${r.rungsAvailable.join(", ")} only` : "";
-      console.log(`  [${c.n}] unreachable - ${c.url} (tried: ${r.rungsAttempted.join(", ")}${trunc})`);
+      console.log(unreachableLine(c.n, c.url, r));
     } else {
-      console.log(`  [${c.n}] supported (${c.claims.length} claims) - ${c.url}`);
+      console.log(supportedLine(c.n, c.url, c.claims.length, r));
     }
     if (flags.has("--explain-fetch") && r.firedRule) {
       console.log(explainFetchLine(r.firedRule, Date.now()));
