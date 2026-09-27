@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.8.1 - 2026-09-26
+
+One false accusation removed, found by a real citation.
+
+- **PDF text is now extracted as UTF-8 on every pdftotext build.** `pdfFetch` ran
+  `pdftotext -layout` with no `-enc`, and decoded the output as UTF-8. Xpdf 4.00, the
+  pdftotext that Git for Windows ships, defaults to Latin-1. Under that default it dropped
+  every CJK glyph, and its Latin-1 bytes for accented letters (é, ç, ï) decoded as U+FFFD.
+  The page had been read, so a Chinese, Japanese or Korean claim on a PDF, or any claim with
+  an accented letter, came back `unsupported`, not `unreachable`. Measured on the NDRC
+  15th Five-Year Plan PDF: 33,908 characters and no Chinese without the flag, 250,690
+  with it. The cited phrase 技术创新，探索通用人工智能发展路径 now reads `supported`, where it
+  was a MISS. Poppler already defaulted to UTF-8, so poppler machines see no change.
+- **The recorded `pdftotextVersion` now carries the encoding** (`pdftotext version 4.00
+  (-enc UTF-8)`). Without that suffix, a PDF archived by 0.8.0 would record the same version
+  string as a read taken now, although the same binary now emits different text. If a
+  `-layout` reflow then lost a claim, `recheck` would report `sourceDrift`, blaming the
+  source for our change. A pre-0.8.1 PDF archive is instead a named confound (exit 0) until
+  the next `supported` `check` re-archives it.
+- **Not added: a "suspiciously little text" guard.** The flag removes the only
+  glyph-dropping mechanism that has been measured. A size heuristic would also reroute
+  genuinely sparse PDFs, and nothing measured calls for it yet.
+
 ## 0.8.0 - 2026-09-25
 
 One gate the README called unbuilt, chosen from a live measurement.
