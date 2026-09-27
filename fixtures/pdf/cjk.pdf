@@ -1,0 +1,73 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 121 >>
+stream
+BT /F2 18 Tf 72 720 Td (ABCDEFGHIJKLMNOPQ) Tj ET
+BT /F1 18 Tf 72 680 Td (Caf\351 d\351j\340 vu, na\357ve fa\347ade) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /ToUnicode 7 0 R >>
+endobj
+7 0 obj
+<< /Length 521 >>
+stream
+/CIDInit /ProcSet findresource begin
+12 dict begin
+begincmap
+/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def
+/CMapName /Testimonium-CJK def
+/CMapType 2 def
+1 begincodespacerange <00> <FF> endcodespacerange
+17 beginbfchar
+<41> <6280>
+<42> <672F>
+<43> <521B>
+<44> <65B0>
+<45> <FF0C>
+<46> <63A2>
+<47> <7D22>
+<48> <901A>
+<49> <7528>
+<4A> <4EBA>
+<4B> <5DE5>
+<4C> <667A>
+<4D> <80FD>
+<4E> <53D1>
+<4F> <5C55>
+<50> <8DEF>
+<51> <5F84>
+endbfchar
+endcmap
+CMapName currentdict /CMap defineresource pop
+end
+end
+endstream
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000251 00000 n 
+0000000423 00000 n 
+0000000520 00000 n 
+0000000607 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+1179
+%%EOF
