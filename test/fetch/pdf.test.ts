@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
+import { CJK_LINE, LATIN1_LINE } from "../../fixtures/pdf/make-cjk-pdf.mjs";
 import {
   isPdf,
   pdfFetch,
   pdfRungAvailable,
+  pdftotextArgs,
   pdftotextVersion,
   toVersionProbe,
   type SpawnResultLike,
@@ -73,6 +75,30 @@ describe("pdfFetch", () => {
       warn.mockRestore();
     }
   });
+
+  // fixtures/pdf/cjk.pdf: one Chinese line (the omnisscientia NDRC claim)
+  // and one accented-Latin line. Read through the real rung - curl fetches a
+  // file:// URL - so this is the production argv against the local binary.
+  // Xpdf 4.00 (Git for Windows' pdftotext) defaults to Latin-1: it dropped
+  // every CJK glyph, and its Latin-1 bytes decoded as U+FFFD under
+  // `encoding: "utf8"`. Poppler defaults to UTF-8, so on a poppler machine
+  // this passes even without the flag - the argv test below pins it anywhere.
+  it.skipIf(!pdfRungAvailable())("reads CJK and accented Latin out of a PDF intact", () => {
+    const res = pdfFetch(new URL("../../fixtures/pdf/cjk.pdf", import.meta.url).href, "testimonium-test");
+    expect(res.rawBody).toContain(CJK_LINE);
+    expect(res.rawBody).toContain(LATIN1_LINE);
+    expect(res.rawBody).not.toContain("�");
+  });
+});
+
+describe("pdftotextArgs", () => {
+  it("asks for UTF-8 output explicitly, whatever the build's default", () => {
+    const args = pdftotextArgs("in.pdf");
+    const i = args.indexOf("-enc");
+    expect(i).toBeGreaterThanOrEqual(0);
+    expect(args[i + 1]).toBe("UTF-8");
+    expect(args.slice(-2)).toEqual(["in.pdf", "-"]);
+  });
 });
 
 describe("pdfRungAvailable", () => {
@@ -106,6 +132,17 @@ describe("pdftotextVersion", () => {
   // is the only thing standing between a poppler upgrade and an exit 1.
   const XPDF_STDERR = "pdftotext version 4.00\r\nCopyright 1996-2017 Glyph & Cog, LLC\r\n";
   const probe = (p: Partial<VersionProbe>): VersionProbe => ({ missing: false, stdout: "", stderr: "", ...p });
+  const ENC = " (-enc UTF-8)";
+
+  it("records the output encoding, so a pre-0.8.1 archive reads as a confound", () => {
+    // 0.8.0 ran pdftotext with no -enc and recorded the bare first line.
+    // Adding -enc UTF-8 changes the extracted text for the SAME binary (CJK
+    // glyphs appear, Latin-1 bytes stop decoding as U+FFFD), so an unchanged
+    // version string would let `recheck` blame the source for our change.
+    const v = pdftotextVersion(() => probe({ stderr: XPDF_STDERR }));
+    expect(v).not.toBe("pdftotext version 4.00");
+    expect(v).toContain("-enc UTF-8");
+  });
 
   it("reads the version off stderr, where both known builds print it", () => {
     // THIS IS ALSO WHERE "a non-zero exit is not absence" is pinned, as far as
@@ -120,7 +157,7 @@ describe("pdftotextVersion", () => {
     // `r.error !== undefined`, not `r.status !== 0` - is `toVersionProbe`'s,
     // below, and has its own tests (fix round 1): no test here reaches it,
     // because every test above injects its own `VersionRunner`.
-    expect(pdftotextVersion(() => probe({ stderr: XPDF_STDERR }))).toBe("pdftotext version 4.00");
+    expect(pdftotextVersion(() => probe({ stderr: XPDF_STDERR }))).toBe(`pdftotext version 4.00${ENC}`);
   });
 
   it("returns only the FIRST non-empty line, not the copyright line under it", () => {
@@ -141,12 +178,12 @@ describe("pdftotextVersion", () => {
     // this machine. The fallback exists because the stream is a property of
     // the build and this probe must not depend on which one is installed.
     expect(pdftotextVersion(() => probe({ stdout: "pdftotext version 0.0.0-test\n" }))).toBe(
-      "pdftotext version 0.0.0-test",
+      `pdftotext version 0.0.0-test${ENC}`,
     );
   });
 
   it("prefers stderr when a build writes to both", () => {
-    expect(pdftotextVersion(() => probe({ stdout: "from stdout", stderr: "from stderr" }))).toBe("from stderr");
+    expect(pdftotextVersion(() => probe({ stdout: "from stdout", stderr: "from stderr" }))).toBe(`from stderr${ENC}`);
   });
 
   it("NEGATIVE CONTROL: a binary that ran and printed nothing records nothing", () => {

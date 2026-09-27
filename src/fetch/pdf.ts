@@ -26,6 +26,17 @@ export const isPdf = (url: string, contentType = ""): boolean => {
   return /\.pdf$/i.test(path) || /\/pdf\//i.test(path) || /application\/pdf/i.test(contentType);
 };
 
+/** `-enc UTF-8` because the output is decoded as UTF-8 and the build's own
+ *  default is not guaranteed to match. Xpdf 4.00 - the pdftotext Git for
+ *  Windows ships - defaults to Latin-1: it silently DROPPED every CJK glyph
+ *  (a Chinese-only NDRC PDF yielded 33,908 chars, none Chinese; 250,690 with
+ *  the flag), and its Latin-1 bytes for é/ç/ï decoded as U+FFFD. The page was
+ *  genuinely read, so every such claim came back `unsupported` - an
+ *  accusation - not `unreachable`. Poppler defaults to UTF-8 and accepts the
+ *  same flag. */
+const PDFTOTEXT_ENC = "UTF-8";
+export const pdftotextArgs = (file: string): string[] => ["-layout", "-enc", PDFTOTEXT_ENC, file, "-"];
+
 /** Extract a PDF's text so a filing can be phrase-checked against its own
  *  bytes. Without this a PDF URL is matched as HTML, every claim misses, and
  *  the result reads identically to a fabricated claim. `-layout` keeps column
@@ -36,7 +47,7 @@ export function pdfFetch(url: string, userAgent: string): RawResponse {
   const tmp = join(tmpdir(), `testimonium-${process.pid}-${Date.now()}.pdf`);
   try {
     execFileSync("curl", ["-s", "--compressed", "--max-time", "30", "-A", userAgent, "-L", "-o", tmp, url]);
-    const text = execFileSync("pdftotext", ["-layout", tmp, "-"], {
+    const text = execFileSync("pdftotext", pdftotextArgs(tmp), {
       encoding: "utf8",
       maxBuffer: 64 * 1024 * 1024,
     });
@@ -159,6 +170,14 @@ const probePdftotext: VersionRunner = () =>
  * RESIDUE, DISCLOSED: two different builds reporting the same version string
  * are not distinguishable at all.
  *
+ * THE ENCODING IS PART OF IT. 0.8.0 passed no `-enc` and recorded the bare
+ * first line; the same Xpdf binary with `-enc UTF-8` emits different text
+ * (CJK glyphs it used to drop). Without the suffix, an archive written by
+ * 0.8.0 and rechecked now would carry a matching version string, and a
+ * `-layout` reflow that loses a claim would read as `sourceDrift` - an
+ * accusation over our own change. With it, that archive is a named confound
+ * until the next `supported` check re-archives it.
+ *
  * The runner is injectable so no test spawns a binary, exactly as
  * `pdfRungAvailable` takes its two predicates.
  */
@@ -167,7 +186,7 @@ export function pdftotextVersion(run: VersionRunner = probePdftotext): string | 
   if (probe.missing) return null;
   for (const stream of [probe.stderr, probe.stdout]) {
     const line = stream.split(/\r?\n/).map((s) => s.trim()).find((s) => s.length > 0);
-    if (line !== undefined) return line;
+    if (line !== undefined) return `${line} (-enc ${PDFTOTEXT_ENC})`;
   }
   return null;
 }
